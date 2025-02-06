@@ -29,6 +29,14 @@ const initialState = {
   possibleMoves: [], // array of {x, y} positions
   phase: "PLACEMENT", // 'PLACEMENT' or 'MOVEMENT'
   gameStatus: "PLAYING", // "PLAYING", "TIGERS_WIN", "GOATS_WIN"
+  moveHistory: [], // Add this line
+};
+
+// Helper function to convert grid coordinates to notation
+const gridToNotation = (x, y) => {
+  const col = String.fromCharCode(65 + x); // Convert 0-4 to A-E
+  const row = y + 1; // Convert 0-4 to 1-5
+  return `${col}${row}`;
 };
 
 export const useGameStore = create((set, get) => ({
@@ -45,6 +53,7 @@ export const useGameStore = create((set, get) => ({
       goatsPlaced: 0,
       goatsCaptured: 0,
       gameStatus: "PLAYING",
+      moveHistory: [],
     });
   },
 
@@ -103,148 +112,160 @@ export const useGameStore = create((set, get) => ({
 
   // Make a move
   makeMove: (toX, toY) => {
-    console.log("makeMove called:", toX, toY);
     const state = get();
-    console.log("Current state:", {
-      phase: state.phase,
-      turn: state.turn,
-      selectedPiece: state.selectedPiece,
-      goatsPlaced: state.goatsPlaced,
-    });
+    const notation = gridToNotation(toX, toY);
+    let moveNotation = "";
 
-    // Moving a tiger (allowed in both phases)
-    if (state.turn === "TIGER" && state.selectedPiece) {
-      console.log("Attempting tiger movement");
-      if (isValidMove(state.selectedPiece, { x: toX, y: toY }, state)) {
-        const newBoard = [...state.board.map((row) => [...row])];
-        const { x: fromX, y: fromY } = state.selectedPiece;
-
-        // Move the tiger piece
-        newBoard[toY][toX] = newBoard[fromY][fromX];
-        newBoard[fromY][fromX] = null;
-
-        // Check if this is a capture move
-        const move = state.possibleMoves.find(
-          (m) => m.x === toX && m.y === toY
-        );
-        if (move?.type === "capture") {
-          // Remove the captured goat
-          newBoard[move.capturedPiece.y][move.capturedPiece.x] = null;
-          const newGoatsCaptured = state.goatsCaptured + 1;
-          console.log("Goats captured:", newGoatsCaptured); // Debug log
-
-          set((state) => {
-            const newState = {
-              ...state,
-              board: newBoard,
-              turn: "GOAT",
-              selectedPiece: null,
-              possibleMoves: [],
-              goatsCaptured: newGoatsCaptured,
-            };
-
-            // Check if tigers won (5 goats captured)
-            if (newGoatsCaptured >= 5) {
-              console.log("Tigers should win - setting game status"); // Debug log
-              newState.gameStatus = "TIGERS_WIN";
-            }
-            console.log("New game status:", newState.gameStatus); // Debug log
-
-            return newState;
-          });
-        } else {
-          set((state) => ({
-            ...state,
-            board: newBoard,
-            turn: "GOAT",
-            selectedPiece: null,
-            possibleMoves: [],
-          }));
-        }
-      }
-      return;
-    }
-
-    // Placing a new goat during placement phase
+    // Placing a new goat
     if (state.phase === "PLACEMENT" && state.turn === "GOAT") {
-      console.log("Attempting goat placement");
       if (isValidPlacement(toX, toY, state.board)) {
+        moveNotation = `G${notation}`;
         const newBoard = [...state.board.map((row) => [...row])];
         newBoard[toY][toX] = { type: "GOAT" };
         const newGoatsPlaced = state.goatsPlaced + 1;
-        set({
+        set((state) => ({
+          ...state,
           board: newBoard,
           goatsPlaced: newGoatsPlaced,
           turn: "TIGER",
           selectedPiece: null,
           possibleMoves: [],
           phase: newGoatsPlaced >= TOTAL_GOATS ? "MOVEMENT" : "PLACEMENT",
-        });
-      } else {
-        console.log("Invalid placement position");
+          moveHistory: [...state.moveHistory, moveNotation],
+        }));
       }
       return;
     }
 
-    // Moving a goat during movement phase
-    if (
-      state.phase === "MOVEMENT" &&
-      state.turn === "GOAT" &&
-      state.selectedPiece
-    ) {
-      console.log("Attempting piece movement", {
-        from: state.selectedPiece,
-        to: { x: toX, y: toY },
-        validMoves: state.possibleMoves,
-        isValidMove: isValidMove(
-          state.selectedPiece,
-          { x: toX, y: toY },
-          state
-        ),
-      });
+    // Moving pieces (both tiger and goat)
+    if (state.selectedPiece) {
+      const fromNotation = gridToNotation(
+        state.selectedPiece.x,
+        state.selectedPiece.y
+      );
+      const pieceType =
+        state.board[state.selectedPiece.y][state.selectedPiece.x].type;
+      moveNotation = `${
+        pieceType === "TIGER" ? "T" : "G"
+      }${fromNotation}${notation}`;
 
-      if (isValidMove(state.selectedPiece, { x: toX, y: toY }, state)) {
-        const newBoard = [...state.board.map((row) => [...row])];
-        const { x: fromX, y: fromY } = state.selectedPiece;
-        console.log("Moving piece", {
-          from: { x: fromX, y: fromY },
-          to: { x: toX, y: toY },
-          piece: newBoard[fromY][fromX],
-        });
+      // Moving a tiger (allowed in both phases)
+      if (state.turn === "TIGER" && state.selectedPiece) {
+        console.log("Attempting tiger movement");
+        if (isValidMove(state.selectedPiece, { x: toX, y: toY }, state)) {
+          const newBoard = [...state.board.map((row) => [...row])];
+          const { x: fromX, y: fromY } = state.selectedPiece;
 
-        // Move the piece
-        newBoard[toY][toX] = newBoard[fromY][fromX];
-        newBoard[fromY][fromX] = null;
+          // Move the tiger piece
+          newBoard[toY][toX] = newBoard[fromY][fromX];
+          newBoard[fromY][fromX] = null;
 
-        const move = state.possibleMoves.find(
-          (move) => move.x === toX && move.y === toY
-        );
+          // Check if this is a capture move
+          const move = state.possibleMoves.find(
+            (m) => m.x === toX && m.y === toY
+          );
+          if (move?.type === "capture") {
+            // Remove the captured goat
+            newBoard[move.capturedPiece.y][move.capturedPiece.x] = null;
+            const newGoatsCaptured = state.goatsCaptured + 1;
+            console.log("Goats captured:", newGoatsCaptured); // Debug log
 
-        if (move?.type === "capture") {
-          // Remove the captured goat
-          newBoard[move.capturedPiece.y][move.capturedPiece.x] = null;
-          set((state) => ({
-            ...state,
-            board: newBoard,
-            turn: "GOAT",
-            selectedPiece: null,
-            possibleMoves: [],
-            goatsCaptured: state.goatsCaptured + 1,
-          }));
-        } else {
-          set((state) => ({
-            ...state,
-            board: newBoard,
-            turn: state.turn === "GOAT" ? "TIGER" : "GOAT",
-            selectedPiece: null,
-            possibleMoves: [],
-          }));
+            set((state) => {
+              const newState = {
+                ...state,
+                board: newBoard,
+                turn: "GOAT",
+                selectedPiece: null,
+                possibleMoves: [],
+                goatsCaptured: newGoatsCaptured,
+                moveHistory: [...state.moveHistory, moveNotation],
+              };
+
+              // Check if tigers won (5 goats captured)
+              if (newGoatsCaptured >= 5) {
+                console.log("Tigers should win - setting game status"); // Debug log
+                newState.gameStatus = "TIGERS_WIN";
+              }
+              console.log("New game status:", newState.gameStatus); // Debug log
+
+              return newState;
+            });
+          } else {
+            set((state) => ({
+              ...state,
+              board: newBoard,
+              turn: "GOAT",
+              selectedPiece: null,
+              possibleMoves: [],
+              moveHistory: [...state.moveHistory, moveNotation],
+            }));
+          }
         }
-      } else {
-        console.log("Invalid move - Failed validation", {
-          possibleMoves: state.possibleMoves,
-          attemptedMove: { x: toX, y: toY },
+        return;
+      }
+
+      // Moving a goat during movement phase
+      if (
+        state.phase === "MOVEMENT" &&
+        state.turn === "GOAT" &&
+        state.selectedPiece
+      ) {
+        console.log("Attempting piece movement", {
+          from: state.selectedPiece,
+          to: { x: toX, y: toY },
+          validMoves: state.possibleMoves,
+          isValidMove: isValidMove(
+            state.selectedPiece,
+            { x: toX, y: toY },
+            state
+          ),
         });
+
+        if (isValidMove(state.selectedPiece, { x: toX, y: toY }, state)) {
+          const newBoard = [...state.board.map((row) => [...row])];
+          const { x: fromX, y: fromY } = state.selectedPiece;
+          console.log("Moving piece", {
+            from: { x: fromX, y: fromY },
+            to: { x: toX, y: toY },
+            piece: newBoard[fromY][fromX],
+          });
+
+          // Move the piece
+          newBoard[toY][toX] = newBoard[fromY][fromX];
+          newBoard[fromY][fromX] = null;
+
+          const move = state.possibleMoves.find(
+            (move) => move.x === toX && move.y === toY
+          );
+
+          if (move?.type === "capture") {
+            // Remove the captured goat
+            newBoard[move.capturedPiece.y][move.capturedPiece.x] = null;
+            set((state) => ({
+              ...state,
+              board: newBoard,
+              turn: "GOAT",
+              selectedPiece: null,
+              possibleMoves: [],
+              goatsCaptured: state.goatsCaptured + 1,
+              moveHistory: [...state.moveHistory, moveNotation],
+            }));
+          } else {
+            set((state) => ({
+              ...state,
+              board: newBoard,
+              turn: state.turn === "GOAT" ? "TIGER" : "GOAT",
+              selectedPiece: null,
+              possibleMoves: [],
+              moveHistory: [...state.moveHistory, moveNotation],
+            }));
+          }
+        } else {
+          console.log("Invalid move - Failed validation", {
+            possibleMoves: state.possibleMoves,
+            attemptedMove: { x: toX, y: toY },
+          });
+        }
       }
     }
 

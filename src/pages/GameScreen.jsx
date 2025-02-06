@@ -12,6 +12,7 @@ const GameScreen = () => {
     goatsCaptured,
     gameStatus,
     resetGame,
+    moveHistory,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
 
@@ -130,14 +131,15 @@ const GameScreen = () => {
               <div className="flex-grow overflow-y-auto custom-scrollbar h-[40vh]">
                 <div className="p-2">
                   <div className="space-y-1">
-                    {Array.from({ length: 25 }).map((_, i) => (
-                      <div key={i} className="flex text-xs">
-                        <span className="w-6 text-gray-500">{i + 1}.</span>
-                        <span className="w-[45%] text-gray-300">
-                          Tiger to e4
-                        </span>
-                        <span className="w-[45%] text-gray-300">
-                          Goat to d5
+                    {moveHistory.map((move, index) => (
+                      <div key={index} className="flex text-xs">
+                        <span className="w-6 text-gray-500">{index + 1}.</span>
+                        <span className="w-full text-gray-300">
+                          {move.startsWith("G") && move.length === 3
+                            ? `Goat to ${move.slice(1)}`
+                            : move.startsWith("T")
+                            ? `Tiger ${move.slice(1, 3)} to ${move.slice(3)}`
+                            : `Goat ${move.slice(1, 3)} to ${move.slice(3)}`}
                         </span>
                       </div>
                     ))}
