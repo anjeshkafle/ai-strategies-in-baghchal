@@ -43,7 +43,17 @@ const getInitialGoatPositions = () => {
   return positions;
 };
 
-const GamePiece = ({ x, y, sprite, size, isSelected, onSelect }) => {
+const GamePiece = ({
+  x,
+  y,
+  sprite,
+  size,
+  isSelected,
+  onSelect,
+  onDragEnd,
+  type,
+  currentTurn,
+}) => {
   const [image] = useImage(sprite);
   return (
     <>
@@ -65,6 +75,8 @@ const GamePiece = ({ x, y, sprite, size, isSelected, onSelect }) => {
         height={size * 0.8}
         onClick={onSelect}
         onTouchStart={onSelect}
+        draggable={type === currentTurn}
+        onDragEnd={onDragEnd}
         listening={true}
       />
     </>
@@ -264,6 +276,44 @@ const Board = () => {
     selectPiece(gridX, gridY);
   };
 
+  const handleDragEnd = (gridX, gridY, event) => {
+    const stage = event.target.getStage();
+    const pos = stage.getPointerPosition();
+
+    // Convert pixel coordinates back to grid coordinates
+    const cellSize = boardDims.cellSize;
+    const offsetX = boardDims.padding;
+    const offsetY = boardDims.padding;
+
+    const newGridX = Math.round((pos.x - offsetX) / cellSize);
+    const newGridY = Math.round((pos.y - offsetY) / cellSize);
+
+    // Only process if within bounds and different from starting position
+    if (
+      newGridX >= 0 &&
+      newGridX < 5 &&
+      newGridY >= 0 &&
+      newGridY < 5 &&
+      (newGridX !== gridX || newGridY !== gridY)
+    ) {
+      selectPiece(gridX, gridY);
+      makeMove(newGridX, newGridY);
+    }
+
+    // Get the original grid position in pixels
+    const originalPos = gridToPixel(gridX, gridY, boardDims);
+
+    // Calculate the exact same offset used in the GamePiece component
+    const pieceSize = boardDims.cellSize * 0.6;
+    const imageOffset = (pieceSize * 0.8) / 2;
+
+    // Reset to the exact original position
+    event.target.position({
+      x: originalPos.x - imageOffset,
+      y: originalPos.y - imageOffset,
+    });
+  };
+
   return (
     <div ref={containerRef} className="w-full h-full bg-gray-800 rounded-lg">
       {boardDims && (
@@ -350,6 +400,9 @@ const Board = () => {
                         selectedPiece?.x === x && selectedPiece?.y === y
                       }
                       onSelect={() => handleBoardClick(x, y)}
+                      onDragEnd={(e) => handleDragEnd(x, y, e)}
+                      type={cell.type}
+                      currentTurn={turn}
                     />
                   );
                 })
