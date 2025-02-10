@@ -13,6 +13,7 @@ import useImage from "use-image";
 import spriteGoat from "../assets/sprite_goat.png";
 import spriteTiger from "../assets/sprite_tiger.png";
 import { useGameStore } from "../stores/gameStore";
+import Konva from "konva";
 
 const BOARD_SIZE = 5; // 5x5 grid
 const INITIAL_TIGER_POSITIONS = [
@@ -50,13 +51,16 @@ const GamePiece = ({
   size,
   isSelected,
   onSelect,
+  onDragStart,
   onDragEnd,
   type,
   currentTurn,
 }) => {
   const [image] = useImage(sprite);
+
   return (
     <>
+      {/* Highlight the piece if it's selected */}
       {isSelected && (
         <Circle
           x={x}
@@ -76,6 +80,8 @@ const GamePiece = ({
         onClick={onSelect}
         onTouchStart={onSelect}
         draggable={type === currentTurn}
+        // NEW: Automatically select piece on drag start
+        onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         listening={true}
       />
@@ -88,6 +94,8 @@ const Board = () => {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const GRID_SIZE = 5;
   const PADDING_PERCENTAGE = 0.15;
+
+  // Grab relevant state + actions from your store
   const { board, turn, selectedPiece, possibleMoves, selectPiece, makeMove } =
     useGameStore();
 
@@ -105,7 +113,7 @@ const Board = () => {
     return () => window.removeEventListener("resize", updateDimensions);
   }, []);
 
-  // Calculate dimensions based on container size
+  // Calculate board geometry
   const calculateDimensions = (containerSize) => {
     const padding = containerSize * PADDING_PERCENTAGE;
     const boardSize = containerSize - padding * 2;
@@ -113,7 +121,7 @@ const Board = () => {
     return { padding, boardSize, cellSize };
   };
 
-  // Generate grid points
+  // Generate grid points for circle markers
   const generatePoints = (dims) => {
     const points = [];
     for (let row = 0; row < GRID_SIZE; row++) {
@@ -155,11 +163,11 @@ const Board = () => {
     return labels;
   };
 
-  // Generate grid lines
+  // Generate lines (square + diagonal lines)
   const generateLines = (dims) => {
     const lines = [];
 
-    // Horizontal and Vertical lines (existing code)
+    // Horizontal lines
     for (let row = 0; row < GRID_SIZE; row++) {
       lines.push({
         points: [
@@ -171,6 +179,7 @@ const Board = () => {
       });
     }
 
+    // Vertical lines
     for (let col = 0; col < GRID_SIZE; col++) {
       lines.push({
         points: [
@@ -182,7 +191,7 @@ const Board = () => {
       });
     }
 
-    // Main corner diagonals (existing)
+    // Corner-to-corner diagonals
     lines.push({
       points: [
         dims.padding,
@@ -200,39 +209,32 @@ const Board = () => {
       ],
     });
 
-    // Center point
+    // Main diamond lines from edges to center
     const midPoint = GRID_SIZE >> 1;
     const midX = dims.padding + midPoint * dims.cellSize;
     const midY = dims.padding + midPoint * dims.cellSize;
 
-    // Diamond diagonals through grid points
-    // Top to center
+    // Edges to center
     lines.push({
       points: [midX, dims.padding, midX, midY],
     });
-    // Right to center
     lines.push({
       points: [dims.padding + dims.boardSize, midY, midX, midY],
     });
-    // Bottom to center
     lines.push({
       points: [midX, dims.padding + dims.boardSize, midX, midY],
     });
-    // Left to center
     lines.push({
       points: [dims.padding, midY, midX, midY],
     });
 
-    // Additional diagonal lines forming the diamond
-    // Top center to left center
+    // Additional diamond diagonals
     lines.push({
       points: [midX, dims.padding, dims.padding, midY],
     });
-    // Left center to bottom center
     lines.push({
       points: [dims.padding, midY, midX, dims.padding + dims.boardSize],
     });
-    // Bottom center to right center
     lines.push({
       points: [
         midX,
@@ -241,7 +243,6 @@ const Board = () => {
         midY,
       ],
     });
-    // Right center to top center
     lines.push({
       points: [dims.padding + dims.boardSize, midY, midX, dims.padding],
     });
@@ -249,7 +250,7 @@ const Board = () => {
     return lines;
   };
 
-  // This will eventually come from a game state manager
+  // This will eventually come from the game store or logic
   const [pieces, setPieces] = useState(() => ({
     tigers: INITIAL_TIGER_POSITIONS,
     goats: getInitialGoatPositions(),
@@ -261,18 +262,20 @@ const Board = () => {
 
   // Convert grid coordinates to pixel coordinates
   const gridToPixel = (gridX, gridY, dims) => {
-    const cellSize = dims.cellSize;
-    const offsetX = dims.padding;
-    const offsetY = dims.padding;
+    const { cellSize, padding } = dims;
     return {
-      x: offsetX + gridX * cellSize,
-      y: offsetY + gridY * cellSize,
+      x: padding + gridX * cellSize,
+      y: padding + gridY * cellSize,
     };
   };
 
+  // Handle board clicks (select or move)
   const handleBoardClick = (gridX, gridY) => {
-    // Always use selectPiece for all clicks
-    // This lets the game store handle all logic for moves and selection
+    selectPiece(gridX, gridY);
+  };
+
+  // NEW: onDragStart -> select the piece immediately
+  const handleDragStart = (gridX, gridY) => {
     selectPiece(gridX, gridY);
   };
 
@@ -280,37 +283,47 @@ const Board = () => {
     const stage = event.target.getStage();
     const pos = stage.getPointerPosition();
 
-    // Convert pixel coordinates back to grid coordinates
-    const cellSize = boardDims.cellSize;
-    const offsetX = boardDims.padding;
-    const offsetY = boardDims.padding;
+    if (!boardDims) return;
 
-    const newGridX = Math.round((pos.x - offsetX) / cellSize);
-    const newGridY = Math.round((pos.y - offsetY) / cellSize);
+    const { cellSize, padding } = boardDims;
+    const newGridX = Math.round((pos.x - padding) / cellSize);
+    const newGridY = Math.round((pos.y - padding) / cellSize);
 
-    // Only process if within bounds and different from starting position
+    // Ensure within board bounds
     if (
       newGridX >= 0 &&
-      newGridX < 5 &&
+      newGridX < GRID_SIZE &&
       newGridY >= 0 &&
-      newGridY < 5 &&
+      newGridY < GRID_SIZE &&
       (newGridX !== gridX || newGridY !== gridY)
     ) {
-      selectPiece(gridX, gridY);
-      makeMove(newGridX, newGridY);
+      // Because onDragStart selected the piece, possibleMoves is now populated
+      const isValidMove = possibleMoves.some(
+        (move) => move.x === newGridX && move.y === newGridY
+      );
+
+      if (isValidMove) {
+        // Animate to new position
+        const newPos = gridToPixel(newGridX, newGridY, boardDims);
+        event.target.to({
+          x: newPos.x - (cellSize * 0.6 * 0.8) / 2,
+          y: newPos.y - (cellSize * 0.6 * 0.8) / 2,
+          duration: 0.1,
+          onFinish: () => {
+            makeMove(newGridX, newGridY);
+          },
+        });
+        return;
+      }
     }
 
-    // Get the original grid position in pixels
+    // Otherwise, snap back
     const originalPos = gridToPixel(gridX, gridY, boardDims);
-
-    // Calculate the exact same offset used in the GamePiece component
-    const pieceSize = boardDims.cellSize * 0.6;
-    const imageOffset = (pieceSize * 0.8) / 2;
-
-    // Reset to the exact original position
-    event.target.position({
-      x: originalPos.x - imageOffset,
-      y: originalPos.y - imageOffset,
+    event.target.to({
+      x: originalPos.x - (cellSize * 0.6 * 0.8) / 2,
+      y: originalPos.y - (cellSize * 0.6 * 0.8) / 2,
+      duration: 0.2,
+      easing: Konva.Easings.EaseOut,
     });
   };
 
@@ -320,7 +333,7 @@ const Board = () => {
         <Stage width={dimensions.width} height={dimensions.height}>
           <Layer>
             <Group>
-              {/* Grid lines - increased stroke width and made color whiter */}
+              {/* Grid lines */}
               {generateLines(boardDims).map((line, i) => (
                 <Line
                   key={i}
@@ -347,7 +360,7 @@ const Board = () => {
                 />
               ))}
 
-              {/* Intersection points - made bigger */}
+              {/* Intersection points */}
               {generatePoints(boardDims).map((point, i) => (
                 <Circle
                   key={i}
@@ -363,6 +376,7 @@ const Board = () => {
               {/* Possible moves indicators */}
               {possibleMoves.map((pos, i) => {
                 const pixelPos = gridToPixel(pos.x, pos.y, boardDims);
+                const isCapture = pos.type === "capture";
                 return (
                   <Circle
                     key={`possible-${i}`}
@@ -370,12 +384,12 @@ const Board = () => {
                     y={pixelPos.y}
                     radius={boardDims.cellSize * 0.2}
                     fill={
-                      pos.type === "capture"
+                      isCapture
                         ? "rgba(255, 0, 0, 0.2)"
                         : "rgba(0, 255, 0, 0.2)"
                     }
                     stroke={
-                      pos.type === "capture"
+                      isCapture
                         ? "rgba(255, 0, 0, 0.5)"
                         : "rgba(0, 255, 0, 0.5)"
                     }
@@ -399,7 +413,10 @@ const Board = () => {
                       isSelected={
                         selectedPiece?.x === x && selectedPiece?.y === y
                       }
+                      // Clicking still works to select
                       onSelect={() => handleBoardClick(x, y)}
+                      // NEW: automatically select on drag start
+                      onDragStart={() => handleDragStart(x, y)}
                       onDragEnd={(e) => handleDragEnd(x, y, e)}
                       type={cell.type}
                       currentTurn={turn}
