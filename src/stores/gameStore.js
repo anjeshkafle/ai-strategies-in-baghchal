@@ -291,8 +291,9 @@ export const useGameStore = create((set, get) => ({
       // Check each tiger position
       for (let y = 0; y < state.board.length; y++) {
         for (let x = 0; x < state.board[y].length; x++) {
-          if (state.board[y][x] === "TIGER") {
-            const moves = getPossibleMoves({ x, y }, state.board);
+          // CORRECTED: Check for tiger type in the cell object
+          if (state.board[y][x]?.type === "TIGER") {
+            const moves = getPossibleMoves(x, y, state.board);
             if (moves.length > 0) {
               tigerHasMove = true;
               break;
