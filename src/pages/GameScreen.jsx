@@ -131,18 +131,54 @@ const GameScreen = () => {
               <div className="flex-grow overflow-y-auto custom-scrollbar h-[40vh]">
                 <div className="p-2">
                   <div className="space-y-1">
-                    {moveHistory.map((move, index) => (
-                      <div key={index} className="flex text-xs">
-                        <span className="w-6 text-gray-500">{index + 1}.</span>
-                        <span className="w-full text-gray-300">
-                          {move.startsWith("G") && move.length === 3
-                            ? `Goat to ${move.slice(1)}`
-                            : move.startsWith("T")
-                            ? `Tiger ${move.slice(1, 3)} to ${move.slice(3)}`
-                            : `Goat ${move.slice(1, 3)} to ${move.slice(3)}`}
-                        </span>
-                      </div>
-                    ))}
+                    {/* Group moves into pairs */}
+                    {Array.from({
+                      length: Math.ceil(moveHistory.length / 2),
+                    }).map((_, i) => {
+                      const goatMove = moveHistory[i * 2];
+                      const tigerMove = moveHistory[i * 2 + 1];
+
+                      // Helper to check if a move is a capture (when source and destination are 2 squares apart)
+                      const isCapture = (move) => {
+                        if (!move || move.length !== 5) return false;
+                        const sourceCol = move.charCodeAt(1) - 65;
+                        const sourceRow = parseInt(move[2]) - 1;
+                        const destCol = move.charCodeAt(3) - 65;
+                        const destRow = parseInt(move[4]) - 1;
+                        return (
+                          Math.abs(sourceCol - destCol) > 1 ||
+                          Math.abs(sourceRow - destRow) > 1
+                        );
+                      };
+
+                      return (
+                        <div key={i} className="flex text-xs">
+                          <span className="w-6 text-gray-500">{i + 1}.</span>
+                          <span className="w-[45%] text-gray-300">
+                            {goatMove &&
+                              (goatMove.length === 3
+                                ? `Goat to ${goatMove.slice(1)}`
+                                : `Goat ${goatMove.slice(
+                                    1,
+                                    3
+                                  )} to ${goatMove.slice(3)}`)}
+                          </span>
+                          <span
+                            className={`w-[45%] ${
+                              isCapture(tigerMove)
+                                ? "text-red-400"
+                                : "text-gray-300"
+                            }`}
+                          >
+                            {tigerMove &&
+                              `Tiger ${tigerMove.slice(
+                                1,
+                                3
+                              )} to ${tigerMove.slice(3)}`}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
