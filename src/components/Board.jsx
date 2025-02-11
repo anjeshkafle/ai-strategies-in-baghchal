@@ -55,8 +55,15 @@ const GamePiece = ({
   onDragEnd,
   type,
   currentTurn,
+  phase,
 }) => {
   const [image] = useImage(sprite);
+
+  // Only allow dragging if:
+  // 1. It's the piece's turn AND
+  // 2. Either it's a tiger OR it's a goat in movement phase
+  const isDraggable =
+    type === currentTurn && (type === "TIGER" || phase === "MOVEMENT");
 
   return (
     <>
@@ -79,7 +86,7 @@ const GamePiece = ({
         height={size * 0.8}
         onClick={onSelect}
         onTouchStart={onSelect}
-        draggable={type === currentTurn}
+        draggable={isDraggable}
         // NEW: Automatically select piece on drag start
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
@@ -96,8 +103,15 @@ const Board = () => {
   const PADDING_PERCENTAGE = 0.15;
 
   // Grab relevant state + actions from your store
-  const { board, turn, selectedPiece, possibleMoves, selectPiece, makeMove } =
-    useGameStore();
+  const {
+    board,
+    turn,
+    selectedPiece,
+    possibleMoves,
+    selectPiece,
+    makeMove,
+    phase,
+  } = useGameStore();
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -413,13 +427,12 @@ const Board = () => {
                       isSelected={
                         selectedPiece?.x === x && selectedPiece?.y === y
                       }
-                      // Clicking still works to select
                       onSelect={() => handleBoardClick(x, y)}
-                      // NEW: automatically select on drag start
                       onDragStart={() => handleDragStart(x, y)}
                       onDragEnd={(e) => handleDragEnd(x, y, e)}
                       type={cell.type}
                       currentTurn={turn}
+                      phase={phase}
                     />
                   );
                 })
