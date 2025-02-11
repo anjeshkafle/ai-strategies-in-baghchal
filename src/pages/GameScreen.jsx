@@ -13,6 +13,7 @@ const GameScreen = () => {
     gameStatus,
     resetGame,
     moveHistory,
+    perspective,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
 
@@ -23,6 +24,49 @@ const GameScreen = () => {
   const handleMainMenu = () => {
     resetGame();
     navigate("/");
+  };
+
+  // Helper function to render player panel
+  const renderPlayerPanel = (isTopPanel) => {
+    const isTiger = (perspective === "TIGER") !== isTopPanel;
+    const playerType = isTiger ? "TIGER" : "GOAT";
+
+    return (
+      <div className="flex-none p-2 border-b border-gray-700">
+        <div
+          className={`flex items-center gap-3 ${
+            turn === playerType
+              ? isTiger
+                ? "text-red-400"
+                : "text-green-400"
+              : "text-gray-400"
+          }`}
+        >
+          <div
+            className={`w-6 h-6 ${
+              isTiger ? "bg-red-500" : "bg-green-500"
+            } rounded-full`}
+          ></div>
+          <span className="text-sm font-medium">
+            {isTiger ? "Tiger" : "Goat"}
+          </span>
+          {isTiger && (
+            <span className="ml-auto text-sm font-medium">
+              Captured: {goatsCaptured}
+            </span>
+          )}
+        </div>
+        <div
+          className={`text-xl font-mono ${
+            turn === playerType
+              ? (isTiger ? "text-red-400" : "text-green-400") + " animate-pulse"
+              : "text-gray-400"
+          }`}
+        >
+          10:00
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -80,29 +124,8 @@ const GameScreen = () => {
           <div className="flex flex-col gap-2 w-72 self-center max-h-[calc(100vh-6rem)]">
             {/* Game Info Panel */}
             <div className="bg-gray-800 rounded-lg flex flex-col">
-              {/* Tiger Info */}
-              <div className="flex-none p-2 border-b border-gray-700">
-                <div
-                  className={`flex items-center gap-3 ${
-                    turn === "TIGER" ? "text-red-400" : "text-gray-400"
-                  }`}
-                >
-                  <div className="w-6 h-6 bg-red-500 rounded-full"></div>
-                  <span className="text-sm font-medium">Tiger</span>
-                  <span className="ml-auto text-sm font-medium">
-                    Captured: {goatsCaptured}
-                  </span>
-                </div>
-                <div
-                  className={`text-xl font-mono ${
-                    turn === "TIGER"
-                      ? "text-red-400 animate-pulse"
-                      : "text-gray-400"
-                  }`}
-                >
-                  10:00
-                </div>
-              </div>
+              {/* Opponent Panel */}
+              {renderPlayerPanel(true)}
 
               {/* Game Phase Info */}
               <div className="flex-none p-2 border-b border-gray-700">
@@ -128,7 +151,7 @@ const GameScreen = () => {
               </div>
 
               {/* Move List */}
-              <div className="flex-grow overflow-y-auto custom-scrollbar h-[40vh]">
+              <div className="flex-grow overflow-y-auto custom-scrollbar h-[40vh] border-b border-gray-700">
                 <div className="p-2">
                   <div className="space-y-1">
                     {/* Group moves into pairs */}
@@ -183,26 +206,8 @@ const GameScreen = () => {
                 </div>
               </div>
 
-              {/* Goat Info */}
-              <div className="flex-none p-2 border-t border-gray-700">
-                <div
-                  className={`flex items-center gap-3 ${
-                    turn === "GOAT" ? "text-green-400" : "text-gray-400"
-                  }`}
-                >
-                  <div className="w-6 h-6 bg-green-500 rounded-full"></div>
-                  <span className="text-sm font-medium">Goat</span>
-                </div>
-                <div
-                  className={`text-xl font-mono ${
-                    turn === "GOAT"
-                      ? "text-green-400 animate-pulse"
-                      : "text-gray-400"
-                  }`}
-                >
-                  10:00
-                </div>
-              </div>
+              {/* Player Panel */}
+              {renderPlayerPanel(false)}
             </div>
 
             {/* Action Buttons */}
