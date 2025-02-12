@@ -38,6 +38,24 @@ const GameScreen = () => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
+  const getTimeStatus = (seconds) => {
+    if (seconds <= 10) return "critical";
+    if (seconds <= 30) return "warning";
+    return "normal";
+  };
+
+  const TIME_STATUS_STYLES = {
+    normal: "",
+    warning: "text-yellow-400",
+    critical: "text-red-500",
+  };
+
+  const ACTIVE_TIME_STATUS_STYLES = {
+    normal: "",
+    warning: "text-yellow-400 animate-pulse",
+    critical: "text-red-500 animate-[pulse_0.5s_ease-in-out_infinite]",
+  };
+
   useEffect(() => {
     if (gameStatus === "PLAYING") {
       const cleanup = startClock();
@@ -100,15 +118,26 @@ const GameScreen = () => {
             <div
               className={`flex flex-col items-end ${
                 turn === playerType
-                  ? (isTiger ? "text-red-400" : "text-green-400") +
-                    " animate-pulse"
+                  ? isTiger
+                    ? "text-red-400"
+                    : "text-green-400"
                   : "text-gray-400"
               }`}
             >
               <span className="text-xs text-gray-500 uppercase tracking-wider">
                 Time
               </span>
-              <span className="text-xl font-mono font-bold">
+              <span
+                className={`text-xl font-mono font-bold ${
+                  turn === playerType
+                    ? ACTIVE_TIME_STATUS_STYLES[
+                        getTimeStatus(isTiger ? tigerTime : goatTime)
+                      ]
+                    : TIME_STATUS_STYLES[
+                        getTimeStatus(isTiger ? tigerTime : goatTime)
+                      ]
+                }`}
+              >
                 {formatTime(isTiger ? tigerTime : goatTime)}
               </span>
             </div>
