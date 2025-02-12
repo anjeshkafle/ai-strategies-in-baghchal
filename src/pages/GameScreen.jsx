@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import useImage from "use-image";
 import spriteGoat from "../assets/sprite_goat.png";
 import spriteTiger from "../assets/sprite_tiger.png";
+import Modal from "../components/Modal";
 
 const GameScreen = () => {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ const GameScreen = () => {
     undoMoves,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
 
   const handleNewGame = () => {
     resetGame();
@@ -183,6 +185,19 @@ const GameScreen = () => {
     );
   };
 
+  const handleStopGame = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleConfirmStop = () => {
+    setIsModalOpen(false);
+    handleMainMenu();
+  };
+
+  const handleCancelStop = () => {
+    setIsModalOpen(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-900">
       {/* Top Navigation */}
@@ -300,15 +315,7 @@ const GameScreen = () => {
               {gameStatus === "PLAYING" ? (
                 <>
                   <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "Are you sure you want to stop this game?"
-                        )
-                      ) {
-                        handleMainMenu();
-                      }
-                    }}
+                    onClick={handleStopGame}
                     className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded"
                   >
                     Stop Game
@@ -337,6 +344,15 @@ const GameScreen = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal for confirming stop game */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCancelStop}
+        onConfirm={handleConfirmStop}
+        title="End Game"
+        message="Are you sure you want to exit to the main menu?"
+      />
     </div>
   );
 };
