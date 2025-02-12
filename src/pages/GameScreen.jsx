@@ -70,6 +70,10 @@ const GameScreen = () => {
     const sprite = isTiger ? spriteTiger : spriteGoat;
     const [spriteImage] = useImage(sprite);
 
+    const isWinner =
+      (gameStatus === "TIGERS_WIN" && isTiger) ||
+      (gameStatus === "GOATS_WIN" && !isTiger);
+
     // Helper function for goats captured text
     const getCapturedText = (count) => {
       return count === 1 ? "1 GOAT CAPTURED" : `${count} GOATS CAPTURED`;
@@ -81,12 +85,20 @@ const GameScreen = () => {
     };
 
     return (
-      <div className="flex-none p-3 border-b border-gray-700">
+      <div
+        className={`flex-none p-3 border-b border-gray-700 ${
+          gameStatus !== "PLAYING" && isWinner
+            ? "bg-gradient-to-r from-yellow-500/10 to-transparent"
+            : ""
+        }`}
+      >
         {/* Player info section */}
         <div>
           <div
             className={`flex items-center justify-between ${
-              turn === playerType
+              isWinner
+                ? "text-yellow-400"
+                : turn === playerType
                 ? isTiger
                   ? "text-red-400"
                   : "text-green-400"
@@ -182,48 +194,30 @@ const GameScreen = () => {
         </div>
       </div>
 
-      {/* Game Status Banner - Add this near the top of your layout */}
-      {gameStatus !== "PLAYING" && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center space-y-6">
-            <h2 className="text-3xl font-bold text-yellow-400">
-              {gameStatus === "TIGERS_WIN" ? "Tigers Win!" : "Goats Win!"}
-            </h2>
-            <p className="text-gray-300">
-              {gameStatus === "TIGERS_WIN"
-                ? goatsCaptured >= 5
-                  ? "Tigers captured 5 goats!"
-                  : "Goats ran out of time!"
-                : gameStatus === "GOATS_WIN"
-                ? tigerTime <= 0
-                  ? "Tigers ran out of time!"
-                  : "Tigers have no legal moves left!"
-                : ""}
-            </p>
-            <div className="space-x-4">
-              <button
-                onClick={handleNewGame}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                New Game
-              </button>
-              <button
-                onClick={handleMainMenu}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Main Menu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Content */}
       <div className="mx-auto h-[calc(100vh-3rem)] flex justify-center">
         <div className="flex gap-2 p-2 items-center">
-          {/* Board - Added specific dimensions */}
-          <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4rem)]">
+          {/* Board with potential overlay */}
+          <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4rem)] relative">
             <Board />
+            {gameStatus !== "PLAYING" && (
+              <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+                <div className="text-center">
+                  <h2 className="text-4xl font-bold text-white mb-2">
+                    {gameStatus === "TIGERS_WIN" ? "Tigers Win!" : "Goats Win!"}
+                  </h2>
+                  <p className="text-gray-200">
+                    {gameStatus === "TIGERS_WIN"
+                      ? goatsCaptured >= 5
+                        ? "Tigers captured 5 goats"
+                        : "Goats ran out of time"
+                      : tigerTime <= 0
+                      ? "Tigers ran out of time"
+                      : "Tigers have no legal moves"}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Section */}
@@ -295,11 +289,27 @@ const GameScreen = () => {
 
             {/* Action Buttons */}
             <div className="bg-gray-800 rounded-lg p-2 flex gap-2">
-              <button className="flex-1 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium rounded">
-                Offer Draw
+              <button
+                onClick={() => {
+                  if (gameStatus === "PLAYING") {
+                    if (
+                      window.confirm("Are you sure you want to leave the game?")
+                    ) {
+                      handleMainMenu();
+                    }
+                  } else {
+                    handleMainMenu();
+                  }
+                }}
+                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded"
+              >
+                Main Menu
               </button>
-              <button className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded">
-                Resign
+              <button
+                className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded opacity-50 cursor-not-allowed"
+                disabled
+              >
+                Undo Move
               </button>
             </div>
           </div>
