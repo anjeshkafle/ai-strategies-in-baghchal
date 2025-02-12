@@ -203,21 +203,31 @@ const GameScreen = () => {
       {/* Top Navigation */}
       <div className="h-12 bg-gray-800 border-b border-gray-700">
         <div className="container mx-auto px-4 h-full flex items-center justify-between">
-          <div className="text-white font-bold text-xl leading-relaxed">
-            Baghchal
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <img src={spriteGoat} alt="Goat" className="w-8 h-8" />
+              <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">
+                Baghchal
+              </h1>
+              <img src={spriteTiger} alt="Tiger" className="w-8 h-8" />
+            </div>
           </div>
           <div className="flex items-center gap-4">
-            <button className="text-gray-300 hover:text-white">Rules</button>
-            <button className="text-gray-300 hover:text-white">Settings</button>
+            <button className="text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1.5 rounded-md transition-colors">
+              Rules
+            </button>
+            <button className="text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1.5 rounded-md transition-colors">
+              Settings
+            </button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto h-[calc(100vh-3rem)] flex justify-center">
-        <div className="flex gap-2 p-2 items-center">
+      <div className="mx-auto h-[calc(100vh-3rem)] flex justify-center items-center">
+        <div className="flex gap-2 p-2 items-center h-[calc(100vh-4rem)]">
           {/* Board with potential overlay */}
-          <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4rem)] relative">
+          <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4.5rem)] relative">
             <Board />
             {gameStatus !== "PLAYING" && (
               <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-[2px] flex items-center justify-center p-8">
@@ -244,14 +254,14 @@ const GameScreen = () => {
           </div>
 
           {/* Right Section */}
-          <div className="flex flex-col gap-2 w-72 self-center max-h-[calc(100vh-6rem)]">
+          <div className="flex flex-col gap-2 w-72 h-[calc(100vh-4.5rem)] self-center">
             {/* Game Info Panel */}
-            <div className="bg-gray-800 rounded-lg flex flex-col">
+            <div className="bg-gray-800 rounded-lg flex flex-col flex-grow">
               {/* Opponent Panel */}
               {renderPlayerPanel(true)}
 
               {/* Move List */}
-              <div className="flex-grow overflow-y-auto custom-scrollbar h-[40vh] border-b border-gray-700">
+              <div className="flex-grow overflow-y-auto custom-scrollbar h-[50vh] border-b border-gray-700">
                 <div className="p-2">
                   <div className="space-y-1">
                     {/* Group moves into pairs */}

@@ -100,7 +100,7 @@ const Board = () => {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const GRID_SIZE = 5;
-  const PADDING_PERCENTAGE = 0.15;
+  const PADDING_PERCENTAGE = 0.1;
 
   // Grab relevant state + actions from your store
   const {
