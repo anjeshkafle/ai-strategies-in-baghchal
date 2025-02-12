@@ -201,20 +201,24 @@ const GameScreen = () => {
           <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4rem)] relative">
             <Board />
             {gameStatus !== "PLAYING" && (
-              <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
-                <div className="text-center">
-                  <h2 className="text-4xl font-bold text-white mb-2">
-                    {gameStatus === "TIGERS_WIN" ? "Tigers Win!" : "Goats Win!"}
-                  </h2>
-                  <p className="text-gray-200">
-                    {gameStatus === "TIGERS_WIN"
-                      ? goatsCaptured >= 5
-                        ? "Tigers captured 5 goats"
-                        : "Goats ran out of time"
-                      : tigerTime <= 0
-                      ? "Tigers ran out of time"
-                      : "Tigers have no legal moves"}
-                  </p>
+              <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-[2px] flex items-center justify-center p-8">
+                <div className="w-full max-w-lg bg-gray-800/90 rounded-xl p-8 shadow-2xl border border-gray-700/50">
+                  <div className="text-center space-y-4">
+                    <h2 className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+                      {gameStatus === "TIGERS_WIN"
+                        ? "Tigers Win!"
+                        : "Goats Win!"}
+                    </h2>
+                    <p className="text-xl text-gray-300 font-medium">
+                      {gameStatus === "TIGERS_WIN"
+                        ? goatsCaptured >= 5
+                          ? "Tigers captured 5 goats"
+                          : "Goats ran out of time"
+                        : tigerTime <= 0
+                        ? "Tigers ran out of time"
+                        : "Tigers have no legal moves"}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
