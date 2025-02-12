@@ -31,6 +31,16 @@ const GameScreen = () => {
     const isTiger = (perspective === "TIGER") !== isTopPanel;
     const playerType = isTiger ? "TIGER" : "GOAT";
 
+    // Helper function for goats captured text
+    const getCapturedText = (count) => {
+      return count === 1 ? "1 GOAT CAPTURED" : `${count} GOATS CAPTURED`;
+    };
+
+    // Helper function for remaining goats text
+    const getRemainingText = (count) => {
+      return count === 1 ? "1 GOAT REMAINING" : `${count} GOATS REMAINING`;
+    };
+
     return (
       <div className="flex-none p-2 border-b border-gray-700">
         {/* Player info section */}
@@ -52,11 +62,6 @@ const GameScreen = () => {
             <span className="text-sm font-medium">
               {isTiger ? "Tiger" : "Goat"}
             </span>
-            {isTiger && (
-              <span className="ml-auto text-sm font-medium">
-                Captured: {goatsCaptured}
-              </span>
-            )}
           </div>
           <div
             className={`text-xl font-mono ${
@@ -70,21 +75,24 @@ const GameScreen = () => {
           </div>
         </div>
 
-        {/* Add game phase info for goat panel only with separator */}
-        {!isTiger && gameStatus === "PLAYING" && (
+        {/* Status info section with separator */}
+        {gameStatus === "PLAYING" && (
           <>
             <div className="border-t border-gray-700 my-2"></div>
             <div className="text-gray-400 text-sm">
-              {phase === "PLACEMENT" ? (
-                <div className="flex justify-between items-center">
-                  <span>Placement Phase</span>
-                  <span className="text-yellow-400 font-mono">
-                    {remainingGoats} goats left
+              <div className="flex justify-between items-center">
+                {isTiger ? (
+                  <span className="text-red-400 font-mono">
+                    {getCapturedText(goatsCaptured)}
                   </span>
-                </div>
-              ) : (
-                <span>Movement Phase</span>
-              )}
+                ) : (
+                  <span className="text-yellow-400 font-mono">
+                    {phase === "PLACEMENT"
+                      ? getRemainingText(remainingGoats)
+                      : "MOVEMENT PHASE"}
+                  </span>
+                )}
+              </div>
             </div>
           </>
         )}
