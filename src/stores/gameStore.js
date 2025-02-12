@@ -42,6 +42,7 @@ const initialState = {
   tigerTime: 10,
   goatTime: 10,
   clockRunning: false,
+  isInitialized: false, // Add this line
 };
 
 // Helper function to convert grid coordinates to notation
@@ -68,6 +69,7 @@ export const useGameStore = create((set, get) => ({
       moveHistory: [],
       tigerTime: initialState.timeControl.initial,
       goatTime: initialState.timeControl.initial,
+      isInitialized: false, // Reset this when going back to main menu
     });
   },
 
@@ -370,6 +372,7 @@ export const useGameStore = create((set, get) => ({
       timeControl: settings.timeControl,
       tigerTime: settings.timeControl.initial,
       goatTime: settings.timeControl.initial,
+      isInitialized: true, // Set this when game settings are configured
     });
   },
 }));
