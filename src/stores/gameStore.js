@@ -43,6 +43,7 @@ const initialState = {
   goatTime: 10,
   clockRunning: false,
   isInitialized: false, // Add this line
+  canUndo: false,
 };
 
 // Helper function to convert grid coordinates to notation
@@ -149,6 +150,7 @@ export const useGameStore = create((set, get) => ({
           phase: newGoatsPlaced >= TOTAL_GOATS ? "MOVEMENT" : "PLACEMENT",
           moveHistory: [...state.moveHistory, moveNotation],
           goatTime: state.goatTime + state.timeControl.increment,
+          canUndo: true,
         }));
       }
       return;
@@ -197,6 +199,7 @@ export const useGameStore = create((set, get) => ({
                 goatsCaptured: newGoatsCaptured,
                 moveHistory: [...state.moveHistory, moveNotation],
                 tigerTime: state.tigerTime + state.timeControl.increment,
+                canUndo: true,
               };
 
               // Check if tigers won (5 goats captured)
@@ -217,6 +220,7 @@ export const useGameStore = create((set, get) => ({
               possibleMoves: [],
               moveHistory: [...state.moveHistory, moveNotation],
               tigerTime: state.tigerTime + state.timeControl.increment,
+              canUndo: true,
             }));
           }
         }
@@ -269,6 +273,7 @@ export const useGameStore = create((set, get) => ({
               goatsCaptured: state.goatsCaptured + 1,
               moveHistory: [...state.moveHistory, moveNotation],
               goatTime: state.goatTime + state.timeControl.increment,
+              canUndo: true,
             }));
           } else {
             set((state) => ({
@@ -279,6 +284,7 @@ export const useGameStore = create((set, get) => ({
               possibleMoves: [],
               moveHistory: [...state.moveHistory, moveNotation],
               goatTime: state.goatTime + state.timeControl.increment,
+              canUndo: true,
             }));
           }
         } else {
@@ -373,6 +379,59 @@ export const useGameStore = create((set, get) => ({
       tigerTime: settings.timeControl.initial,
       goatTime: settings.timeControl.initial,
       isInitialized: true, // Set this when game settings are configured
+    });
+  },
+
+  undoMoves: () => {
+    const state = get();
+    if (state.moveHistory.length === 0) return;
+
+    // Remove last move from history
+    const newHistory = state.moveHistory.slice(0, -1);
+
+    // Recreate the board state up to this point
+    const newBoard = createInitialBoard();
+    let goatsPlaced = 0;
+    let goatsCaptured = 0;
+
+    // Replay all moves except the last one
+    newHistory.forEach((move) => {
+      if (move.length === 3) {
+        // Placement move
+        const col = move.charCodeAt(1) - 65;
+        const row = parseInt(move[2]) - 1;
+        newBoard[row][col] = { type: "GOAT" };
+        goatsPlaced++;
+      } else {
+        // Movement move
+        const fromCol = move.charCodeAt(1) - 65;
+        const fromRow = parseInt(move[2]) - 1;
+        const toCol = move.charCodeAt(3) - 65;
+        const toRow = parseInt(move[4]) - 1;
+
+        // Check if it was a capture move
+        if (Math.abs(fromCol - toCol) > 1 || Math.abs(fromRow - toRow) > 1) {
+          goatsCaptured++;
+        }
+
+        newBoard[toRow][toCol] = newBoard[fromRow][fromCol];
+        newBoard[fromRow][fromCol] = null;
+      }
+    });
+
+    // Determine whose turn it should be based on move history length
+    const newTurn = newHistory.length % 2 === 0 ? "GOAT" : "TIGER";
+
+    set({
+      board: newBoard,
+      moveHistory: newHistory,
+      goatsPlaced,
+      goatsCaptured,
+      turn: newTurn,
+      selectedPiece: null,
+      possibleMoves: [],
+      phase: goatsPlaced < TOTAL_GOATS ? "PLACEMENT" : "MOVEMENT",
+      canUndo: newHistory.length > 0,
     });
   },
 }));

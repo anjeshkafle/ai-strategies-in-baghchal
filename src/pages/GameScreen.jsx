@@ -20,6 +20,8 @@ const GameScreen = () => {
     tigerTime,
     goatTime,
     startClock,
+    canUndo,
+    undoMoves,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
 
@@ -293,28 +295,42 @@ const GameScreen = () => {
 
             {/* Action Buttons */}
             <div className="bg-gray-800 rounded-lg p-2 flex gap-2">
-              <button
-                onClick={() => {
-                  if (gameStatus === "PLAYING") {
-                    if (
-                      window.confirm("Are you sure you want to leave the game?")
-                    ) {
-                      handleMainMenu();
-                    }
-                  } else {
-                    handleMainMenu();
-                  }
-                }}
-                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded"
-              >
-                Main Menu
-              </button>
-              <button
-                className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded opacity-50 cursor-not-allowed"
-                disabled
-              >
-                Undo Move
-              </button>
+              {gameStatus === "PLAYING" ? (
+                <>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Are you sure you want to stop this game?"
+                        )
+                      ) {
+                        handleMainMenu();
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded"
+                  >
+                    Stop Game
+                  </button>
+                  <button
+                    onClick={undoMoves}
+                    className={`flex-1 px-3 py-2 ${
+                      canUndo
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-gray-600 cursor-not-allowed"
+                    } text-white text-sm font-medium rounded`}
+                    disabled={!canUndo}
+                  >
+                    Undo Move
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleMainMenu}
+                  className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded"
+                >
+                  Main Menu
+                </button>
+              )}
             </div>
           </div>
         </div>
