@@ -154,6 +154,9 @@ export const useGameStore = create((set, get) => ({
           goatTime: state.goatTime + state.timeControl.increment,
           canUndo: true,
         }));
+
+        // Check game end after state update
+        setTimeout(() => get().checkGameEnd(), 0);
       }
       return;
     }
@@ -297,13 +300,18 @@ export const useGameStore = create((set, get) => ({
         }
       }
     }
-    // After successful moves, add:
-    get().checkGameEnd();
 
-    // After the move is made, trigger AI move if needed
+    // After successful moves, add:
     setTimeout(() => {
-      get().handleAIMove();
-    }, 500); // Small delay to allow UI updates
+      get().checkGameEnd();
+
+      // Only trigger AI if game is still playing
+      if (get().gameStatus === "PLAYING") {
+        setTimeout(() => {
+          get().handleAIMove();
+        }, 500);
+      }
+    }, 0);
   },
 
   getRemainingGoats: () => TOTAL_GOATS - get().goatsPlaced,
@@ -318,26 +326,25 @@ export const useGameStore = create((set, get) => ({
       return;
     }
 
-    // Check if goats won (tigers have no legal moves)
-    if (state.turn === "TIGER") {
-      let tigerHasMove = false;
-      // Check each tiger position
-      for (let y = 0; y < state.board.length; y++) {
-        for (let x = 0; x < state.board[y].length; x++) {
-          // CORRECTED: Check for tiger type in the cell object
-          if (state.board[y][x]?.type === "TIGER") {
-            const moves = getPossibleMoves(x, y, state.board);
-            if (moves.length > 0) {
-              tigerHasMove = true;
-              break;
-            }
+    // Check if tigers have no legal moves (works in both phases)
+    let tigerHasMove = false;
+    // Check each tiger position
+    for (let y = 0; y < state.board.length; y++) {
+      for (let x = 0; x < state.board[y].length; x++) {
+        if (state.board[y][x]?.type === "TIGER") {
+          const moves = getPossibleMoves(x, y, state.board);
+          if (moves.length > 0) {
+            tigerHasMove = true;
+            break;
           }
         }
-        if (tigerHasMove) break;
       }
-      if (!tigerHasMove) {
-        set({ gameStatus: "GOATS_WIN" });
-      }
+      if (tigerHasMove) break;
+    }
+
+    if (!tigerHasMove) {
+      set({ gameStatus: "GOATS_WIN" });
+      return;
     }
   },
 
@@ -380,12 +387,27 @@ export const useGameStore = create((set, get) => ({
   },
 
   setGameSettings: (settings) => {
+    // Determine perspective based on human player
+    let perspective = "GOAT"; // default
+    if (
+      settings.players.goat !== "HUMAN" &&
+      settings.players.tiger === "HUMAN"
+    ) {
+      perspective = "TIGER";
+    } else if (
+      settings.players.goat === "HUMAN" &&
+      settings.players.tiger !== "HUMAN"
+    ) {
+      perspective = "GOAT";
+    }
+
     set({
       players: settings.players,
       timeControl: settings.timeControl,
       tigerTime: settings.timeControl.initial,
       goatTime: settings.timeControl.initial,
-      isInitialized: true, // Set this when game settings are configured
+      perspective: perspective,
+      isInitialized: true,
     });
   },
 

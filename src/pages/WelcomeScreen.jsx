@@ -4,6 +4,7 @@ import { useGameStore } from "../stores/gameStore";
 import useImage from "use-image";
 import spriteGoat from "../assets/sprite_goat.png";
 import spriteTiger from "../assets/sprite_tiger.png";
+import CustomSelect from "../components/CustomSelect";
 
 const TIME_PRESETS = [
   { name: "3m | 2s", initial: 180, increment: 2 },
@@ -47,9 +48,21 @@ const WelcomeScreen = () => {
           increment: settings.selectedPreset.increment,
         };
 
+    // Determine perspective based on human player
+    let perspective = "GOAT"; // default
+    if (settings.players.goat === "AI" && settings.players.tiger === "HUMAN") {
+      perspective = "TIGER";
+    } else if (
+      settings.players.goat === "HUMAN" &&
+      settings.players.tiger === "HUMAN"
+    ) {
+      perspective = "GOAT"; // In case both are human, keep GOAT perspective
+    }
+
     setGameSettings({
       players: settings.players,
       timeControl,
+      perspective,
     });
     navigate("/game");
   };
@@ -92,24 +105,19 @@ const WelcomeScreen = () => {
                   <img src={spriteGoat} alt="Goat" className="w-8 h-8" />
                   <span className="text-gray-300">Goat</span>
                 </div>
-                <div className="relative w-36">
-                  <select
-                    className="bg-gray-700 text-white rounded px-3 py-2 pr-10 appearance-none w-full"
-                    value={settings.players.goat}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        players: { ...settings.players, goat: e.target.value },
-                      })
-                    }
-                  >
-                    <option value="HUMAN">Human</option>
-                    <option value="AI">Computer</option>
-                  </select>
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-300 pointer-events-none">
-                    ▼
-                  </span>
-                </div>
+                <CustomSelect
+                  value={settings.players.goat}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      players: { ...settings.players, goat: e.target.value },
+                    })
+                  }
+                  options={[
+                    { value: "HUMAN", label: "Human" },
+                    { value: "AI", label: "Computer" },
+                  ]}
+                />
               </div>
 
               {/* Tiger Player Selection */}
@@ -118,24 +126,19 @@ const WelcomeScreen = () => {
                   <img src={spriteTiger} alt="Tiger" className="w-8 h-8" />
                   <span className="text-gray-300">Tiger</span>
                 </div>
-                <div className="relative w-36">
-                  <select
-                    className="bg-gray-700 text-white rounded px-3 py-2 pr-10 appearance-none w-full"
-                    value={settings.players.tiger}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        players: { ...settings.players, tiger: e.target.value },
-                      })
-                    }
-                  >
-                    <option value="HUMAN">Human</option>
-                    <option value="AI">Computer</option>
-                  </select>
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-300 pointer-events-none">
-                    ▼
-                  </span>
-                </div>
+                <CustomSelect
+                  value={settings.players.tiger}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      players: { ...settings.players, tiger: e.target.value },
+                    })
+                  }
+                  options={[
+                    { value: "HUMAN", label: "Human" },
+                    { value: "AI", label: "Computer" },
+                  ]}
+                />
               </div>
             </div>
           </div>

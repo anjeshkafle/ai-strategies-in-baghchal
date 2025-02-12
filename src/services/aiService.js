@@ -18,7 +18,7 @@ export const getBestMove = async (
   if (!isAI) return null;
 
   // Random delay between 1-10 seconds (1000-10000ms)
-  const randomDelay = Math.floor(Math.random() * 9000) + 1000;
+  const randomDelay = Math.floor(Math.random() * 1000) + 1000;
   await delay(randomDelay);
 
   // Get the piece type based on the agent
