@@ -107,7 +107,7 @@ const GhostPiece = ({ x, y, sprite, size }) => {
       image={image}
       width={size * 0.8}
       height={size * 0.8}
-      opacity={0.4}
+      opacity={0.5}
       listening={false}
     />
   );
@@ -171,7 +171,8 @@ const Board = () => {
   // Generate coordinate labels
   const generateLabels = (dims) => {
     const labels = [];
-    const LABEL_OFFSET = 15;
+    const LABEL_OFFSET = 25;
+    const FONT_SIZE = 16;
 
     // Column letters (A-E) at bottom
     for (let col = 0; col < GRID_SIZE; col++) {
@@ -422,8 +423,9 @@ const Board = () => {
                   y={label.y}
                   text={label.text}
                   fill="#E5E7EB"
-                  fontSize={12}
+                  fontSize={16}
                   fontFamily="monospace"
+                  fontStyle="bold"
                   align="center"
                   verticalAlign="middle"
                   offsetX={6}
@@ -437,7 +439,7 @@ const Board = () => {
                   key={i}
                   x={point.x}
                   y={point.y}
-                  radius={6}
+                  radius={boardDims.cellSize * 0.05}
                   fill="#E5E7EB"
                   stroke="#9CA3AF"
                   strokeWidth={2}
