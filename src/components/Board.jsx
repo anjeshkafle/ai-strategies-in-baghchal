@@ -96,6 +96,23 @@ const GamePiece = ({
   );
 };
 
+// Add this new component for the ghost piece
+const GhostPiece = ({ x, y, sprite, size }) => {
+  const [image] = useImage(sprite);
+
+  return (
+    <Image
+      x={x - (size * 0.8) / 2}
+      y={y - (size * 0.8) / 2}
+      image={image}
+      width={size * 0.8}
+      height={size * 0.8}
+      opacity={0.4}
+      listening={false}
+    />
+  );
+};
+
 const Board = () => {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -112,6 +129,8 @@ const Board = () => {
     makeMove,
     phase,
   } = useGameStore();
+
+  const [mousePos, setMousePos] = useState(null);
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -344,7 +363,45 @@ const Board = () => {
   return (
     <div ref={containerRef} className="w-full h-full bg-gray-800 rounded-lg">
       {boardDims && (
-        <Stage width={dimensions.width} height={dimensions.height}>
+        <Stage
+          width={dimensions.width}
+          height={dimensions.height}
+          onMouseMove={(e) => {
+            const stage = e.target.getStage();
+            const pos = stage.getPointerPosition();
+            if (pos && boardDims) {
+              const { padding, cellSize } = boardDims;
+
+              // Calculate the exact position relative to the grid
+              const relX = (pos.x - padding) / cellSize;
+              const relY = (pos.y - padding) / cellSize;
+
+              // Calculate distance to nearest grid point
+              const gridX = Math.round(relX);
+              const gridY = Math.round(relY);
+
+              // Calculate distance from mouse to nearest grid point
+              const distance = Math.sqrt(
+                Math.pow(relX - gridX, 2) + Math.pow(relY - gridY, 2)
+              );
+
+              // Only set position if within threshold (about half a sprite width)
+              // 0.3 is a good starting value, adjust as needed
+              if (
+                distance < 0.3 &&
+                gridX >= 0 &&
+                gridX < GRID_SIZE &&
+                gridY >= 0 &&
+                gridY < GRID_SIZE
+              ) {
+                setMousePos({ x: gridX, y: gridY });
+              } else {
+                setMousePos(null);
+              }
+            }
+          }}
+          onMouseLeave={() => setMousePos(null)}
+        >
           <Layer>
             <Group>
               {/* Grid lines */}
@@ -457,6 +514,19 @@ const Board = () => {
                   );
                 })
               )}
+
+              {/* Ghost piece during placement phase */}
+              {phase === "PLACEMENT" &&
+                turn === "GOAT" &&
+                mousePos &&
+                !board[mousePos.y][mousePos.x] && (
+                  <GhostPiece
+                    x={gridToPixel(mousePos.x, mousePos.y, boardDims).x}
+                    y={gridToPixel(mousePos.x, mousePos.y, boardDims).y}
+                    sprite={spriteGoat}
+                    size={boardDims.cellSize * 0.6}
+                  />
+                )}
             </Group>
           </Layer>
         </Stage>
