@@ -58,16 +58,16 @@ const WelcomeScreen = () => {
 
   return (
     <div className="fixed inset-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800">
-      <div className="max-w-4xl w-full mx-4 space-y-8">
+      <div className="max-w-4xl w-full mx-4 space-y-12">
         {/* Game Title with Sprites */}
-        <div className="text-center relative">
-          <div className="absolute left-1/2 -translate-x-[200px] top-1/2 -translate-y-1/2">
+        <div className="text-center relative h-32 mb-4 flex items-center justify-center">
+          <div className="absolute left-1/2 -translate-x-[200px]">
             <img src={spriteGoat} alt="Goat" className="w-16 h-16" />
           </div>
-          <h1 className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">
+          <h1 className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 leading-relaxed my-0 py-0">
             Baghchal
           </h1>
-          <div className="absolute left-1/2 translate-x-[140px] top-1/2 -translate-y-1/2">
+          <div className="absolute left-1/2 translate-x-[140px]">
             <img src={spriteTiger} alt="Tiger" className="w-16 h-16" />
           </div>
         </div>
@@ -211,15 +211,17 @@ const WelcomeScreen = () => {
         </div>
 
         {/* Start Button */}
-        <button
-          className="w-full max-w-md mx-auto px-8 py-4 bg-gradient-to-r from-yellow-500 to-yellow-600 
-                     text-white text-xl font-bold rounded-lg shadow-lg
-                     hover:from-yellow-600 hover:to-yellow-700 
-                     transform transition-all duration-200 hover:scale-105"
-          onClick={handleStartGame}
-        >
-          Start Game
-        </button>
+        <div className="flex justify-center mb-8">
+          <button
+            className="w-full max-w-md px-8 py-4 bg-gradient-to-r from-yellow-500 to-yellow-600 
+                       text-white text-xl font-bold rounded-lg shadow-lg
+                       hover:from-yellow-600 hover:to-yellow-700 
+                       transform transition-all duration-200 hover:scale-105"
+            onClick={handleStartGame}
+          >
+            Start Game
+          </button>
+        </div>
       </div>
     </div>
   );
