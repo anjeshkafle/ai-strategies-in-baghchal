@@ -31,6 +31,13 @@ const initialState = {
   gameStatus: "PLAYING", // "PLAYING", "TIGERS_WIN", "GOATS_WIN"
   moveHistory: [], // Add this line
   perspective: "GOAT", // Add this line
+  timeControl: {
+    initial: 10, // 10 minutes in seconds
+    increment: 5, // 5 seconds increment per move
+  },
+  tigerTime: 10,
+  goatTime: 10,
+  clockRunning: false,
 };
 
 // Helper function to convert grid coordinates to notation
@@ -55,6 +62,8 @@ export const useGameStore = create((set, get) => ({
       goatsCaptured: 0,
       gameStatus: "PLAYING",
       moveHistory: [],
+      tigerTime: initialState.timeControl.initial,
+      goatTime: initialState.timeControl.initial,
     });
   },
 
@@ -133,6 +142,7 @@ export const useGameStore = create((set, get) => ({
           possibleMoves: [],
           phase: newGoatsPlaced >= TOTAL_GOATS ? "MOVEMENT" : "PLACEMENT",
           moveHistory: [...state.moveHistory, moveNotation],
+          goatTime: state.goatTime + state.timeControl.increment,
         }));
       }
       return;
@@ -180,6 +190,7 @@ export const useGameStore = create((set, get) => ({
                 possibleMoves: [],
                 goatsCaptured: newGoatsCaptured,
                 moveHistory: [...state.moveHistory, moveNotation],
+                tigerTime: state.tigerTime + state.timeControl.increment,
               };
 
               // Check if tigers won (5 goats captured)
@@ -199,6 +210,7 @@ export const useGameStore = create((set, get) => ({
               selectedPiece: null,
               possibleMoves: [],
               moveHistory: [...state.moveHistory, moveNotation],
+              tigerTime: state.tigerTime + state.timeControl.increment,
             }));
           }
         }
@@ -250,6 +262,7 @@ export const useGameStore = create((set, get) => ({
               possibleMoves: [],
               goatsCaptured: state.goatsCaptured + 1,
               moveHistory: [...state.moveHistory, moveNotation],
+              goatTime: state.goatTime + state.timeControl.increment,
             }));
           } else {
             set((state) => ({
@@ -259,6 +272,7 @@ export const useGameStore = create((set, get) => ({
               selectedPiece: null,
               possibleMoves: [],
               moveHistory: [...state.moveHistory, moveNotation],
+              goatTime: state.goatTime + state.timeControl.increment,
             }));
           }
         } else {
@@ -269,7 +283,6 @@ export const useGameStore = create((set, get) => ({
         }
       }
     }
-
     // After successful moves, add:
     get().checkGameEnd();
   },
@@ -307,6 +320,44 @@ export const useGameStore = create((set, get) => ({
         set({ gameStatus: "GOATS_WIN" });
       }
     }
+  },
+
+  // Start the clock
+  startClock: () => {
+    set({ clockRunning: true });
+    const intervalId = setInterval(() => {
+      const state = get();
+      if (!state.clockRunning || state.gameStatus !== "PLAYING") {
+        clearInterval(intervalId);
+        return;
+      }
+
+      const timeKey = state.turn === "TIGER" ? "tigerTime" : "goatTime";
+      const newTime = state[timeKey] - 1;
+
+      if (newTime <= 0) {
+        // Player lost on time
+        set({
+          clockRunning: false,
+          gameStatus: state.turn === "TIGER" ? "GOATS_WIN" : "TIGERS_WIN",
+          [timeKey]: 0,
+        });
+        clearInterval(intervalId);
+      } else {
+        set({ [timeKey]: newTime });
+      }
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  },
+
+  // Add time increment after a move
+  addIncrement: () => {
+    const state = get();
+    const timeKey = state.turn === "TIGER" ? "tigerTime" : "goatTime";
+    set({
+      [timeKey]: state[timeKey] + state.timeControl.increment,
+    });
   },
 }));
 

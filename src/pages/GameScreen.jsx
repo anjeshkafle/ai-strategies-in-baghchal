@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import Board from "../components/Board";
 import { useGameStore } from "../stores/gameStore";
 import { useNavigate } from "react-router-dom";
@@ -17,9 +17,11 @@ const GameScreen = () => {
     resetGame,
     moveHistory,
     perspective,
+    tigerTime,
+    goatTime,
+    startClock,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
-  const [spriteImage] = useImage(spriteGoat);
 
   const handleNewGame = () => {
     resetGame();
@@ -29,6 +31,19 @@ const GameScreen = () => {
     resetGame();
     navigate("/");
   };
+
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  };
+
+  useEffect(() => {
+    if (gameStatus === "PLAYING") {
+      const cleanup = startClock();
+      return cleanup;
+    }
+  }, [gameStatus, startClock]);
 
   // Helper function to render player panel
   const renderPlayerPanel = (isTopPanel) => {
@@ -93,7 +108,9 @@ const GameScreen = () => {
               <span className="text-xs text-gray-500 uppercase tracking-wider">
                 Time
               </span>
-              <span className="text-xl font-mono font-bold">10:00</span>
+              <span className="text-xl font-mono font-bold">
+                {formatTime(isTiger ? tigerTime : goatTime)}
+              </span>
             </div>
           </div>
         </div>
@@ -145,8 +162,14 @@ const GameScreen = () => {
             </h2>
             <p className="text-gray-300">
               {gameStatus === "TIGERS_WIN"
-                ? "Tigers captured 5 goats!"
-                : "Tigers have no legal moves left!"}
+                ? goatsCaptured >= 5
+                  ? "Tigers captured 5 goats!"
+                  : "Goats ran out of time!"
+                : gameStatus === "GOATS_WIN"
+                ? tigerTime <= 0
+                  ? "Tigers ran out of time!"
+                  : "Tigers have no legal moves left!"
+                : ""}
             </p>
             <div className="space-x-4">
               <button
