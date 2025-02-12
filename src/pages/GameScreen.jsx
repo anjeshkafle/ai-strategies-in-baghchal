@@ -2,6 +2,9 @@ import React from "react";
 import Board from "../components/Board";
 import { useGameStore } from "../stores/gameStore";
 import { useNavigate } from "react-router-dom";
+import useImage from "use-image";
+import spriteGoat from "../assets/sprite_goat.png";
+import spriteTiger from "../assets/sprite_tiger.png";
 
 const GameScreen = () => {
   const navigate = useNavigate();
@@ -16,6 +19,7 @@ const GameScreen = () => {
     perspective,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
+  const [spriteImage] = useImage(spriteGoat);
 
   const handleNewGame = () => {
     resetGame();
@@ -30,6 +34,8 @@ const GameScreen = () => {
   const renderPlayerPanel = (isTopPanel) => {
     const isTiger = (perspective === "TIGER") !== isTopPanel;
     const playerType = isTiger ? "TIGER" : "GOAT";
+    const sprite = isTiger ? spriteTiger : spriteGoat;
+    const [spriteImage] = useImage(sprite);
 
     // Helper function for goats captured text
     const getCapturedText = (count) => {
@@ -42,11 +48,11 @@ const GameScreen = () => {
     };
 
     return (
-      <div className="flex-none p-2 border-b border-gray-700">
+      <div className="flex-none p-3 border-b border-gray-700">
         {/* Player info section */}
         <div>
           <div
-            className={`flex items-center gap-3 ${
+            className={`flex items-center justify-between ${
               turn === playerType
                 ? isTiger
                   ? "text-red-400"
@@ -54,39 +60,56 @@ const GameScreen = () => {
                 : "text-gray-400"
             }`}
           >
+            <div className="flex items-center gap-3">
+              {spriteImage && (
+                <div className="relative">
+                  <img
+                    src={sprite}
+                    alt={isTiger ? "Tiger" : "Goat"}
+                    className="w-8 h-8 object-contain"
+                  />
+                  {turn === playerType && (
+                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-pulse" />
+                  )}
+                </div>
+              )}
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-500 uppercase tracking-wider">
+                  Player
+                </span>
+                <span className="text-base font-extrabold tracking-wide">
+                  {isTiger ? "TIGER" : "GOAT"}
+                </span>
+              </div>
+            </div>
             <div
-              className={`w-6 h-6 ${
-                isTiger ? "bg-red-500" : "bg-green-500"
-              } rounded-full`}
-            ></div>
-            <span className="text-sm font-medium">
-              {isTiger ? "Tiger" : "Goat"}
-            </span>
-          </div>
-          <div
-            className={`text-xl font-mono ${
-              turn === playerType
-                ? (isTiger ? "text-red-400" : "text-green-400") +
-                  " animate-pulse"
-                : "text-gray-400"
-            }`}
-          >
-            10:00
+              className={`flex flex-col items-end ${
+                turn === playerType
+                  ? (isTiger ? "text-red-400" : "text-green-400") +
+                    " animate-pulse"
+                  : "text-gray-400"
+              }`}
+            >
+              <span className="text-xs text-gray-500 uppercase tracking-wider">
+                Time
+              </span>
+              <span className="text-xl font-mono font-bold">10:00</span>
+            </div>
           </div>
         </div>
 
         {/* Status info section with separator */}
         {gameStatus === "PLAYING" && (
           <>
-            <div className="border-t border-gray-700 my-2"></div>
+            <div className="border-t border-gray-700 my-2" />
             <div className="text-gray-400 text-sm">
               <div className="flex justify-between items-center">
                 {isTiger ? (
-                  <span className="text-red-400 font-mono">
+                  <span className="text-red-400 font-mono font-bold tracking-wide">
                     {getCapturedText(goatsCaptured)}
                   </span>
                 ) : (
-                  <span className="text-yellow-400 font-mono">
+                  <span className="text-yellow-400 font-mono font-bold tracking-wide">
                     {phase === "PLACEMENT"
                       ? getRemainingText(remainingGoats)
                       : "MOVEMENT PHASE"}
