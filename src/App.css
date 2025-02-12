@@ -40,3 +40,45 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Add these styles for the game info section */
+.game-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.turn-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.piece-icon {
+  width: 24px;
+  height: 24px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.tiger-icon {
+  background-image: url("/assets/tiger.png"); /* Adjust path based on your asset location */
+}
+
+.goat-icon {
+  background-image: url("/assets/goat.png"); /* Adjust path based on your asset location */
+}
+
+.timer {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #fff;
+  padding: 5px 15px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}

@@ -69,7 +69,7 @@ const GameScreen = () => {
                     className="w-8 h-8 object-contain"
                   />
                   {turn === playerType && (
-                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-pulse" />
+                    <div className="absolute -bottom-1.5 -right-1.5 w-2.5 h-2.5 bg-yellow-400 rounded-full animate-pulse" />
                   )}
                 </div>
               )}
