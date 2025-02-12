@@ -58,22 +58,32 @@ const WelcomeScreen = () => {
 
   return (
     <div className="fixed inset-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800">
-      <div className="max-w-4xl w-full mx-4 space-y-12">
+      <div className="max-w-4xl w-full mx-4 space-y-8 py-8 overflow-y-auto">
         {/* Game Title with Sprites */}
-        <div className="text-center relative h-32 mb-4 flex items-center justify-center">
-          <div className="absolute left-1/2 -translate-x-[200px]">
-            <img src={spriteGoat} alt="Goat" className="w-16 h-16" />
+        <div className="text-center relative flex items-center justify-center mb-6">
+          <div className="absolute left-1/2 -translate-x-[200px] md:-translate-x-[200px] -translate-x-[150px]">
+            <img
+              src={spriteGoat}
+              alt="Goat"
+              className="w-12 h-12 md:w-16 md:h-16"
+            />
           </div>
-          <h1 className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 leading-relaxed my-0 py-0">
-            Baghchal
-          </h1>
-          <div className="absolute left-1/2 translate-x-[140px]">
-            <img src={spriteTiger} alt="Tiger" className="w-16 h-16" />
+          <div className="py-2">
+            <h1 className="text-6xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 block pb-2">
+              Baghchal
+            </h1>
+          </div>
+          <div className="absolute left-1/2 translate-x-[100px] md:translate-x-[140px]">
+            <img
+              src={spriteTiger}
+              alt="Tiger"
+              className="w-12 h-12 md:w-16 md:h-16"
+            />
           </div>
         </div>
 
         {/* Game Modes */}
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Player Selection */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h2 className="text-xl font-bold text-white mb-4">Players</h2>
@@ -122,7 +132,7 @@ const WelcomeScreen = () => {
           {/* Time Controls */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h2 className="text-xl font-bold text-white mb-4">Time Control</h2>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {TIME_PRESETS.map((preset) => (
                 <button
                   key={preset.name}
@@ -211,7 +221,7 @@ const WelcomeScreen = () => {
         </div>
 
         {/* Start Button */}
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center">
           <button
             className="w-full max-w-md px-8 py-4 bg-gradient-to-r from-yellow-500 to-yellow-600 
                        text-white text-xl font-bold rounded-lg shadow-lg

@@ -188,7 +188,9 @@ const GameScreen = () => {
       {/* Top Navigation */}
       <div className="h-12 bg-gray-800 border-b border-gray-700">
         <div className="container mx-auto px-4 h-full flex items-center justify-between">
-          <div className="text-white font-bold text-xl">Baghchal</div>
+          <div className="text-white font-bold text-xl leading-relaxed">
+            Baghchal
+          </div>
           <div className="flex items-center gap-4">
             <button className="text-gray-300 hover:text-white">Rules</button>
             <button className="text-gray-300 hover:text-white">Settings</button>
