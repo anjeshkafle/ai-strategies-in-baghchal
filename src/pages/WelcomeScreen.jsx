@@ -6,21 +6,19 @@ import spriteGoat from "../assets/sprite_goat.png";
 import spriteTiger from "../assets/sprite_tiger.png";
 
 const TIME_PRESETS = [
-  { name: "3+2", initial: 180, increment: 2 },
+  { name: "3m | 2s", initial: 180, increment: 2 },
   { name: "5 min", initial: 300, increment: 0 },
-  { name: "5+3", initial: 300, increment: 3 },
+  { name: "5m | 3s", initial: 300, increment: 3 },
   { name: "10 min", initial: 600, increment: 0 },
-  { name: "10|5", initial: 600, increment: 5 },
+  { name: "10m | 5s", initial: 600, increment: 5 },
   { name: "15 min", initial: 900, increment: 0 },
-  { name: "15|10", initial: 900, increment: 10 },
+  { name: "15m | 10s", initial: 900, increment: 10 },
   { name: "Custom", initial: 600, increment: 0 },
 ];
 
 const WelcomeScreen = () => {
   const navigate = useNavigate();
   const setGameSettings = useGameStore((state) => state.setGameSettings);
-  const [spriteGoatImage] = useImage(spriteGoat);
-  const [spriteTigerImage] = useImage(spriteTiger);
 
   const [settings, setSettings] = useState({
     players: {
