@@ -212,7 +212,7 @@ const GameScreen = () => {
               <img src={spriteTiger} alt="Tiger" className="w-8 h-8" />
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4">
             <button className="text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1.5 rounded-md transition-colors">
               Rules
             </button>
@@ -224,9 +224,55 @@ const GameScreen = () => {
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto h-[calc(100vh-3rem)] flex justify-center items-center">
-        <div className="flex gap-2 p-2 items-center h-[calc(100vh-4rem)]">
-          {/* Board with potential overlay */}
+      <div className="h-[calc(100vh-3rem)] overflow-y-auto">
+        {/* Mobile Layout */}
+        <div className="md:hidden flex flex-col min-h-full">
+          {/* Top Player Panel */}
+          <div className="bg-gray-800">{renderPlayerPanel(true)}</div>
+
+          {/* Board */}
+          <div className="flex-1 aspect-square w-full bg-gray-800">
+            <Board />
+          </div>
+
+          {/* Bottom Player Panel and Actions */}
+          <div className="bg-gray-800">
+            {renderPlayerPanel(false)}
+            <div className="p-2 flex gap-2">
+              {gameStatus === "PLAYING" ? (
+                <>
+                  <button
+                    onClick={handleStopGame}
+                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded"
+                  >
+                    Stop
+                  </button>
+                  <button
+                    onClick={undoMoves}
+                    className={`flex-1 px-3 py-2 ${
+                      canUndo
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-gray-600 cursor-not-allowed"
+                    } text-white text-sm font-medium rounded`}
+                    disabled={!canUndo}
+                  >
+                    Undo
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleMainMenu}
+                  className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded"
+                >
+                  Main Menu
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Layout */}
+        <div className="hidden md:flex gap-2 p-2 items-center justify-center h-full">
           <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4.5rem)] relative">
             <Board />
             {gameStatus !== "PLAYING" && (
@@ -253,14 +299,10 @@ const GameScreen = () => {
             )}
           </div>
 
-          {/* Right Section */}
+          {/* Right Section - Only visible on desktop */}
           <div className="flex flex-col gap-2 w-72 h-[calc(100vh-4.5rem)] self-center">
-            {/* Game Info Panel */}
             <div className="bg-gray-800 rounded-lg flex flex-col flex-grow">
-              {/* Opponent Panel */}
               {renderPlayerPanel(true)}
-
-              {/* Move List */}
               <div className="flex-grow overflow-y-auto custom-scrollbar h-[50vh] border-b border-gray-700">
                 <div className="p-2">
                   <div className="space-y-1">
@@ -315,12 +357,8 @@ const GameScreen = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Player Panel */}
               {renderPlayerPanel(false)}
             </div>
-
-            {/* Action Buttons */}
             <div className="bg-gray-800 rounded-lg p-2 flex gap-2">
               {gameStatus === "PLAYING" ? (
                 <>
