@@ -46,6 +46,7 @@ const initialState = {
   isInitialized: false, // Add this line
   canUndo: false,
   isAIThinking: false,
+  lastMove: null, // { from?: {x,y}, to: {x,y} }
 };
 
 // Helper function to convert grid coordinates to notation
@@ -153,6 +154,7 @@ export const useGameStore = create((set, get) => ({
           moveHistory: [...state.moveHistory, moveNotation],
           goatTime: state.goatTime + state.timeControl.increment,
           canUndo: true,
+          lastMove: { to: { x: toX, y: toY } },
         }));
 
         // Check game end after state update
@@ -205,6 +207,10 @@ export const useGameStore = create((set, get) => ({
                 moveHistory: [...state.moveHistory, moveNotation],
                 tigerTime: state.tigerTime + state.timeControl.increment,
                 canUndo: true,
+                lastMove: {
+                  from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
+                  to: { x: toX, y: toY },
+                },
               };
 
               // Check if tigers won (5 goats captured)
@@ -226,6 +232,10 @@ export const useGameStore = create((set, get) => ({
               moveHistory: [...state.moveHistory, moveNotation],
               tigerTime: state.tigerTime + state.timeControl.increment,
               canUndo: true,
+              lastMove: {
+                from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
+                to: { x: toX, y: toY },
+              },
             }));
           }
         }
@@ -279,6 +289,10 @@ export const useGameStore = create((set, get) => ({
               moveHistory: [...state.moveHistory, moveNotation],
               goatTime: state.goatTime + state.timeControl.increment,
               canUndo: true,
+              lastMove: {
+                from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
+                to: { x: toX, y: toY },
+              },
             }));
           } else {
             set((state) => ({
@@ -290,6 +304,10 @@ export const useGameStore = create((set, get) => ({
               moveHistory: [...state.moveHistory, moveNotation],
               goatTime: state.goatTime + state.timeControl.increment,
               canUndo: true,
+              lastMove: {
+                from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
+                to: { x: toX, y: toY },
+              },
             }));
           }
         } else {

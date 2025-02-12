@@ -135,6 +135,7 @@ const Board = () => {
     makeMove,
     phase,
     players,
+    lastMove,
   } = useGameStore();
 
   const [mousePos, setMousePos] = useState(null);
@@ -349,7 +350,8 @@ const Board = () => {
         event.target.to({
           x: newPos.x - (cellSize * 0.6 * 0.8) / 2,
           y: newPos.y - (cellSize * 0.6 * 0.8) / 2,
-          duration: 0.1,
+          duration: 0.3,
+          easing: Konva.Easings.EaseInOut,
           onFinish: () => {
             makeMove(newGridX, newGridY);
           },
@@ -363,8 +365,8 @@ const Board = () => {
     event.target.to({
       x: originalPos.x - (cellSize * 0.6 * 0.8) / 2,
       y: originalPos.y - (cellSize * 0.6 * 0.8) / 2,
-      duration: 0.2,
-      easing: Konva.Easings.EaseOut,
+      duration: 0.3,
+      easing: Konva.Easings.EaseInOut,
     });
   };
 
@@ -452,6 +454,34 @@ const Board = () => {
                   strokeWidth={2}
                 />
               ))}
+
+              {lastMove && (
+                <>
+                  {lastMove.from && (
+                    <Circle
+                      x={
+                        gridToPixel(lastMove.from.x, lastMove.from.y, boardDims)
+                          .x
+                      }
+                      y={
+                        gridToPixel(lastMove.from.x, lastMove.from.y, boardDims)
+                          .y
+                      }
+                      radius={boardDims.cellSize * 0.3}
+                      stroke="#fbbf24"
+                      strokeWidth={2}
+                      opacity={0.5}
+                    />
+                  )}
+                  <Circle
+                    x={gridToPixel(lastMove.to.x, lastMove.to.y, boardDims).x}
+                    y={gridToPixel(lastMove.to.x, lastMove.to.y, boardDims).y}
+                    radius={boardDims.cellSize * 0.3}
+                    fill="#fbbf24"
+                    opacity={0.2}
+                  />
+                </>
+              )}
 
               {/* Possible moves indicators */}
               {possibleMoves.map((pos, i) => {
