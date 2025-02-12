@@ -33,38 +33,61 @@ const GameScreen = () => {
 
     return (
       <div className="flex-none p-2 border-b border-gray-700">
-        <div
-          className={`flex items-center gap-3 ${
-            turn === playerType
-              ? isTiger
-                ? "text-red-400"
-                : "text-green-400"
-              : "text-gray-400"
-          }`}
-        >
+        {/* Player info section */}
+        <div>
           <div
-            className={`w-6 h-6 ${
-              isTiger ? "bg-red-500" : "bg-green-500"
-            } rounded-full`}
-          ></div>
-          <span className="text-sm font-medium">
-            {isTiger ? "Tiger" : "Goat"}
-          </span>
-          {isTiger && (
-            <span className="ml-auto text-sm font-medium">
-              Captured: {goatsCaptured}
+            className={`flex items-center gap-3 ${
+              turn === playerType
+                ? isTiger
+                  ? "text-red-400"
+                  : "text-green-400"
+                : "text-gray-400"
+            }`}
+          >
+            <div
+              className={`w-6 h-6 ${
+                isTiger ? "bg-red-500" : "bg-green-500"
+              } rounded-full`}
+            ></div>
+            <span className="text-sm font-medium">
+              {isTiger ? "Tiger" : "Goat"}
             </span>
-          )}
+            {isTiger && (
+              <span className="ml-auto text-sm font-medium">
+                Captured: {goatsCaptured}
+              </span>
+            )}
+          </div>
+          <div
+            className={`text-xl font-mono ${
+              turn === playerType
+                ? (isTiger ? "text-red-400" : "text-green-400") +
+                  " animate-pulse"
+                : "text-gray-400"
+            }`}
+          >
+            10:00
+          </div>
         </div>
-        <div
-          className={`text-xl font-mono ${
-            turn === playerType
-              ? (isTiger ? "text-red-400" : "text-green-400") + " animate-pulse"
-              : "text-gray-400"
-          }`}
-        >
-          10:00
-        </div>
+
+        {/* Add game phase info for goat panel only with separator */}
+        {!isTiger && gameStatus === "PLAYING" && (
+          <>
+            <div className="border-t border-gray-700 my-2"></div>
+            <div className="text-gray-400 text-sm">
+              {phase === "PLACEMENT" ? (
+                <div className="flex justify-between items-center">
+                  <span>Placement Phase</span>
+                  <span className="text-yellow-400 font-mono">
+                    {remainingGoats} goats left
+                  </span>
+                </div>
+              ) : (
+                <span>Movement Phase</span>
+              )}
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -126,29 +149,6 @@ const GameScreen = () => {
             <div className="bg-gray-800 rounded-lg flex flex-col">
               {/* Opponent Panel */}
               {renderPlayerPanel(true)}
-
-              {/* Game Phase Info */}
-              <div className="flex-none p-2 border-b border-gray-700">
-                {gameStatus === "PLAYING" ? (
-                  <div className="text-gray-400 text-sm">
-                    {phase === "PLACEMENT" ? (
-                      <div className="flex justify-between items-center">
-                        <span>Placement Phase</span>
-                        <span className="text-yellow-400 font-mono">
-                          {remainingGoats} goats left
-                        </span>
-                      </div>
-                    ) : (
-                      <span>Movement Phase</span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-center">
-                    Game Over -{" "}
-                    {gameStatus === "TIGERS_WIN" ? "Tigers Won!" : "Goats Won!"}
-                  </div>
-                )}
-              </div>
 
               {/* Move List */}
               <div className="flex-grow overflow-y-auto custom-scrollbar h-[40vh] border-b border-gray-700">

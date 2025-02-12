@@ -30,7 +30,7 @@ const initialState = {
   phase: "PLACEMENT", // 'PLACEMENT' or 'MOVEMENT'
   gameStatus: "PLAYING", // "PLAYING", "TIGERS_WIN", "GOATS_WIN"
   moveHistory: [], // Add this line
-  perspective: "TIGER", // Add this line
+  perspective: "GOAT", // Add this line
 };
 
 // Helper function to convert grid coordinates to notation
