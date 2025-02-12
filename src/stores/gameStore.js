@@ -31,8 +31,12 @@ const initialState = {
   gameStatus: "PLAYING", // "PLAYING", "TIGERS_WIN", "GOATS_WIN"
   moveHistory: [], // Add this line
   perspective: "GOAT", // Add this line
+  players: {
+    goat: "HUMAN", // "HUMAN" or "AI"
+    tiger: "HUMAN", // "HUMAN" or "AI"
+  },
   timeControl: {
-    initial: 10, // 10 minutes in seconds
+    initial: 600, // 10 minutes in seconds
     increment: 5, // 5 seconds increment per move
   },
   tigerTime: 10,
@@ -357,6 +361,15 @@ export const useGameStore = create((set, get) => ({
     const timeKey = state.turn === "TIGER" ? "tigerTime" : "goatTime";
     set({
       [timeKey]: state[timeKey] + state.timeControl.increment,
+    });
+  },
+
+  setGameSettings: (settings) => {
+    set({
+      players: settings.players,
+      timeControl: settings.timeControl,
+      tigerTime: settings.timeControl.initial,
+      goatTime: settings.timeControl.initial,
     });
   },
 }));
