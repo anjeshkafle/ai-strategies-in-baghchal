@@ -73,7 +73,20 @@ export const useGameStore = create((set, get) => ({
       moveHistory: [],
       tigerTime: initialState.timeControl.initial,
       goatTime: initialState.timeControl.initial,
-      isInitialized: false, // Reset this when going back to main menu
+      clockRunning: false,
+      isInitialized: false,
+      canUndo: false,
+      isAIThinking: false,
+      lastMove: null,
+      perspective: "GOAT",
+      players: {
+        goat: "HUMAN",
+        tiger: "HUMAN",
+      },
+      timeControl: {
+        initial: 600,
+        increment: 5,
+      },
     });
   },
 

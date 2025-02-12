@@ -168,11 +168,16 @@ const GameScreen = () => {
               >
                 {formatTime(isTiger ? tigerTime : goatTime)}
               </span>
-              {isAIThinking && playerType === turn && (
-                <div className="text-yellow-400 text-sm animate-pulse">
-                  Thinking...
-                </div>
-              )}
+              {/* Add a fixed-height container for the thinking indicator */}
+              <div className="h-5">
+                {" "}
+                {/* This creates a fixed space */}
+                {isAIThinking && playerType === turn && (
+                  <div className="text-yellow-400 text-sm animate-pulse">
+                    Thinking...
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
