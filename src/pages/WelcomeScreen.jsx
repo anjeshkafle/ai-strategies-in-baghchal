@@ -88,48 +88,61 @@ const WelcomeScreen = () => {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h2 className="text-xl font-bold text-white mb-4">Players</h2>
             <div className="space-y-4">
+              {/* Goat Player Selection */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <img src={spriteGoat} alt="Goat" className="w-8 h-8" />
                   <span className="text-gray-300">Goat</span>
                 </div>
-                <select
-                  className="bg-gray-700 text-white rounded px-3 py-2"
-                  value={settings.players.goat}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      players: { ...settings.players, goat: e.target.value },
-                    })
-                  }
-                >
-                  <option value="HUMAN">Human</option>
-                  <option value="AI">Computer</option>
-                </select>
+                <div className="relative w-36">
+                  <select
+                    className="bg-gray-700 text-white rounded px-3 py-2 pr-10 appearance-none w-full"
+                    value={settings.players.goat}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        players: { ...settings.players, goat: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="HUMAN">Human</option>
+                    <option value="AI">Computer</option>
+                  </select>
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-300 pointer-events-none">
+                    ▼
+                  </span>
+                </div>
               </div>
+
+              {/* Tiger Player Selection */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <img src={spriteTiger} alt="Tiger" className="w-8 h-8" />
                   <span className="text-gray-300">Tiger</span>
                 </div>
-                <select
-                  className="bg-gray-700 text-white rounded px-3 py-2"
-                  value={settings.players.tiger}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      players: { ...settings.players, tiger: e.target.value },
-                    })
-                  }
-                >
-                  <option value="HUMAN">Human</option>
-                  <option value="AI">Computer</option>
-                </select>
+                <div className="relative w-36">
+                  <select
+                    className="bg-gray-700 text-white rounded px-3 py-2 pr-10 appearance-none w-full"
+                    value={settings.players.tiger}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        players: { ...settings.players, tiger: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="HUMAN">Human</option>
+                    <option value="AI">Computer</option>
+                  </select>
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-300 pointer-events-none">
+                    ▼
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Time Controls */}
+          {/* Time Controls (Restored) */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h2 className="text-xl font-bold text-white mb-4">Time Control</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -177,44 +190,6 @@ const WelcomeScreen = () => {
                     min="1"
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={settings.customTime.useIncrement}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        customTime: {
-                          ...settings.customTime,
-                          useIncrement: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  <label className="text-gray-300">Use Increment</label>
-                </div>
-                {settings.customTime.useIncrement && (
-                  <div>
-                    <label className="text-gray-300 block mb-2">
-                      Increment (seconds)
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full bg-gray-700 text-white rounded px-3 py-2"
-                      value={settings.customTime.increment}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          customTime: {
-                            ...settings.customTime,
-                            increment: Math.max(0, parseInt(e.target.value)),
-                          },
-                        })
-                      }
-                      min="0"
-                    />
-                  </div>
-                )}
               </div>
             )}
           </div>
