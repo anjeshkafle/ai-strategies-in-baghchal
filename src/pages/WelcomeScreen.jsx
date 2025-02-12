@@ -190,6 +190,51 @@ const WelcomeScreen = () => {
                     min="1"
                   />
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="useIncrement"
+                    className="rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
+                    checked={settings.customTime.useIncrement}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        customTime: {
+                          ...settings.customTime,
+                          useIncrement: e.target.checked,
+                          increment: e.target.checked ? 5 : 0,
+                        },
+                      })
+                    }
+                  />
+                  <label htmlFor="useIncrement" className="text-gray-300">
+                    Add increment
+                  </label>
+                </div>
+
+                {settings.customTime.useIncrement && (
+                  <div>
+                    <label className="text-gray-300 block mb-2">
+                      Increment (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      className="w-full bg-gray-700 text-white rounded px-3 py-2"
+                      value={settings.customTime.increment}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          customTime: {
+                            ...settings.customTime,
+                            increment: Math.max(0, parseInt(e.target.value)),
+                          },
+                        })
+                      }
+                      min="0"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
