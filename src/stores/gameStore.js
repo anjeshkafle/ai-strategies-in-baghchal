@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getBestMove } from "../services/aiService";
 
 const TOTAL_GOATS = 20;
 
@@ -44,6 +45,7 @@ const initialState = {
   clockRunning: false,
   isInitialized: false, // Add this line
   canUndo: false,
+  isAIThinking: false,
 };
 
 // Helper function to convert grid coordinates to notation
@@ -297,6 +299,11 @@ export const useGameStore = create((set, get) => ({
     }
     // After successful moves, add:
     get().checkGameEnd();
+
+    // After the move is made, trigger AI move if needed
+    setTimeout(() => {
+      get().handleAIMove();
+    }, 500); // Small delay to allow UI updates
   },
 
   getRemainingGoats: () => TOTAL_GOATS - get().goatsPlaced,
@@ -433,6 +440,34 @@ export const useGameStore = create((set, get) => ({
       phase: goatsPlaced < TOTAL_GOATS ? "PLACEMENT" : "MOVEMENT",
       canUndo: newHistory.length > 0,
     });
+  },
+
+  // Add new method to handle AI moves
+  handleAIMove: async () => {
+    const state = get();
+    const currentPlayer = state.turn;
+    const isAI = state.players[currentPlayer.toLowerCase()] === "AI";
+
+    if (!isAI || state.gameStatus !== "PLAYING") return;
+
+    set({ isAIThinking: true });
+
+    try {
+      const move = await getBestMove(state.board, state.phase, currentPlayer);
+
+      if (move.type === "placement") {
+        get().makeMove(move.x, move.y);
+      } else {
+        // First select the piece
+        get().selectPiece(move.from.x, move.from.y);
+        // Then make the move
+        get().makeMove(move.to.x, move.to.y);
+      }
+    } catch (error) {
+      console.error("Error getting AI move:", error);
+    } finally {
+      set({ isAIThinking: false });
+    }
   },
 }));
 
@@ -573,3 +608,6 @@ function getPossibleMoves(x, y, board) {
 
   return moves;
 }
+
+// Export the getPossibleMoves function for use in AI service
+export { getPossibleMoves };

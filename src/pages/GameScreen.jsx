@@ -23,6 +23,9 @@ const GameScreen = () => {
     startClock,
     canUndo,
     undoMoves,
+    isAIThinking,
+    players,
+    handleAIMove,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -66,6 +69,15 @@ const GameScreen = () => {
       return cleanup;
     }
   }, [gameStatus, startClock]);
+
+  useEffect(() => {
+    if (gameStatus === "PLAYING") {
+      const isCurrentPlayerAI = players[turn.toLowerCase()] === "AI";
+      if (isCurrentPlayerAI) {
+        handleAIMove();
+      }
+    }
+  }, [turn, phase, gameStatus, players, handleAIMove]);
 
   // Helper function to render player panel
   const renderPlayerPanel = (isTopPanel) => {
@@ -156,6 +168,11 @@ const GameScreen = () => {
               >
                 {formatTime(isTiger ? tigerTime : goatTime)}
               </span>
+              {isAIThinking && playerType === turn && (
+                <div className="text-yellow-400 text-sm animate-pulse">
+                  Thinking...
+                </div>
+              )}
             </div>
           </div>
         </div>

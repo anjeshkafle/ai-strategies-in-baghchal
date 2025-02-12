@@ -58,17 +58,24 @@ const GamePiece = ({
   phase,
 }) => {
   const [image] = useImage(sprite);
+  const { players } = useGameStore();
+
+  // Check if this piece type is controlled by AI
+  const isAIControlled = players[type.toLowerCase()] === "AI";
 
   // Only allow dragging if:
   // 1. It's the piece's turn AND
-  // 2. Either it's a tiger OR it's a goat in movement phase
+  // 2. Either it's a tiger OR it's a goat in movement phase AND
+  // 3. The piece is not AI controlled
   const isDraggable =
-    type === currentTurn && (type === "TIGER" || phase === "MOVEMENT");
+    type === currentTurn &&
+    (type === "TIGER" || phase === "MOVEMENT") &&
+    !isAIControlled;
 
   return (
     <>
       {/* Highlight the piece if it's selected */}
-      {isSelected && (
+      {isSelected && !isAIControlled && (
         <Circle
           x={x}
           y={y}
@@ -84,13 +91,12 @@ const GamePiece = ({
         image={image}
         width={size * 0.8}
         height={size * 0.8}
-        onClick={onSelect}
-        onTouchStart={onSelect}
+        onClick={isAIControlled ? null : onSelect}
+        onTouchStart={isAIControlled ? null : onSelect}
         draggable={isDraggable}
-        // NEW: Automatically select piece on drag start
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        listening={true}
+        onDragStart={isDraggable ? onDragStart : null}
+        onDragEnd={isDraggable ? onDragEnd : null}
+        listening={!isAIControlled}
       />
     </>
   );
@@ -128,6 +134,7 @@ const Board = () => {
     selectPiece,
     makeMove,
     phase,
+    players,
   } = useGameStore();
 
   const [mousePos, setMousePos] = useState(null);
@@ -502,6 +509,8 @@ const Board = () => {
                 row.map((cell, x) => {
                   if (cell) return null;
                   const pixelPos = gridToPixel(x, y, boardDims);
+                  const isAITurn = players[turn.toLowerCase()] === "AI";
+
                   return (
                     <Rect
                       key={`click-${x}-${y}`}
@@ -510,8 +519,11 @@ const Board = () => {
                       width={boardDims.cellSize * 0.6}
                       height={boardDims.cellSize * 0.6}
                       fill="transparent"
-                      onClick={() => handleBoardClick(x, y)}
-                      onTouchStart={() => handleBoardClick(x, y)}
+                      onClick={isAITurn ? null : () => handleBoardClick(x, y)}
+                      onTouchStart={
+                        isAITurn ? null : () => handleBoardClick(x, y)
+                      }
+                      listening={!isAITurn}
                     />
                   );
                 })
@@ -520,6 +532,7 @@ const Board = () => {
               {/* Ghost piece during placement phase */}
               {phase === "PLACEMENT" &&
                 turn === "GOAT" &&
+                players.goat !== "AI" &&
                 mousePos &&
                 !board[mousePos.y][mousePos.x] && (
                   <GhostPiece
