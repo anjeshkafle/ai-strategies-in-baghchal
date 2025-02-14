@@ -321,53 +321,40 @@ const Board = () => {
     selectPiece(gridX, gridY);
   };
 
-  const handleDragEnd = (gridX, gridY, event) => {
-    const stage = event.target.getStage();
+  const handleDragEnd = (fromX, fromY, e) => {
+    const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
+    const { padding, cellSize } = boardDims;
 
-    if (!boardDims) return;
+    // Calculate grid position
+    const relX = (pos.x - padding) / cellSize;
+    const relY = (pos.y - padding) / cellSize;
+    const toX = Math.round(relX);
+    const toY = Math.round(relY);
 
-    const { cellSize, padding } = boardDims;
-    const newGridX = Math.round((pos.x - padding) / cellSize);
-    const newGridY = Math.round((pos.y - padding) / cellSize);
-
-    // Ensure within board bounds
+    // Only make move if position is valid
     if (
-      newGridX >= 0 &&
-      newGridX < GRID_SIZE &&
-      newGridY >= 0 &&
-      newGridY < GRID_SIZE &&
-      (newGridX !== gridX || newGridY !== gridY)
+      toX >= 0 &&
+      toX < GRID_SIZE &&
+      toY >= 0 &&
+      toY < GRID_SIZE &&
+      (toX !== fromX || toY !== fromY)
     ) {
-      // Because onDragStart selected the piece, possibleMoves is now populated
-      const isValidMove = possibleMoves.some(
-        (move) => move.x === newGridX && move.y === newGridY
-      );
-
-      if (isValidMove) {
-        // Animate to new position
-        const newPos = gridToPixel(newGridX, newGridY, boardDims);
-        event.target.to({
-          x: newPos.x - (cellSize * 0.6 * 0.8) / 2,
-          y: newPos.y - (cellSize * 0.6 * 0.8) / 2,
-          duration: 0.3,
-          easing: Konva.Easings.EaseInOut,
-          onFinish: () => {
-            makeMove(newGridX, newGridY);
-          },
-        });
-        return;
-      }
+      makeMove(toX, toY);
     }
 
-    // Otherwise, snap back
-    const originalPos = gridToPixel(gridX, gridY, boardDims);
-    event.target.to({
+    // Reset the dragged piece position
+    const piece = e.target;
+    const originalPos = gridToPixel(fromX, fromY, boardDims);
+    piece.to({
       x: originalPos.x - (cellSize * 0.6 * 0.8) / 2,
       y: originalPos.y - (cellSize * 0.6 * 0.8) / 2,
       duration: 0.3,
       easing: Konva.Easings.EaseInOut,
     });
+
+    // Clear mouse position after drag ends
+    setMousePos(null);
   };
 
   return (
