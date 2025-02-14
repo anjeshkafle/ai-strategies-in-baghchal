@@ -14,8 +14,8 @@ frontend/dist-ssr/
 frontend/*.local
 
 # Python (Backend)
-backend/venv/  # Ignore virtual environment
-backend/__pycache__/  # Ignore Python cache files
+backend/venv/
+backend/__pycache__/
 backend/*.pyc
 backend/*.pyo
 backend/*.pyd
