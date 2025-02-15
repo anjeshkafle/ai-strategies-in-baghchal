@@ -23,8 +23,8 @@ const WelcomeScreen = () => {
 
   const [settings, setSettings] = useState({
     players: {
-      goat: "HUMAN",
-      tiger: "HUMAN",
+      goat: { type: "HUMAN", model: null },
+      tiger: { type: "HUMAN", model: null },
     },
     selectedPreset: TIME_PRESETS[4], // 10|5 default
     isCustom: false,
@@ -50,11 +50,14 @@ const WelcomeScreen = () => {
 
     // Determine perspective based on human player
     let perspective = "GOAT"; // default
-    if (settings.players.goat === "AI" && settings.players.tiger === "HUMAN") {
+    if (
+      settings.players.goat.type === "AI" &&
+      settings.players.tiger.type === "HUMAN"
+    ) {
       perspective = "TIGER";
     } else if (
-      settings.players.goat === "HUMAN" &&
-      settings.players.tiger === "HUMAN"
+      settings.players.goat.type === "HUMAN" &&
+      settings.players.tiger.type === "HUMAN"
     ) {
       perspective = "GOAT"; // In case both are human, keep GOAT perspective
     }
@@ -105,19 +108,49 @@ const WelcomeScreen = () => {
                   <img src={spriteGoat} alt="Goat" className="w-8 h-8" />
                   <span className="text-gray-300">Goat</span>
                 </div>
-                <CustomSelect
-                  value={settings.players.goat}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      players: { ...settings.players, goat: e.target.value },
-                    })
-                  }
-                  options={[
-                    { value: "HUMAN", label: "Human" },
-                    { value: "AI", label: "Computer" },
-                  ]}
-                />
+                <div className="flex gap-2">
+                  <CustomSelect
+                    value={settings.players.goat.type}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        players: {
+                          ...settings.players,
+                          goat: {
+                            ...settings.players.goat,
+                            type: e.target.value,
+                            model: e.target.value === "AI" ? "random" : null,
+                          },
+                        },
+                      })
+                    }
+                    options={[
+                      { value: "HUMAN", label: "Human" },
+                      { value: "AI", label: "Computer" },
+                    ]}
+                  />
+                  {settings.players.goat.type === "AI" && (
+                    <CustomSelect
+                      value={settings.players.goat.model}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          players: {
+                            ...settings.players,
+                            goat: {
+                              ...settings.players.goat,
+                              model: e.target.value,
+                            },
+                          },
+                        })
+                      }
+                      options={[
+                        { value: "random", label: "Random AI" },
+                        { value: "minimax", label: "Minimax Base" },
+                      ]}
+                    />
+                  )}
+                </div>
               </div>
 
               {/* Tiger Player Selection */}
@@ -126,19 +159,49 @@ const WelcomeScreen = () => {
                   <img src={spriteTiger} alt="Tiger" className="w-8 h-8" />
                   <span className="text-gray-300">Tiger</span>
                 </div>
-                <CustomSelect
-                  value={settings.players.tiger}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      players: { ...settings.players, tiger: e.target.value },
-                    })
-                  }
-                  options={[
-                    { value: "HUMAN", label: "Human" },
-                    { value: "AI", label: "Computer" },
-                  ]}
-                />
+                <div className="flex gap-2">
+                  <CustomSelect
+                    value={settings.players.tiger.type}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        players: {
+                          ...settings.players,
+                          tiger: {
+                            ...settings.players.tiger,
+                            type: e.target.value,
+                            model: e.target.value === "AI" ? "random" : null,
+                          },
+                        },
+                      })
+                    }
+                    options={[
+                      { value: "HUMAN", label: "Human" },
+                      { value: "AI", label: "Computer" },
+                    ]}
+                  />
+                  {settings.players.tiger.type === "AI" && (
+                    <CustomSelect
+                      value={settings.players.tiger.model}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          players: {
+                            ...settings.players,
+                            tiger: {
+                              ...settings.players.tiger,
+                              model: e.target.value,
+                            },
+                          },
+                        })
+                      }
+                      options={[
+                        { value: "random", label: "Random AI" },
+                        { value: "minimax", label: "Minimax Base" },
+                      ]}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </div>

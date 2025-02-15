@@ -72,8 +72,8 @@ const GameScreen = () => {
 
   useEffect(() => {
     if (gameStatus === "PLAYING") {
-      const isCurrentPlayerAI = players[turn.toLowerCase()] === "AI";
-      if (isCurrentPlayerAI) {
+      const currentPlayer = players[turn.toLowerCase()];
+      if (currentPlayer.type === "AI") {
         handleAIMove();
       }
     }

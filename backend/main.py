@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from models.random_agent import RandomAgent
+from models.minimax_agent import MinimaxAgent
 
 app = FastAPI()
 
@@ -19,11 +20,12 @@ class MoveRequest(BaseModel):
     board: List[List[Optional[Dict]]]
     phase: str
     agent: str
-    model: str = "random"
+    model: str
 
 # Initialize agents
 agents = {
-    "random": RandomAgent()
+    "random": RandomAgent(),
+    "minimax": MinimaxAgent()
 }
 
 @app.post("/get-best-move")

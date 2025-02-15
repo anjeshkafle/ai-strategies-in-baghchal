@@ -30,11 +30,11 @@ const initialState = {
   possibleMoves: [], // array of {x, y} positions
   phase: "PLACEMENT", // 'PLACEMENT' or 'MOVEMENT'
   gameStatus: "PLAYING", // "PLAYING", "TIGERS_WIN", "GOATS_WIN"
-  moveHistory: [], // Add this line
-  perspective: "GOAT", // Add this line
+  moveHistory: [],
+  perspective: "GOAT",
   players: {
-    goat: "HUMAN", // "HUMAN" or "AI"
-    tiger: "HUMAN", // "HUMAN" or "AI"
+    goat: { type: "HUMAN", model: null }, // type: "HUMAN", "AI", model: "random", "minimax"
+    tiger: { type: "HUMAN", model: null },
   },
   timeControl: {
     initial: 600, // 10 minutes in seconds
@@ -43,7 +43,7 @@ const initialState = {
   tigerTime: 10,
   goatTime: 10,
   clockRunning: false,
-  isInitialized: false, // Add this line
+  isInitialized: false,
   canUndo: false,
   isAIThinking: false,
   lastMove: null, // { from?: {x,y}, to: {x,y} }
@@ -80,8 +80,8 @@ export const useGameStore = create((set, get) => ({
       lastMove: null,
       perspective: "GOAT",
       players: {
-        goat: "HUMAN",
-        tiger: "HUMAN",
+        goat: { type: "HUMAN", model: null },
+        tiger: { type: "HUMAN", model: null },
       },
       timeControl: {
         initial: 600,
@@ -498,15 +498,21 @@ export const useGameStore = create((set, get) => ({
   // Add new method to handle AI moves
   handleAIMove: async () => {
     const state = get();
-    const currentPlayer = state.turn;
-    const isAI = state.players[currentPlayer.toLowerCase()] === "AI";
+    const currentPlayer = state.turn.toLowerCase();
+    const playerConfig = state.players[currentPlayer];
+    const isAI = playerConfig?.type === "AI";
 
     if (!isAI || state.gameStatus !== "PLAYING") return;
 
     set({ isAIThinking: true });
 
     try {
-      const move = await getBestMove(state.board, state.phase, currentPlayer);
+      const move = await getBestMove(
+        state.board,
+        state.phase,
+        playerConfig,
+        state.turn // Pass the current turn
+      );
 
       if (move.type === "placement") {
         get().makeMove(move.x, move.y);
