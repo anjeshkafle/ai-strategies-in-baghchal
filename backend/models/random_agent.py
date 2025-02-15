@@ -1,4 +1,5 @@
 from typing import List, Dict, Optional, TypedDict, Union
+from models.game_state import GameState
 import random
 from game_logic import get_all_possible_moves
 
@@ -14,7 +15,7 @@ class MovementMove(TypedDict):
     capture: Optional[Dict[str, int]]
 
 class RandomAgent:
-    def get_move(self, board: List[List[Optional[Dict]]], phase: str, agent: str) -> Union[PlacementMove, MovementMove]:
+    def get_move(self, state: GameState) -> Union[PlacementMove, MovementMove]:
         """
         Get a random valid move for the current state
         Returns either:
@@ -26,8 +27,8 @@ class RandomAgent:
             "capture": Optional[{"x": int, "y": int}]
           }
         """
-        possible_moves = get_all_possible_moves(board, phase, agent.upper())
+        possible_moves = get_all_possible_moves(state.board, state.phase, state.turn)
         if not possible_moves:
-            raise ValueError(f"No valid moves available for {agent} in current state")
+            raise ValueError(f"No valid moves available for {state.turn} in current state")
         
         return random.choice(possible_moves) 

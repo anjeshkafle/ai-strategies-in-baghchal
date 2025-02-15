@@ -1,5 +1,12 @@
 // New function to communicate with backend
-const fetchBestMove = async (boardState, phase, agent, model) => {
+const fetchBestMove = async (
+  boardState,
+  phase,
+  agent,
+  model,
+  goatsPlaced = 0,
+  goatsCaptured = 0
+) => {
   try {
     const response = await fetch("http://localhost:8000/get-best-move", {
       method: "POST",
@@ -11,6 +18,8 @@ const fetchBestMove = async (boardState, phase, agent, model) => {
         phase,
         agent,
         model,
+        goats_placed: goatsPlaced,
+        goats_captured: goatsCaptured,
       }),
     });
 
@@ -30,7 +39,8 @@ export const getBestMove = async (
   boardState,
   phase,
   playerConfig,
-  currentTurn
+  currentTurn,
+  gameState = {}
 ) => {
   const isAI = playerConfig?.type?.toLowerCase() === "ai";
   if (!isAI || !playerConfig.model) return null;
@@ -38,7 +48,9 @@ export const getBestMove = async (
   return await fetchBestMove(
     boardState,
     phase,
-    currentTurn, // Pass the actual turn (GOAT/TIGER) as agent
-    playerConfig.model
+    currentTurn,
+    playerConfig.model,
+    gameState.goatsPlaced || 0,
+    gameState.goatsCaptured || 0
   );
 };

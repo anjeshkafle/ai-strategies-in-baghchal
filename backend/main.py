@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 from models.random_agent import RandomAgent
 from models.minimax_agent import MinimaxAgent
+from models.game_state import GameState
 import logging
 import time
 
@@ -30,11 +31,13 @@ class MoveRequest(BaseModel):
     phase: str
     agent: str
     model: str
+    goats_placed: int = 0  # Add default value
+    goats_captured: int = 0  # Add default value
 
 # Initialize agents
 agents = {
     "random": RandomAgent(),
-    "minimax": MinimaxAgent(max_depth=4, max_time=10.0)  # Add timeout of 10 seconds
+    "minimax": MinimaxAgent(max_depth=4)  # Remove max_time as it's not used
 }
 
 @app.post("/get-best-move")
@@ -47,7 +50,17 @@ async def get_best_move(request: MoveRequest):
         raise HTTPException(status_code=400, detail=f"Unknown model: {request.model}")
     
     try:
-        move = agents[request.model].get_move(request.board, request.phase, request.agent)
+        # Create a GameState object from the request
+        state = GameState()
+        state.board = request.board
+        state.phase = request.phase
+        state.turn = request.agent
+        state.goats_placed = request.goats_placed
+        state.goats_captured = request.goats_captured
+        
+        # Get move using the agent
+        move = agents[request.model].get_move(state)
+        
         elapsed = time.time() - start_time
         logger.info(f"Move calculation completed in {elapsed:.2f}s: {move}")
         return move

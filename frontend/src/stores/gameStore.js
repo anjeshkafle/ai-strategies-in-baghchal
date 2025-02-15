@@ -539,43 +539,41 @@ export const useGameStore = create((set, get) => ({
     });
   },
 
-  // Add new method to handle AI moves
+  // Handle AI move
   handleAIMove: async () => {
     const state = get();
-    const currentPlayer = state.turn.toLowerCase();
-    const playerConfig = state.players[currentPlayer];
-    const isAI = playerConfig?.type === "AI";
+    if (state.gameStatus !== "PLAYING") return;
 
-    if (!isAI || state.gameStatus !== "PLAYING" || get().isAIThinking) return;
+    const currentPlayer = state.players[state.turn.toLowerCase()];
+    if (currentPlayer.type !== "AI" || !currentPlayer.model) return;
 
-    await new Promise((resolve) => {
-      set((state) => ({ ...state, isAIThinking: true }));
-      resolve();
-    });
-
+    set({ isAIThinking: true });
     try {
       const move = await getBestMove(
         state.board,
         state.phase,
-        playerConfig,
-        state.turn
+        currentPlayer,
+        state.turn,
+        {
+          goatsPlaced: state.goatsPlaced,
+          goatsCaptured: state.goatsCaptured,
+        }
       );
 
-      if (move.type === "placement") {
-        await get().makeMove(move.x, move.y);
-      } else {
-        // First select the piece
-        get().selectPiece(move.from.x, move.from.y);
-        // Then make the move
-        await get().makeMove(move.to.x, move.to.y);
+      if (move) {
+        if (move.type === "placement") {
+          await get().makeMove(move.x, move.y);
+        } else {
+          // First select the piece
+          get().selectPiece(move.from.x, move.from.y);
+          // Then make the move
+          await get().makeMove(move.to.x, move.to.y);
+        }
       }
     } catch (error) {
       console.error("Error getting AI move:", error);
     } finally {
-      await new Promise((resolve) => {
-        set((state) => ({ ...state, isAIThinking: false }));
-        resolve();
-      });
+      set({ isAIThinking: false });
     }
   },
 }));
