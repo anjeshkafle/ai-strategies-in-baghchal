@@ -144,7 +144,7 @@ export const useGameStore = create((set, get) => ({
   },
 
   // Make a move
-  makeMove: (toX, toY) => {
+  makeMove: async (toX, toY) => {
     const state = get();
     const notation = gridToNotation(toX, toY);
     let moveNotation = "";
@@ -156,22 +156,28 @@ export const useGameStore = create((set, get) => ({
         const newBoard = [...state.board.map((row) => [...row])];
         newBoard[toY][toX] = { type: "GOAT" };
         const newGoatsPlaced = state.goatsPlaced + 1;
-        set((state) => ({
-          ...state,
-          board: newBoard,
-          goatsPlaced: newGoatsPlaced,
-          turn: "TIGER",
-          selectedPiece: null,
-          possibleMoves: [],
-          phase: newGoatsPlaced >= TOTAL_GOATS ? "MOVEMENT" : "PLACEMENT",
-          moveHistory: [...state.moveHistory, moveNotation],
-          goatTime: state.goatTime + state.timeControl.increment,
-          canUndo: true,
-          lastMove: { to: { x: toX, y: toY } },
-        }));
 
-        // Check game end after state update
-        setTimeout(() => get().checkGameEnd(), 0);
+        await new Promise((resolve) => {
+          set((state) => {
+            const newState = {
+              ...state,
+              board: newBoard,
+              goatsPlaced: newGoatsPlaced,
+              turn: "TIGER",
+              selectedPiece: null,
+              possibleMoves: [],
+              phase: newGoatsPlaced >= TOTAL_GOATS ? "MOVEMENT" : "PLACEMENT",
+              moveHistory: [...state.moveHistory, moveNotation],
+              goatTime: state.goatTime + state.timeControl.increment,
+              canUndo: true,
+              lastMove: { to: { x: toX, y: toY } },
+            };
+            resolve();
+            return newState;
+          });
+        });
+
+        await get().checkGameEnd();
       }
       return;
     }
@@ -209,48 +215,63 @@ export const useGameStore = create((set, get) => ({
             const newGoatsCaptured = state.goatsCaptured + 1;
             console.log("Goats captured:", newGoatsCaptured); // Debug log
 
-            set((state) => {
-              const newState = {
-                ...state,
-                board: newBoard,
-                turn: "GOAT",
-                selectedPiece: null,
-                possibleMoves: [],
-                goatsCaptured: newGoatsCaptured,
-                moveHistory: [...state.moveHistory, moveNotation],
-                tigerTime: state.tigerTime + state.timeControl.increment,
-                canUndo: true,
-                lastMove: {
-                  from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
-                  to: { x: toX, y: toY },
-                },
-              };
+            await new Promise((resolve) => {
+              set((state) => {
+                const newState = {
+                  ...state,
+                  board: newBoard,
+                  turn: "GOAT",
+                  selectedPiece: null,
+                  possibleMoves: [],
+                  goatsCaptured: newGoatsCaptured,
+                  moveHistory: [...state.moveHistory, moveNotation],
+                  tigerTime: state.tigerTime + state.timeControl.increment,
+                  canUndo: true,
+                  lastMove: {
+                    from: {
+                      x: state.selectedPiece.x,
+                      y: state.selectedPiece.y,
+                    },
+                    to: { x: toX, y: toY },
+                  },
+                };
 
-              // Check if tigers won (5 goats captured)
-              if (newGoatsCaptured >= 5) {
-                console.log("Tigers should win - setting game status"); // Debug log
-                newState.gameStatus = "TIGERS_WIN";
-              }
-              console.log("New game status:", newState.gameStatus); // Debug log
-
-              return newState;
+                // Check if tigers won (5 goats captured)
+                if (newGoatsCaptured >= 5) {
+                  console.log("Tigers should win - setting game status"); // Debug log
+                  newState.gameStatus = "TIGERS_WIN";
+                }
+                console.log("New game status:", newState.gameStatus); // Debug log
+                resolve();
+                return newState;
+              });
             });
           } else {
-            set((state) => ({
-              ...state,
-              board: newBoard,
-              turn: "GOAT",
-              selectedPiece: null,
-              possibleMoves: [],
-              moveHistory: [...state.moveHistory, moveNotation],
-              tigerTime: state.tigerTime + state.timeControl.increment,
-              canUndo: true,
-              lastMove: {
-                from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
-                to: { x: toX, y: toY },
-              },
-            }));
+            await new Promise((resolve) => {
+              set((state) => {
+                const newState = {
+                  ...state,
+                  board: newBoard,
+                  turn: "GOAT",
+                  selectedPiece: null,
+                  possibleMoves: [],
+                  moveHistory: [...state.moveHistory, moveNotation],
+                  tigerTime: state.tigerTime + state.timeControl.increment,
+                  canUndo: true,
+                  lastMove: {
+                    from: {
+                      x: state.selectedPiece.x,
+                      y: state.selectedPiece.y,
+                    },
+                    to: { x: toX, y: toY },
+                  },
+                };
+                resolve();
+                return newState;
+              });
+            });
           }
+          await get().checkGameEnd();
         }
         return;
       }
@@ -292,68 +313,85 @@ export const useGameStore = create((set, get) => ({
           if (move?.type === "capture") {
             // Remove the captured goat
             newBoard[move.capturedPiece.y][move.capturedPiece.x] = null;
-            set((state) => ({
-              ...state,
-              board: newBoard,
-              turn: "GOAT",
-              selectedPiece: null,
-              possibleMoves: [],
-              goatsCaptured: state.goatsCaptured + 1,
-              moveHistory: [...state.moveHistory, moveNotation],
-              goatTime: state.goatTime + state.timeControl.increment,
-              canUndo: true,
-              lastMove: {
-                from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
-                to: { x: toX, y: toY },
-              },
-            }));
+            await new Promise((resolve) => {
+              set((state) => {
+                const newState = {
+                  ...state,
+                  board: newBoard,
+                  turn: "GOAT",
+                  selectedPiece: null,
+                  possibleMoves: [],
+                  goatsCaptured: state.goatsCaptured + 1,
+                  moveHistory: [...state.moveHistory, moveNotation],
+                  goatTime: state.goatTime + state.timeControl.increment,
+                  canUndo: true,
+                  lastMove: {
+                    from: {
+                      x: state.selectedPiece.x,
+                      y: state.selectedPiece.y,
+                    },
+                    to: { x: toX, y: toY },
+                  },
+                };
+                resolve();
+                return newState;
+              });
+            });
           } else {
-            set((state) => ({
-              ...state,
-              board: newBoard,
-              turn: state.turn === "GOAT" ? "TIGER" : "GOAT",
-              selectedPiece: null,
-              possibleMoves: [],
-              moveHistory: [...state.moveHistory, moveNotation],
-              goatTime: state.goatTime + state.timeControl.increment,
-              canUndo: true,
-              lastMove: {
-                from: { x: state.selectedPiece.x, y: state.selectedPiece.y },
-                to: { x: toX, y: toY },
-              },
-            }));
+            await new Promise((resolve) => {
+              set((state) => {
+                const newState = {
+                  ...state,
+                  board: newBoard,
+                  turn: state.turn === "GOAT" ? "TIGER" : "GOAT",
+                  selectedPiece: null,
+                  possibleMoves: [],
+                  moveHistory: [...state.moveHistory, moveNotation],
+                  goatTime: state.goatTime + state.timeControl.increment,
+                  canUndo: true,
+                  lastMove: {
+                    from: {
+                      x: state.selectedPiece.x,
+                      y: state.selectedPiece.y,
+                    },
+                    to: { x: toX, y: toY },
+                  },
+                };
+                resolve();
+                return newState;
+              });
+            });
           }
+          await get().checkGameEnd();
         } else {
           console.log("Invalid move - Failed validation", {
             possibleMoves: state.possibleMoves,
             attemptedMove: { x: toX, y: toY },
           });
         }
+        return;
       }
     }
 
     // After successful moves, add:
-    setTimeout(() => {
-      get().checkGameEnd();
-
-      // Only trigger AI if game is still playing
-      if (get().gameStatus === "PLAYING") {
-        setTimeout(() => {
-          get().handleAIMove();
-        }, 500);
-      }
-    }, 0);
+    await get().checkGameEnd();
   },
 
   getRemainingGoats: () => TOTAL_GOATS - get().goatsPlaced,
 
   // Add function to check for game end conditions
-  checkGameEnd: () => {
+  checkGameEnd: async () => {
     const state = get();
 
     // Check if tigers won (5 goats captured)
     if (state.goatsCaptured >= 5) {
-      set({ gameStatus: "TIGERS_WIN" });
+      await new Promise((resolve) => {
+        set((state) => {
+          const newState = { ...state, gameStatus: "TIGERS_WIN" };
+          resolve();
+          return newState;
+        });
+      });
       return;
     }
 
@@ -374,7 +412,13 @@ export const useGameStore = create((set, get) => ({
     }
 
     if (!tigerHasMove) {
-      set({ gameStatus: "GOATS_WIN" });
+      await new Promise((resolve) => {
+        set((state) => {
+          const newState = { ...state, gameStatus: "GOATS_WIN" };
+          resolve();
+          return newState;
+        });
+      });
       return;
     }
   },
@@ -502,30 +546,36 @@ export const useGameStore = create((set, get) => ({
     const playerConfig = state.players[currentPlayer];
     const isAI = playerConfig?.type === "AI";
 
-    if (!isAI || state.gameStatus !== "PLAYING") return;
+    if (!isAI || state.gameStatus !== "PLAYING" || get().isAIThinking) return;
 
-    set({ isAIThinking: true });
+    await new Promise((resolve) => {
+      set((state) => ({ ...state, isAIThinking: true }));
+      resolve();
+    });
 
     try {
       const move = await getBestMove(
         state.board,
         state.phase,
         playerConfig,
-        state.turn // Pass the current turn
+        state.turn
       );
 
       if (move.type === "placement") {
-        get().makeMove(move.x, move.y);
+        await get().makeMove(move.x, move.y);
       } else {
         // First select the piece
         get().selectPiece(move.from.x, move.from.y);
         // Then make the move
-        get().makeMove(move.to.x, move.to.y);
+        await get().makeMove(move.to.x, move.to.y);
       }
     } catch (error) {
       console.error("Error getting AI move:", error);
     } finally {
-      set({ isAIThinking: false });
+      await new Promise((resolve) => {
+        set((state) => ({ ...state, isAIThinking: false }));
+        resolve();
+      });
     }
   },
 }));

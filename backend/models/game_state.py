@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Tuple
 from copy import deepcopy
-from ..game_logic import get_possible_moves, get_all_possible_moves
+from game_logic import get_possible_moves, get_all_possible_moves
 
 class GameState:
     """

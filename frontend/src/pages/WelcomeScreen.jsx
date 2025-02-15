@@ -119,7 +119,7 @@ const WelcomeScreen = () => {
                           goat: {
                             ...settings.players.goat,
                             type: e.target.value,
-                            model: e.target.value === "AI" ? "random" : null,
+                            model: e.target.value === "AI" ? "minimax" : null,
                           },
                         },
                       })
@@ -145,8 +145,8 @@ const WelcomeScreen = () => {
                         })
                       }
                       options={[
-                        { value: "random", label: "Random AI" },
                         { value: "minimax", label: "Minimax Base" },
+                        { value: "random", label: "Random AI" },
                       ]}
                     />
                   )}
@@ -170,7 +170,7 @@ const WelcomeScreen = () => {
                           tiger: {
                             ...settings.players.tiger,
                             type: e.target.value,
-                            model: e.target.value === "AI" ? "random" : null,
+                            model: e.target.value === "AI" ? "minimax" : null,
                           },
                         },
                       })
@@ -196,8 +196,8 @@ const WelcomeScreen = () => {
                         })
                       }
                       options={[
-                        { value: "random", label: "Random AI" },
                         { value: "minimax", label: "Minimax Base" },
+                        { value: "random", label: "Random AI" },
                       ]}
                     />
                   )}

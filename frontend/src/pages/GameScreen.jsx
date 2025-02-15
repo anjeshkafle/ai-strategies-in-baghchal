@@ -73,11 +73,11 @@ const GameScreen = () => {
   useEffect(() => {
     if (gameStatus === "PLAYING") {
       const currentPlayer = players[turn.toLowerCase()];
-      if (currentPlayer.type === "AI") {
+      if (currentPlayer.type === "AI" && !isAIThinking) {
         handleAIMove();
       }
     }
-  }, [turn, phase, gameStatus, players, handleAIMove]);
+  }, [turn, phase, gameStatus, players, handleAIMove, isAIThinking]);
 
   // Helper function to render player panel
   const renderPlayerPanel = (isTopPanel) => {
