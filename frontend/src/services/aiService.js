@@ -8,6 +8,15 @@ const fetchBestMove = async (
   goatsCaptured = 0
 ) => {
   try {
+    console.log("Fetching best move:", {
+      board: boardState,
+      phase,
+      agent,
+      model,
+      goats_placed: goatsPlaced,
+      goats_captured: goatsCaptured,
+    });
+
     const response = await fetch("http://localhost:8000/get-best-move", {
       method: "POST",
       headers: {
@@ -24,10 +33,12 @@ const fetchBestMove = async (
     });
 
     if (!response.ok) {
-      throw new Error("Network response was not ok");
+      throw new Error(`Network response was not ok: ${response.status}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log("Received move from backend:", data);
+    return data;
   } catch (error) {
     console.error("Error fetching best move:", error);
     throw error;
@@ -38,19 +49,21 @@ const fetchBestMove = async (
 export const getBestMove = async (
   boardState,
   phase,
-  playerConfig,
-  currentTurn,
+  agent,
+  model,
   gameState = {}
 ) => {
-  const isAI = playerConfig?.type?.toLowerCase() === "ai";
-  if (!isAI || !playerConfig.model) return null;
-
-  return await fetchBestMove(
-    boardState,
-    phase,
-    currentTurn,
-    playerConfig.model,
-    gameState.goatsPlaced || 0,
-    gameState.goatsCaptured || 0
-  );
+  try {
+    return await fetchBestMove(
+      boardState,
+      phase,
+      agent,
+      model,
+      gameState.goatsPlaced || 0,
+      gameState.goatsCaptured || 0
+    );
+  } catch (error) {
+    console.error("Error in getBestMove:", error);
+    return null;
+  }
 };

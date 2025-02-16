@@ -74,7 +74,12 @@ const GameScreen = () => {
     if (gameStatus === "PLAYING") {
       const currentPlayer = players[turn.toLowerCase()];
       if (currentPlayer.type === "AI" && !isAIThinking) {
-        handleAIMove();
+        // Add a small delay before triggering AI move to allow for animations
+        const timeoutId = setTimeout(() => {
+          handleAIMove();
+        }, 300);
+
+        return () => clearTimeout(timeoutId);
       }
     }
   }, [turn, phase, gameStatus, players, handleAIMove, isAIThinking]);
