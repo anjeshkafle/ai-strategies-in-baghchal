@@ -1,6 +1,9 @@
 from typing import List, Optional, Dict, Union
 from models.game_state import GameState
 from game_logic import get_all_possible_moves
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MinimaxAgent:
     """
@@ -39,16 +42,19 @@ class MinimaxAgent:
         
         # Count movable tigers (tigers with at least one valid move)
         movable_tigers = self._count_movable_tigers(state)
-        score += 300 * movable_tigers
+        tiger_score = 300 * movable_tigers
+        score += tiger_score
         
         # Dead goats (captured)
-        score += 700 * state.goats_captured
+        capture_score = 700 * state.goats_captured
+        score += capture_score
         
         # Count closed spaces (positions where tigers are trapped)
         closed_spaces = self._count_closed_spaces(state)
-        score -= 700 * closed_spaces
+        closed_score = -700 * closed_spaces
+        score += closed_score
         
-        # Penalize for depth to prefer faster wins/avoid slower losses
+        # Penalize for depth to prefer faster wins/losses
         score -= depth
         
         return score
@@ -144,20 +150,20 @@ class MinimaxAgent:
             return value
     
     def get_move(self, state: GameState) -> Dict:
-        """
-        Get the best move for the current state.
+        """Get the best move for the current state."""
+        # Log initial state evaluation
+        initial_score = self.evaluate(state, 0)
+        logger.info("INITIAL STATE ANALYSIS:")
+        logger.info(f"Movable tigers: {self._count_movable_tigers(state)}")
+        logger.info(f"Goats captured: {state.goats_captured}")
+        logger.info(f"Trapped tigers: {self._count_closed_spaces(state)}")
+        logger.info(f"Initial position score: {initial_score}")
         
-        Args:
-            state: Current game state
-            
-        Returns:
-            The best move found
-        """
         self.best_move = None
         is_maximizing = state.turn == "TIGER"
         
         # Start minimax search
-        self.minimax(
+        final_score = self.minimax(
             state,
             self.max_depth,
             -MinimaxAgent.INF,
@@ -165,11 +171,22 @@ class MinimaxAgent:
             is_maximizing
         )
         
+        # Log final decision
+        logger.info("FINAL DECISION:")
+        if self.best_move:
+            if "type" in self.best_move and self.best_move["type"] == "placement":
+                logger.info(f"Place at ({self.best_move['x']}, {self.best_move['y']})")
+            else:
+                logger.info(f"Move from ({self.best_move['from']['x']}, {self.best_move['from']['y']}) to ({self.best_move['to']['x']}, {self.best_move['to']['y']})")
+                if self.best_move.get("capture"):
+                    logger.info("This move includes a capture!")
+            logger.info(f"Expected score after move: {final_score}")
+        
         if not self.best_move:
-            # Fallback to first valid move if something went wrong
             valid_moves = state.get_valid_moves()
             if not valid_moves:
                 raise ValueError("No valid moves available")
+            logger.warning("No best move found, falling back to first valid move")
             return valid_moves[0]
         
         return self.best_move 
