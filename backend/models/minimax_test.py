@@ -47,10 +47,10 @@ def debug_board_state(state: GameState):
 #  "GGT.G",  # Fourth row
 #  "GG..T"]  # Bottom row
 test_state = {
-    "board": ["TGGGG", "GGGGG", "GGGTG", "GGT.G", "GG..T"],
+    "board": ["T...T", ".....", ".....", ".....", "T...T"],
     "phase": "PLACEMENT",
     "turn": "GOAT",
-    "goats_placed": 18,
+    "goats_placed": 0,
     "goats_captured": 0
 }
 
