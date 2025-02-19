@@ -152,5 +152,45 @@ def test_minimax_agent():
     
     return best_move
 
+def test_specific_positions():
+    """Test evaluation of specific positions where one allows capture and one doesn't."""
+    game_state = create_game_state_from_dict(test_state)
+    agent = MinimaxAgent(max_depth=4)
+    
+    print("\nTesting position 4,3 (allows capture):")
+    # Test position 4,3 (allows capture)
+    move_4_3 = {"type": "placement", "x": 4, "y": 3}  # Using 1-based indexing as the game expects
+    state_4_3 = game_state.clone()
+    state_4_3.apply_move(move_4_3)
+    
+    # Get minimax score for 4,3 (this will print the full search tree due to logging)
+    score_4_3 = agent.minimax(state_4_3, 4, -agent.INF, agent.INF, True)  # True because next move is Tiger's
+    
+    print("\nTesting position 4,2 (safe move):")
+    # Test position 4,2 (safe move)
+    move_4_2 = {"type": "placement", "x": 4, "y": 2}  # Using 1-based indexing
+    state_4_2 = game_state.clone()
+    state_4_2.apply_move(move_4_2)
+    
+    # Get minimax score for 4,2
+    score_4_2 = agent.minimax(state_4_2, 4, -agent.INF, agent.INF, True)  # True because next move is Tiger's
+    
+    print("\nFinal scores:")
+    print(f"Score for position 4,3 (allows capture): {score_4_3}")
+    print(f"Score for position 4,2 (safe move): {score_4_2}")
+    
+    # Also test the full get_move to see what it chooses
+    print("\nTesting full get_move to see what it chooses:")
+    best_move = agent.get_move(game_state)
+    print(f"Best move chosen: {json.dumps(best_move, indent=2)}")
+    
+    return {
+        "pos_4_3": score_4_3,
+        "pos_4_2": score_4_2,
+        "best_move": best_move
+    }
+
 if __name__ == "__main__":
     test_minimax_agent()
+    print("\nRunning specific position tests:")
+    test_specific_positions()

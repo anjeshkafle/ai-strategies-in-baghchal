@@ -145,17 +145,38 @@ class MinimaxAgent:
                 if depth == self.max_depth:
                     self.current_move = move
                 
+                # Check if this move allows an immediate capture by Tiger
+                tiger_moves = get_all_possible_moves(new_state.board, "MOVEMENT", "TIGER")
+                allows_capture = any(m.get('capture') for m in tiger_moves)
+                
+                # If move allows capture, evaluate immediately
+                capture_score = None
+                if allows_capture:
+                    # Simulate the capture
+                    best_capture_score = -MinimaxAgent.INF
+                    for tiger_move in tiger_moves:
+                        if tiger_move.get('capture'):
+                            capture_state = new_state.clone()
+                            capture_state.apply_move(tiger_move)
+                            score = self.evaluate(capture_state, depth-1)
+                            best_capture_score = max(best_capture_score, score)
+                    capture_score = best_capture_score
+                    
+                    if depth >= self.max_depth - 2:
+                        logger.info(f"{indent}WARNING: This move allows a capture!")
+                        logger.info(f"{indent}Immediate capture score: {capture_score}")
+                
                 # Get score from child nodes
                 value_t = self.minimax(new_state, depth - 1, alpha, beta, True)
                 
+                # For moves that allow capture, use the worse of the immediate evaluation or child node score
+                if capture_score is not None:
+                    value_t = max(value_t, capture_score)  # Use max because a higher score is worse for Goat
+                
                 if depth >= self.max_depth - 2:
                     logger.info(f"{indent}Move got score: {value_t}")
-                    if new_state.goats_captured > state.goats_captured:
-                        logger.info(f"{indent}WARNING: This move allows a capture!")
-                        logger.info(f"{indent}State after capture:")
-                        logger.info(f"{indent}- Movable tigers: {self._count_movable_tigers(new_state)}")
-                        logger.info(f"{indent}- Goats captured: {new_state.goats_captured}")
-                        logger.info(f"{indent}- Closed spaces: {self._count_closed_spaces(new_state)}")
+                    if allows_capture:
+                        logger.info(f"{indent}Final score after considering capture: {value_t}")
                 
                 # At root node, always log the move for debugging
                 if depth == self.max_depth:
