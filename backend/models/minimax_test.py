@@ -9,11 +9,18 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 def debug_board_state(state: GameState):
-    """Print a visual representation of the board state."""
+    """
+    Print a visual representation of the board state.
+    Prints in the same orientation as the test_state format:
+    - Each row printed matches a string in test_state["board"]
+    - First row is the top row of the board
+    """
     print("\nBoard state:")
     for y in range(5):
         row = ""
         for x in range(5):
+            # Note: state.board[y][x] is already in internal format
+            # which matches our visual format after transposition
             piece = state.board[y][x]
             if piece is None:
                 row += ". "
@@ -21,7 +28,7 @@ def debug_board_state(state: GameState):
                 row += "T "
             else:
                 row += "G "
-        print(row)
+        print(row.rstrip())  # Remove trailing space
     print(f"Turn: {state.turn}, Phase: {state.phase}")
     print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}\n")
 

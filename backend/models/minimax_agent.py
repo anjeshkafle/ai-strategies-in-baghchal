@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Union
 from models.game_state import GameState
-from game_logic import get_all_possible_moves
+from game_logic import get_all_possible_moves, check_game_end
 import logging
 from operator import itemgetter
 
@@ -106,28 +106,31 @@ class MinimaxAgent:
     
     def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool) -> float:
         """Minimax algorithm with alpha-beta pruning."""
-        indent = "  " * (self.max_depth - depth)  # Indentation for readability
+        indent = "  " * (self.max_depth - depth)
         
-        # Get score at leaf nodes
-        score = self.evaluate(state, depth)
-        
-        # Return score if leaf node is reached
-        if depth == 0 or abs(score) == MinimaxAgent.INF:
+        # Get score at leaf nodes or terminal states
+        if depth == 0 or check_game_end(state.board, state.goats_captured) != "PLAYING":
+            score = self.evaluate(state, depth)
             logger.info(f"{indent}Leaf node at depth {depth}")
             logger.info(f"{indent}Turn: {state.turn}")
             logger.info(f"{indent}Score: {score}")
             logger.info(f"{indent}Goats captured: {state.goats_captured}")
+            logger.info(f"{indent}Evaluation details:")
+            logger.info(f"{indent}- Movable tigers: {self._count_movable_tigers(state)} (score: {300 * self._count_movable_tigers(state)})")
+            logger.info(f"{indent}- Goats captured: {state.goats_captured} (score: {700 * state.goats_captured})")
+            logger.info(f"{indent}- Closed spaces: {self._count_closed_spaces(state)} (score: {-700 * self._count_closed_spaces(state)})")
+            logger.info(f"{indent}- Depth penalty: -{depth}")
             return score
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            return score
+            return self.evaluate(state, depth)
         
         if not is_maximizing:  # Minimizing player (Goat)
             value = MinimaxAgent.INF
             for move in valid_moves:
                 # Log move being considered
-                if depth >= self.max_depth - 2:  # Only log first two levels for readability
+                if depth >= self.max_depth - 2:
                     logger.info(f"\n{indent}Depth {depth} (Goat's turn) considering:")
                     if move['type'] == 'placement':
                         logger.info(f"{indent}Place at ({move['x']}, {move['y']})")
@@ -142,13 +145,17 @@ class MinimaxAgent:
                 if depth == self.max_depth:
                     self.current_move = move
                 
-                # Recursive evaluation
+                # Get score from child nodes
                 value_t = self.minimax(new_state, depth - 1, alpha, beta, True)
                 
-                if depth >= self.max_depth - 2:  # Log score for this move
+                if depth >= self.max_depth - 2:
                     logger.info(f"{indent}Move got score: {value_t}")
                     if new_state.goats_captured > state.goats_captured:
                         logger.info(f"{indent}WARNING: This move allows a capture!")
+                        logger.info(f"{indent}State after capture:")
+                        logger.info(f"{indent}- Movable tigers: {self._count_movable_tigers(new_state)}")
+                        logger.info(f"{indent}- Goats captured: {new_state.goats_captured}")
+                        logger.info(f"{indent}- Closed spaces: {self._count_closed_spaces(new_state)}")
                 
                 # At root node, always log the move for debugging
                 if depth == self.max_depth:
@@ -162,7 +169,7 @@ class MinimaxAgent:
                 if value_t < value:
                     value = value_t
                     beta = min(beta, value)
-                    if depth == self.max_depth:  # Root node
+                    if depth == self.max_depth:
                         self.best_move = move
                         logger.info(f"{indent}New best move for Goat with score: {value_t}")
                 
@@ -176,7 +183,7 @@ class MinimaxAgent:
             value = -MinimaxAgent.INF
             for move in valid_moves:
                 # Log move being considered
-                if depth >= self.max_depth - 2:  # Only log first two levels for readability
+                if depth >= self.max_depth - 2:
                     logger.info(f"\n{indent}Depth {depth} (Tiger's turn) considering:")
                     if move['type'] == 'placement':
                         logger.info(f"{indent}Place at ({move['x']}, {move['y']})")
@@ -193,10 +200,25 @@ class MinimaxAgent:
                 if depth == self.max_depth:
                     self.current_move = move
                 
-                # Recursive evaluation
+                # For capture moves, evaluate immediately and propagate if better
+                capture_score = None
+                if move.get('capture'):
+                    capture_score = self.evaluate(new_state, depth-1)
+                    if depth >= self.max_depth - 2:
+                        logger.info(f"{indent}State immediately after capture:")
+                        logger.info(f"{indent}- Movable tigers: {self._count_movable_tigers(new_state)}")
+                        logger.info(f"{indent}- Goats captured: {new_state.goats_captured}")
+                        logger.info(f"{indent}- Closed spaces: {self._count_closed_spaces(new_state)}")
+                        logger.info(f"{indent}- Raw evaluation: {capture_score}")
+                
+                # Get score from child nodes
                 value_t = self.minimax(new_state, depth - 1, alpha, beta, False)
                 
-                if depth >= self.max_depth - 2:  # Log score for this move
+                # For capture moves, use the better of the immediate evaluation or child node score
+                if capture_score is not None:
+                    value_t = max(value_t, capture_score)
+                
+                if depth >= self.max_depth - 2:
                     logger.info(f"{indent}Move got score: {value_t}")
                     if move.get('capture'):
                         logger.info(f"{indent}Capture move resulted in score: {value_t}")
@@ -213,7 +235,7 @@ class MinimaxAgent:
                 if value_t > value:
                     value = value_t
                     alpha = max(alpha, value)
-                    if depth == self.max_depth:  # Root node
+                    if depth == self.max_depth:
                         self.best_move = move
                         logger.info(f"{indent}New best move for Tiger with score: {value_t}")
                 
