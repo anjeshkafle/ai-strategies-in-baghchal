@@ -105,10 +105,7 @@ class MinimaxAgent:
         return closed_count
     
     def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool) -> float:
-        """
-        Minimax algorithm with alpha-beta pruning.
-        Matches the reference implementation's structure.
-        """
+        """Minimax algorithm with alpha-beta pruning."""
         # Get score at leaf nodes
         score = self.evaluate(state, depth)
         
@@ -134,17 +131,20 @@ class MinimaxAgent:
                 # Recursive evaluation
                 value_t = self.minimax(new_state, depth - 1, alpha, beta, True)
                 
+                # At root node, always log the move for debugging
+                if depth == self.max_depth:
+                    self.move_scores.append({
+                        'move': move,
+                        'score': value_t,
+                        'eval': self.current_eval.copy() if hasattr(self, 'current_eval') else None
+                    })
+                
+                # Update best move and value
                 if value_t < value:
                     value = value_t
                     beta = min(beta, value)
                     if depth == self.max_depth:  # Root node
                         self.best_move = move
-                        # Store move and score for logging
-                        self.move_scores.append({
-                            'move': move,
-                            'score': value,
-                            'eval': self.current_eval.copy() if hasattr(self, 'current_eval') else None
-                        })
                 
                 if alpha >= beta:
                     break
@@ -164,17 +164,20 @@ class MinimaxAgent:
                 # Recursive evaluation
                 value_t = self.minimax(new_state, depth - 1, alpha, beta, False)
                 
+                # At root node, always log the move for debugging
+                if depth == self.max_depth:
+                    self.move_scores.append({
+                        'move': move,
+                        'score': value_t,
+                        'eval': self.current_eval.copy() if hasattr(self, 'current_eval') else None
+                    })
+                
+                # Update best move and value
                 if value_t > value:
                     value = value_t
                     alpha = max(alpha, value)
                     if depth == self.max_depth:  # Root node
                         self.best_move = move
-                        # Store move and score for logging
-                        self.move_scores.append({
-                            'move': move,
-                            'score': value,
-                            'eval': self.current_eval.copy() if hasattr(self, 'current_eval') else None
-                        })
                 
                 if alpha >= beta:
                     break
