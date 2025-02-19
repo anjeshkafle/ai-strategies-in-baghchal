@@ -48,13 +48,22 @@ def debug_board_state(state: GameState):
 #  "GG..T"]  # Bottom row
 #["GGG..", "T..T.", "...G.", ".....", "T...T"] //ALlows a tiger to capture a goat
 #["T...T", ".....", ".....", ".....", "T...T"] //No goats captured
-test_state = {
-    "board": ["GGG..", "T..T.", "...G.", ".....", "T...T"],
-    "phase": "PLACEMENT",
-    "turn": "TIGER",
-    "goats_placed": 4,
-    "goats_captured": 0
-}
+test_states = [
+    {
+        "board": ["T...T", ".....", ".....", ".....", "T...T"],
+        "phase": "PLACEMENT",
+        "turn": "GOAT",
+        "goats_placed": 4,
+        "goats_captured": 0
+    },
+    {
+        "board": ["GGG..", "T..T.", "...G.", ".....", "T...T"],
+        "phase": "MOVEMENT",
+        "turn": "TIGER",
+        "goats_placed": 20,
+        "goats_captured": 0
+    }
+]
 
 def transpose_board(board_strings: List[str]) -> List[str]:
     """
@@ -119,40 +128,47 @@ def create_game_state_from_dict(state_dict: Dict[str, Any]) -> GameState:
     return game_state
 
 def test_minimax_agent():
-    """Test the minimax agent on the given board state."""
-    # Create game state from test state
-    game_state = create_game_state_from_dict(test_state)
-    
-    print("\nInitial board state:")
-    debug_board_state(game_state)
-    
+    """Test the minimax agent on both board states."""
     # Initialize minimax agent with depth 4
     agent = MinimaxAgent(max_depth=4)
     
-    # Get the best move
-    best_move = agent.get_move(game_state)
-    
-    # Print initial evaluation
-    print(f"Initial position evaluation: {agent.evaluate(game_state)}")
-    
-    # Print the best move found
-    print("\nBest move found:")
-    print(json.dumps(best_move, indent=2))
-    
-    # Apply the move and show resulting state
-    game_state.apply_move(best_move)
-    print("\nAfter applying move:")
-    debug_board_state(game_state)
-    
-    # Show possible tiger moves in the resulting position
-    tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
-    print("\nPossible tiger moves in resulting position:")
-    for move in tiger_moves:
-        print(json.dumps(move, indent=2))
-    
-    print(f"\nEvaluation after move: {agent.evaluate(game_state)}")
-    
-    return best_move
+    for i, test_state in enumerate(test_states):
+        print(f"\n{'='*50}")
+        print(f"Testing scenario {i+1}")
+        print('='*50)
+        
+        # Create game state from test state
+        game_state = create_game_state_from_dict(test_state)
+        
+        print("\nInitial board state:")
+        debug_board_state(game_state)
+        
+        # Get the best move
+        best_move = agent.get_move(game_state)
+        
+        # Print initial evaluation
+        print(f"Initial position evaluation: {agent.evaluate(game_state)}")
+        
+        # Print the best move found
+        print("\nBest move found:")
+        print(json.dumps(best_move, indent=2))
+        
+        # Apply the move and show resulting state
+        game_state.apply_move(best_move)
+        print("\nAfter applying move:")
+        debug_board_state(game_state)
+        
+        # Show possible moves in the resulting position
+        if game_state.turn == "TIGER":
+            moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
+            print("\nPossible tiger moves in resulting position:")
+        else:
+            moves = get_all_possible_moves(game_state.board, "PLACEMENT", "GOAT")
+            print("\nPossible goat moves in resulting position:")
+        for move in moves:
+            print(json.dumps(move, indent=2))
+        
+        print(f"\nEvaluation after move: {agent.evaluate(game_state)}")
 
 if __name__ == "__main__":
     test_minimax_agent()
