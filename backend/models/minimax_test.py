@@ -2,6 +2,10 @@ from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
 from typing import Dict, Any, List
 import json
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # Visual board representation (matches what you see on the actual board)
 # Reading from top to bottom, left to right:

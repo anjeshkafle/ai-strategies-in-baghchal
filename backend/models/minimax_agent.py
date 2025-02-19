@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Union
 from models.game_state import GameState
 from game_logic import get_all_possible_moves
 import logging
+from operator import itemgetter
 
 logger = logging.getLogger(__name__)
 
@@ -13,10 +14,11 @@ class MinimaxAgent:
     
     INF = 1000000
     
-    def __init__(self, max_depth: int = 5, max_time: Optional[float] = None):  # Added max_time for compatibility
+    def __init__(self, max_depth: int = 5, max_time: Optional[float] = None):
         self.max_depth = max_depth
         self.max_time = max_time  # Not used but kept for compatibility
         self.best_move = None
+        self.move_scores = []  # Store scores for all top-level moves
     
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
@@ -56,6 +58,16 @@ class MinimaxAgent:
         
         # Penalize for depth to prefer faster wins/losses
         score -= depth
+
+        # Store evaluation components for logging
+        if hasattr(self, 'current_move'):
+            self.current_eval = {
+                'movable_tigers': movable_tigers,
+                'goats_captured': state.goats_captured,
+                'closed_spaces': closed_spaces,
+                'depth_penalty': depth,
+                'total_score': score
+            }
         
         return score
     
@@ -115,6 +127,10 @@ class MinimaxAgent:
                 new_state = state.clone()
                 new_state.apply_move(move)
                 
+                # Store current move for logging at root level
+                if depth == self.max_depth:
+                    self.current_move = move
+                
                 # Recursive evaluation
                 value_t = self.minimax(new_state, depth - 1, alpha, beta, True)
                 
@@ -123,6 +139,12 @@ class MinimaxAgent:
                     beta = min(beta, value)
                     if depth == self.max_depth:  # Root node
                         self.best_move = move
+                        # Store move and score for logging
+                        self.move_scores.append({
+                            'move': move,
+                            'score': value,
+                            'eval': self.current_eval.copy() if hasattr(self, 'current_eval') else None
+                        })
                 
                 if alpha >= beta:
                     break
@@ -135,6 +157,10 @@ class MinimaxAgent:
                 new_state = state.clone()
                 new_state.apply_move(move)
                 
+                # Store current move for logging at root level
+                if depth == self.max_depth:
+                    self.current_move = move
+                
                 # Recursive evaluation
                 value_t = self.minimax(new_state, depth - 1, alpha, beta, False)
                 
@@ -143,6 +169,12 @@ class MinimaxAgent:
                     alpha = max(alpha, value)
                     if depth == self.max_depth:  # Root node
                         self.best_move = move
+                        # Store move and score for logging
+                        self.move_scores.append({
+                            'move': move,
+                            'score': value,
+                            'eval': self.current_eval.copy() if hasattr(self, 'current_eval') else None
+                        })
                 
                 if alpha >= beta:
                     break
@@ -151,9 +183,12 @@ class MinimaxAgent:
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state."""
+        # Reset move scores for new search
+        self.move_scores = []
+        
         # Log initial state evaluation
         initial_score = self.evaluate(state, 0)
-        logger.info("INITIAL STATE ANALYSIS:")
+        logger.info("\nINITIAL STATE ANALYSIS:")
         logger.info(f"Movable tigers: {self._count_movable_tigers(state)}")
         logger.info(f"Goats captured: {state.goats_captured}")
         logger.info(f"Trapped tigers: {self._count_closed_spaces(state)}")
@@ -171,14 +206,37 @@ class MinimaxAgent:
             is_maximizing
         )
         
-        # Log final decision
-        logger.info("FINAL DECISION:")
+        # Sort and log all considered moves
+        sorted_moves = sorted(self.move_scores, key=itemgetter('score'), reverse=is_maximizing)
+        
+        logger.info("\nALL CONSIDERED MOVES (sorted by score):")
+        for move_data in sorted_moves:
+            move = move_data['move']
+            score = move_data['score']
+            eval_data = move_data['eval']
+            
+            if move['type'] == 'placement':
+                logger.info(f"\nPlace at ({move['x']}, {move['y']}):")
+            else:
+                logger.info(f"\nMove from ({move['from']['x']}, {move['from']['y']}) to ({move['to']['x']}, {move['to']['y']}):")
+                if move.get('capture'):
+                    logger.info("This move includes a capture!")
+            
+            logger.info(f"Score: {score}")
+            if eval_data:
+                logger.info("Evaluation components:")
+                logger.info(f"- Movable tigers: {eval_data['movable_tigers']} (score: {eval_data['movable_tigers'] * 300})")
+                logger.info(f"- Goats captured: {eval_data['goats_captured']} (score: {eval_data['goats_captured'] * 700})")
+                logger.info(f"- Closed spaces: {eval_data['closed_spaces']} (score: {eval_data['closed_spaces'] * -700})")
+                logger.info(f"- Depth penalty: -{eval_data['depth_penalty']}")
+        
+        logger.info("\nFINAL DECISION:")
         if self.best_move:
-            if "type" in self.best_move and self.best_move["type"] == "placement":
+            if self.best_move['type'] == "placement":
                 logger.info(f"Place at ({self.best_move['x']}, {self.best_move['y']})")
             else:
                 logger.info(f"Move from ({self.best_move['from']['x']}, {self.best_move['from']['y']}) to ({self.best_move['to']['x']}, {self.best_move['to']['y']})")
-                if self.best_move.get("capture"):
+                if self.best_move.get('capture'):
                     logger.info("This move includes a capture!")
             logger.info(f"Expected score after move: {final_score}")
         
