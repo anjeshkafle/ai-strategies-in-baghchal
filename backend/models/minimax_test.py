@@ -11,34 +11,43 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 def debug_board_state(state: GameState):
     """
     Print a visual representation of the board state.
-    Prints in the same orientation as the test_state format:
-    - Each row printed matches a string in test_state["board"]
-    - First row is the top row of the board
+    Transposes the board back to original orientation where:
+    - Each row is printed from top to bottom
+    - Within each row, pieces are printed from left to right
     """
     print("\nBoard state:")
-    for y in range(5):
-        row = ""
-        for x in range(5):
-            # Note: state.board[y][x] is already in internal format
-            # which matches our visual format after transposition
-            piece = state.board[y][x]
+    # Transpose back for display
+    display_board = [[None for _ in range(5)] for _ in range(5)]
+    for i in range(5):
+        for j in range(5):
+            display_board[i][j] = state.board[j][i]
+    
+    for row in display_board:
+        row_str = ""
+        for piece in row:
             if piece is None:
-                row += ". "
+                row_str += ". "
             elif piece["type"] == "TIGER":
-                row += "T "
+                row_str += "T "
             else:
-                row += "G "
-        print(row.rstrip())  # Remove trailing space
+                row_str += "G "
+        print(row_str.rstrip())
     print(f"Turn: {state.turn}, Phase: {state.phase}")
     print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}\n")
 
-# Visual board representation (matches what you see on the actual board)
-# Reading from top to bottom, left to right:
-#   - Each string represents a column
-#   - First string is leftmost column, last string is rightmost column
-#   - Within each string, first char is top position, last char is bottom position
+# Visual board representation:
+# In test_state["board"]:
+#   - Each string represents a ROW (top to bottom)
+#   - First string is top row, last string is bottom row
+#   - Within each string, chars go from left to right
+# Example:
+# ["TGGGG",  # Top row
+#  "GGGGG",  # Second row
+#  "GGGTG",  # Middle row
+#  "GGT.G",  # Fourth row
+#  "GG..T"]  # Bottom row
 test_state = {
-    "board": ["TGGGG", "GGGGG", "GGGTG", "GGT.G", "GG..T"],  # Visually intuitive format
+    "board": ["TGGGG", "GGGGG", "GGGTG", "GGT.G", "GG..T"],
     "phase": "PLACEMENT",
     "turn": "GOAT",
     "goats_placed": 18,
@@ -47,30 +56,39 @@ test_state = {
 
 def transpose_board(board_strings: List[str]) -> List[str]:
     """
-    Transpose the visual board representation to match the internal coordinate system.
-    Input format: Each string represents a column (visual format)
-    Output format: Each string represents a row (internal format)
+    Convert from test_state format to internal format.
+    
+    Input (test_state format):
+    - Each string represents a row
+    - First string is top row
+    Example: ["TGGGG",  # Top row
+             "GGGGG",  # Second row
+             "GGGTG",  # Middle row
+             "GGT.G",  # Fourth row
+             "GG..T"]  # Bottom row
+    
+    Output (internal format):
+    - Each string represents a column
+    - First string is leftmost column
+    Example: ["TGGGG",  # Leftmost column
+             "GGGGG",  # Second column
+             "GGGTG",  # Middle column
+             "GGT.G",  # Fourth column
+             "GG..T"]  # Rightmost column
     """
-    # Convert list of strings to list of lists for easier transposition
-    char_lists = [list(s) for s in board_strings]
-    # Transpose the 2D array
-    transposed = list(map(list, zip(*char_lists)))
-    # Convert back to list of strings
-    return [''.join(row) for row in transposed]
+    # No need to transpose since the format is already correct
+    return board_strings
 
 def convert_compact_board(compact_board: List[str]) -> List[List[Dict]]:
     """
     Convert compact board representation to full board representation.
-    Automatically transposes the board from visual format to internal format.
+    Transposes the board so that (x,y) in moves can be interpreted as (row,col).
     """
-    # First transpose the board to match internal coordinate system
-    internal_board = transpose_board(compact_board)
-    
-    # Then convert to full board representation
+    # First create board in original orientation
     board = []
-    for row in internal_board:
+    for row in compact_board:  # Each string is a row
         board_row = []
-        for cell in row:
+        for cell in row:  # Each char in the string is a cell in that row
             if cell == 'T':
                 board_row.append({"type": "TIGER"})
             elif cell == 'G':
@@ -78,7 +96,14 @@ def convert_compact_board(compact_board: List[str]) -> List[List[Dict]]:
             else:  # cell == '.'
                 board_row.append(None)
         board.append(board_row)
-    return board
+    
+    # Now transpose the board so (x,y) in moves can be interpreted as (row,col)
+    transposed = [[None for _ in range(5)] for _ in range(5)]
+    for i in range(5):
+        for j in range(5):
+            transposed[j][i] = board[i][j]
+    
+    return transposed
 
 def create_game_state_from_dict(state_dict: Dict[str, Any]) -> GameState:
     """Create a GameState instance from a dictionary representation."""
