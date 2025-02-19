@@ -1,11 +1,29 @@
 from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
+from game_logic import get_all_possible_moves
 from typing import Dict, Any, List
 import json
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+def debug_board_state(state: GameState):
+    """Print a visual representation of the board state."""
+    print("\nBoard state:")
+    for y in range(5):
+        row = ""
+        for x in range(5):
+            piece = state.board[y][x]
+            if piece is None:
+                row += ". "
+            elif piece["type"] == "TIGER":
+                row += "T "
+            else:
+                row += "G "
+        print(row)
+    print(f"Turn: {state.turn}, Phase: {state.phase}")
+    print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}\n")
 
 # Visual board representation (matches what you see on the actual board)
 # Reading from top to bottom, left to right:
@@ -71,6 +89,9 @@ def test_minimax_agent():
     # Create game state from test state
     game_state = create_game_state_from_dict(test_state)
     
+    print("\nInitial board state:")
+    debug_board_state(game_state)
+    
     # Initialize minimax agent with depth 4
     agent = MinimaxAgent(max_depth=4)
     
@@ -84,8 +105,17 @@ def test_minimax_agent():
     print("\nBest move found:")
     print(json.dumps(best_move, indent=2))
     
-    # Apply the move to see resulting position
+    # Apply the move and show resulting state
     game_state.apply_move(best_move)
+    print("\nAfter applying move:")
+    debug_board_state(game_state)
+    
+    # Show possible tiger moves in the resulting position
+    tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
+    print("\nPossible tiger moves in resulting position:")
+    for move in tiger_moves:
+        print(json.dumps(move, indent=2))
+    
     print(f"\nEvaluation after move: {agent.evaluate(game_state)}")
     
     return best_move
