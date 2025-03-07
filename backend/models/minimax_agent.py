@@ -81,20 +81,108 @@ class MinimaxAgent:
     
     def _count_closed_spaces(self, state: GameState) -> int:
         """
-        Counts the number of positions where tigers are trapped.
-        A space is considered "closed" if a tiger has no moves.
+        Counts the number of empty positions that are "closed".
+        A position is considered "closed" if:
+        1. It is empty
+        2. All neighboring positions are occupied by goats
+        3. No tiger can access this position through a capture move
         This matches the reference implementation's no_of_closed_spaces.
         """
         closed_count = 0
+        
+        # Get all empty positions
+        empty_positions = []
         for y in range(GameState.BOARD_SIZE):
             for x in range(GameState.BOARD_SIZE):
-                piece = state.board[y][x]
-                if piece and piece["type"] == "TIGER":
-                    moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-                    tiger_moves = [m for m in moves if m["from"]["x"] == x and m["from"]["y"] == y]
-                    if len(tiger_moves) == 0:  # Tiger has no moves
-                        closed_count += 1
+                if state.board[y][x] is None:
+                    empty_positions.append((x, y))
+        
+        # For each empty position, check if it's closed
+        for x, y in empty_positions:
+            # Get all neighboring positions
+            neighbors = []
+            # Check all 8 directions
+            for dx, dy in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
+                new_x, new_y = x + dx, y + dy
+                # Check if the position is valid and connected
+                if (0 <= new_x < GameState.BOARD_SIZE and 
+                    0 <= new_y < GameState.BOARD_SIZE and 
+                    self._is_valid_connection(x, y, new_x, new_y)):
+                    neighbors.append((new_x, new_y))
+            
+            # Check if all neighbors are goats
+            all_neighbors_goats = True
+            for nx, ny in neighbors:
+                piece = state.board[ny][nx]
+                if piece is None or piece["type"] != "GOAT":
+                    all_neighbors_goats = False
+                    break
+            
+            # If all neighbors are goats, check if any tiger can capture to this position
+            if all_neighbors_goats:
+                can_be_captured_to = False
+                # Get all tiger positions
+                for ty in range(GameState.BOARD_SIZE):
+                    for tx in range(GameState.BOARD_SIZE):
+                        piece = state.board[ty][tx]
+                        if piece and piece["type"] == "TIGER":
+                            # Get all possible moves for this tiger
+                            moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+                            # Check if any move is a capture to our position
+                            for move in moves:
+                                if (move.get("capture") and 
+                                    move["to"]["x"] == x and 
+                                    move["to"]["y"] == y):
+                                    can_be_captured_to = True
+                                    break
+                            if can_be_captured_to:
+                                break
+                        if can_be_captured_to:
+                            break
+                
+                # If no tiger can capture to this position, it's closed
+                if not can_be_captured_to:
+                    closed_count += 1
+        
         return closed_count
+
+    def _is_valid_connection(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
+        """Helper method to check if two positions are validly connected on the board."""
+        # Orthogonal moves are always valid if adjacent
+        if abs(from_x - to_x) + abs(from_y - to_y) == 1:
+            return True
+
+        # Diagonal moves need special handling
+        if abs(from_x - to_x) == 1 and abs(from_y - to_y) == 1:
+            # No diagonal moves for second and fourth nodes on outer edges
+            if self._is_outer_layer(from_x, from_y):
+                is_second_or_fourth_node = (
+                    ((from_x == 0 or from_x == 4) and (from_y == 1 or from_y == 3)) or
+                    ((from_y == 0 or from_y == 4) and (from_x == 1 or from_x == 3))
+                )
+                if is_second_or_fourth_node:
+                    return False
+
+            # No diagonal moves for middle nodes in second layer
+            if self._is_second_layer(from_x, from_y):
+                is_middle_node = (
+                    (from_x == 1 and from_y == 2) or
+                    (from_x == 2 and from_y == 1) or
+                    (from_x == 2 and from_y == 3) or
+                    (from_x == 3 and from_y == 2)
+                )
+                if is_middle_node:
+                    return False
+            return True
+        return False
+
+    def _is_outer_layer(self, x: int, y: int) -> bool:
+        """Check if a position is on the outer layer of the board."""
+        return x == 0 or y == 0 or x == 4 or y == 4
+
+    def _is_second_layer(self, x: int, y: int) -> bool:
+        """Check if a position is on the second layer of the board."""
+        return x == 1 or y == 1 or x == 3 or y == 3
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using minimax with alpha-beta pruning."""
