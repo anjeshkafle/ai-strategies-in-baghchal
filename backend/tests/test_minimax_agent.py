@@ -112,4 +112,12 @@ def test_count_functions(depth=6):
     print(f"Goats placed: {game_state_1.goats_placed}")
 
 if __name__ == "__main__":
-    test_count_functions() 
+    test_count_functions()
+    
+# Add a pytest-compatible test function
+def test_minimax_agent():
+    """Pytest-compatible test function for the minimax agent."""
+    # Test with a smaller depth for faster execution during automated testing
+    test_count_functions(depth=3)
+    # No assertions needed as this is primarily a visual test
+    # The test passes if no exceptions are raised
