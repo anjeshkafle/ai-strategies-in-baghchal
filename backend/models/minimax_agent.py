@@ -27,6 +27,11 @@ class MinimaxAgent:
         - 300 * movable_tigers
         - 700 * dead_goats
         - -700 * closed_spaces
+        
+        Note: The closed_spaces calculation currently just counts total spaces,
+        but the _count_closed_spaces method now returns detailed region information
+        that could be used for more sophisticated evaluation in the future
+        (e.g., weighting larger regions differently, or considering region shapes).
         """
         # Check for terminal states first
         winner = state.get_winner()
@@ -48,8 +53,9 @@ class MinimaxAgent:
         score += capture_score
         
         # Count closed spaces (positions where tigers are trapped)
-        closed_spaces = self._count_closed_spaces(state)
-        closed_score = -700 * closed_spaces
+        closed_regions = self._count_closed_spaces(state)
+        total_closed_spaces = sum(len(region) for region in closed_regions)
+        closed_score = -700 * total_closed_spaces
         score += closed_score
         
         # Store evaluation components for logging
@@ -57,7 +63,8 @@ class MinimaxAgent:
             self.current_eval = {
                 'movable_tigers': movable_tigers,
                 'goats_captured': state.goats_captured,
-                'closed_spaces': closed_spaces,
+                'closed_spaces': total_closed_spaces,
+                'closed_regions': [len(region) for region in closed_regions],  # Add region sizes for logging
                 'total_score': score
             }
         
@@ -79,12 +86,17 @@ class MinimaxAgent:
                         movable_count += 1
         return movable_count
     
-    def _count_closed_spaces(self, state: GameState) -> int:
+    def _count_closed_spaces(self, state: GameState) -> List[List[tuple[int, int]]]:
         """
-        Counts the number of empty positions that are "closed".
+        Identifies all closed regions in the current board state.
         A region of connected empty positions is considered "closed" if:
         1. All neighboring positions around the region are occupied by goats
         2. No tiger can access any position in this region through a capture move
+        
+        Returns:
+            List of closed regions, where each region is a list of (x,y) coordinates
+            belonging to that region. This allows for more sophisticated evaluation
+            of closed spaces in the future (e.g., weighting larger regions differently).
         """
         # Get all tiger capture moves first for efficiency
         tiger_capture_moves = []
@@ -110,7 +122,7 @@ class MinimaxAgent:
         
         # Track visited positions to avoid reprocessing
         visited = set()
-        closed_count = 0
+        closed_regions = []
         
         # For each empty position, find its connected region
         for x, y in empty_positions:
@@ -161,11 +173,11 @@ class MinimaxAgent:
                         is_closed_region = False
                         break
             
-            # If the region is closed, count all positions in it
+            # If the region is closed, add it to our list of closed regions
             if is_closed_region:
-                closed_count += len(region)
+                closed_regions.append(region)
         
-        return closed_count
+        return closed_regions
 
     def _is_valid_connection(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
         """Helper method to check if two positions are validly connected on the board."""
@@ -233,12 +245,14 @@ class MinimaxAgent:
             # Log evaluation components for this move
             tigers_score = self._count_movable_tigers(next_state) * 300
             goats_captured = next_state.goats_captured * 700
-            closed_spaces = self._count_closed_spaces(next_state) * 700
+            closed_regions = self._count_closed_spaces(next_state)
+            closed_spaces_count = sum(len(region) for region in closed_regions)
+            closed_spaces_score = -700 * closed_spaces_count
             
             logger.info("Evaluation components:")
             logger.info(f"- Movable tigers: {self._count_movable_tigers(next_state)} (score: {tigers_score})")
             logger.info(f"- Goats captured: {next_state.goats_captured} (score: {goats_captured})")
-            logger.info(f"- Closed spaces: {self._count_closed_spaces(next_state)} (score: {-closed_spaces})")
+            logger.info(f"- Closed spaces: {closed_spaces_count} in {len(closed_regions)} regions (score: {closed_spaces_score})")
             
             if state.turn == "TIGER":
                 if value > best_value:

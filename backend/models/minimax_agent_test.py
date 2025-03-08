@@ -20,20 +20,47 @@ def convert_string_to_board(board_state):
             # _ represents empty cell, already None by default
     return board
 
+def print_region_details(closed_regions):
+    """Helper function to print detailed information about closed regions"""
+    if not closed_regions:
+        print("No closed regions found.")
+        return
+        
+    print(f"\nFound {len(closed_regions)} closed region(s):")
+    for i, region in enumerate(closed_regions):
+        print(f"\nRegion {i+1} (size: {len(region)}):")
+        print("Coordinates (x,y):", ", ".join([f"({x},{y})" for x,y in region]))
+        
+        # Calculate region bounds
+        min_x = min(x for x,_ in region)
+        max_x = max(x for x,_ in region)
+        min_y = min(y for _,y in region)
+        max_y = max(y for _,y in region)
+        print(f"Region bounds: x:[{min_x},{max_x}], y:[{min_y},{max_y}]")
+        
+        # Visual representation of this region
+        print("Visual shape:")
+        for y in range(min_y, max_y + 1):
+            row = ""
+            for x in range(min_x, max_x + 1):
+                if (x,y) in region:
+                    row += "□ "  # Empty square in region
+                else:
+                    row += "· "  # Not part of region
+            print(row)
+
 def test_count_functions(depth=6):
-    
-    # Test state 2: Two adjacent closed spaces
+    # Test state with multiple closed regions
     test_state_1 = [
-        "GTGTG",  # Top row
-        "_G_G_",  # Second row
-        "_G_G_",  # Middle row
-        "_G_G_",  # Fourth row
-        "GTGTG"   # Bottom row
+        "_____",  # Top row
+        "_____",  # Second row
+        "GGGGG",  # Middle row
+        "GG_GG",  # Fourth row
+        "_TGT_"   # Bottom row
     ]
     
-    # Test with state 1
     print("\n" + "="*50)
-    print("TESTING STATE 1 (One isolated closed space)")
+    print("TESTING BOARD STATE")
     print("="*50)
     
     game_state_1 = GameState()
@@ -54,9 +81,11 @@ def test_count_functions(depth=6):
     movable_tigers = agent._count_movable_tigers(game_state_1)
     print(f"\nNumber of movable tigers: {movable_tigers}")
     
-    # Count closed spaces
-    closed_spaces = agent._count_closed_spaces(game_state_1)
-    print(f"Number of closed spaces: {closed_spaces}")
+    # Get and analyze closed regions
+    closed_regions = agent._count_closed_spaces(game_state_1)
+    total_closed_spaces = sum(len(region) for region in closed_regions)
+    print(f"\nTotal closed spaces: {total_closed_spaces}")
+    print_region_details(closed_regions)
     
     # Get best move from minimax agent
     best_move = agent.get_move(game_state_1)
@@ -65,7 +94,7 @@ def test_count_functions(depth=6):
     print(f"Evaluation score: {agent.evaluate(game_state_1)}")
     
     # Print the board for visualization
-    print("\nBoard state (visual):")
+    print("\nComplete board state (visual):")
     for i in range(5):
         row = ""
         for j in range(5):
@@ -81,7 +110,6 @@ def test_count_functions(depth=6):
     print(f"\nCurrent turn: {game_state_1.turn}")
     print(f"Phase: {game_state_1.phase}")
     print(f"Goats placed: {game_state_1.goats_placed}")
-    
 
 if __name__ == "__main__":
     test_count_functions() 
