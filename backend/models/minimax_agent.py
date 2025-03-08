@@ -82,13 +82,24 @@ class MinimaxAgent:
     def _count_closed_spaces(self, state: GameState) -> int:
         """
         Counts the number of empty positions that are "closed".
-        A position is considered "closed" if:
-        1. It is empty
-        2. All neighboring positions are occupied by goats
-        3. No tiger can access this position through a capture move
-        This matches the reference implementation's no_of_closed_spaces.
+        A region of connected empty positions is considered "closed" if:
+        1. All neighboring positions around the region are occupied by goats
+        2. No tiger can access any position in this region through a capture move
         """
-        closed_count = 0
+        # Get all tiger capture moves first for efficiency
+        tiger_capture_moves = []
+        for ty in range(GameState.BOARD_SIZE):
+            for tx in range(GameState.BOARD_SIZE):
+                piece = state.board[ty][tx]
+                if piece and piece["type"] == "TIGER":
+                    # Get all possible moves for this tiger
+                    moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+                    # Filter to only capture moves
+                    capture_moves = [move for move in moves if move.get("capture")]
+                    tiger_capture_moves.extend(capture_moves)
+        
+        # Set of destinations that tigers can capture to
+        capturable_positions = {(move["to"]["x"], move["to"]["y"]) for move in tiger_capture_moves}
         
         # Get all empty positions
         empty_positions = []
@@ -97,52 +108,62 @@ class MinimaxAgent:
                 if state.board[y][x] is None:
                     empty_positions.append((x, y))
         
-        # For each empty position, check if it's closed
+        # Track visited positions to avoid reprocessing
+        visited = set()
+        closed_count = 0
+        
+        # For each empty position, find its connected region
         for x, y in empty_positions:
-            # Get all neighboring positions
-            neighbors = []
-            # Check all 8 directions
-            for dx, dy in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
-                new_x, new_y = x + dx, y + dy
-                # Check if the position is valid and connected
-                if (0 <= new_x < GameState.BOARD_SIZE and 
-                    0 <= new_y < GameState.BOARD_SIZE and 
-                    self._is_valid_connection(x, y, new_x, new_y)):
-                    neighbors.append((new_x, new_y))
-            
-            # Check if all neighbors are goats
-            all_neighbors_goats = True
-            for nx, ny in neighbors:
-                piece = state.board[ny][nx]
-                if piece is None or piece["type"] != "GOAT":
-                    all_neighbors_goats = False
-                    break
-            
-            # If all neighbors are goats, check if any tiger can capture to this position
-            if all_neighbors_goats:
-                can_be_captured_to = False
-                # Get all tiger positions
-                for ty in range(GameState.BOARD_SIZE):
-                    for tx in range(GameState.BOARD_SIZE):
-                        piece = state.board[ty][tx]
-                        if piece and piece["type"] == "TIGER":
-                            # Get all possible moves for this tiger
-                            moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-                            # Check if any move is a capture to our position
-                            for move in moves:
-                                if (move.get("capture") and 
-                                    move["to"]["x"] == x and 
-                                    move["to"]["y"] == y):
-                                    can_be_captured_to = True
-                                    break
-                            if can_be_captured_to:
-                                break
-                        if can_be_captured_to:
-                            break
+            if (x, y) in visited:
+                continue
                 
-                # If no tiger can capture to this position, it's closed
-                if not can_be_captured_to:
-                    closed_count += 1
+            # Find the connected region of empty spaces
+            region = []
+            is_closed_region = True
+            
+            # Use BFS to find all connected empty spaces
+            queue = [(x, y)]
+            region_visited = {(x, y)}
+            
+            while queue:
+                curr_x, curr_y = queue.pop(0)
+                region.append((curr_x, curr_y))
+                
+                # Get neighboring positions
+                neighbors = []
+                for dx, dy in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
+                    new_x, new_y = curr_x + dx, curr_y + dy
+                    if (0 <= new_x < GameState.BOARD_SIZE and 
+                        0 <= new_y < GameState.BOARD_SIZE and 
+                        self._is_valid_connection(curr_x, curr_y, new_x, new_y)):
+                        neighbors.append((new_x, new_y))
+                
+                # Check neighbors: if empty, add to queue, if not goat, region not closed
+                for nx, ny in neighbors:
+                    piece = state.board[ny][nx]
+                    
+                    if piece is None:
+                        # Connected empty space
+                        if (nx, ny) not in region_visited:
+                            queue.append((nx, ny))
+                            region_visited.add((nx, ny))
+                    elif piece["type"] != "GOAT":
+                        # If any neighbor is not a goat, region is not closed
+                        is_closed_region = False
+            
+            # Mark all positions in this region as visited
+            visited.update(region_visited)
+            
+            # Check if any position in the region can be captured to
+            if is_closed_region:
+                for pos_x, pos_y in region:
+                    if (pos_x, pos_y) in capturable_positions:
+                        is_closed_region = False
+                        break
+            
+            # If the region is closed, count all positions in it
+            if is_closed_region:
+                closed_count += len(region)
         
         return closed_count
 

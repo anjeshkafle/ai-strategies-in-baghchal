@@ -21,6 +21,26 @@ const createInitialBoard = () => {
   return board;
 };
 
+// Helper to convert board to test format
+const boardToTestFormat = (board) => {
+  const testBoard = [];
+  for (let i = 0; i < 5; i++) {
+    let row = "";
+    for (let j = 0; j < 5; j++) {
+      const piece = board[i][j]; // Don't swap i,j anymore - we want visual representation
+      if (piece === null) {
+        row += "_";
+      } else if (piece.type === "TIGER") {
+        row += "T";
+      } else {
+        row += "G";
+      }
+    }
+    testBoard.push(row);
+  }
+  return testBoard;
+};
+
 const initialState = {
   board: createInitialBoard(),
   turn: "GOAT", // 'GOAT' or 'TIGER'
@@ -176,6 +196,15 @@ export const useGameStore = create((set, get) => ({
               canUndo: true,
               lastMove: { to: { x: toX, y: toY } },
             };
+
+            // Log board state in test format
+            console.log("Current board state in test format:");
+            console.log(JSON.stringify(boardToTestFormat(newBoard), null, 2));
+            console.log(`Phase: ${newState.phase}`);
+            console.log(`Turn: ${newState.turn}`);
+            console.log(`Goats placed: ${newState.goatsPlaced}`);
+            console.log(`Goats captured: ${state.goatsCaptured}`);
+
             resolve();
             return newState;
           });
@@ -245,6 +274,15 @@ export const useGameStore = create((set, get) => ({
                     ? "TIGERS_WIN"
                     : state.gameStatus,
               };
+
+              // Log board state in test format
+              console.log("Current board state in test format:");
+              console.log(JSON.stringify(boardToTestFormat(newBoard), null, 2));
+              console.log(`Phase: ${newState.phase}`);
+              console.log(`Turn: ${newState.turn}`);
+              console.log(`Goats placed: ${newState.goatsPlaced}`);
+              console.log(`Goats captured: ${newState.goatsCaptured}`);
+
               resolve();
               return newState;
             });
@@ -288,6 +326,15 @@ export const useGameStore = create((set, get) => ({
                   to: { x: toX, y: toY },
                 },
               };
+
+              // Log board state in test format
+              console.log("Current board state in test format:");
+              console.log(JSON.stringify(boardToTestFormat(newBoard), null, 2));
+              console.log(`Phase: ${newState.phase}`);
+              console.log(`Turn: ${newState.turn}`);
+              console.log(`Goats placed: ${newState.goatsPlaced}`);
+              console.log(`Goats captured: ${state.goatsCaptured}`);
+
               resolve();
               return newState;
             });
