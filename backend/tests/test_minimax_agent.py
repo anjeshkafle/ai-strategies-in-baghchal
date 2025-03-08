@@ -49,15 +49,15 @@ def print_region_details(closed_regions):
                     row += "· "  # Not part of region
             print(row)
 
-def test_count_functions(depth=6):
+def test_count_functions(depth=4):
     # Test state with multiple closed regions
     test_state_1 = [
-        "__G_T",
-        "T____",
-        "G____",
-        "_____",
-        "T___T"
-        ]
+  "GGGGG",
+  "GGGGG",
+  "GGGGG",
+  "GTG_G",
+  "_T_TT"
+]
     
     print("\n" + "="*50)
     print("TESTING BOARD STATE")
@@ -67,7 +67,7 @@ def test_count_functions(depth=6):
     game_state_1.board = convert_string_to_board(test_state_1)
     game_state_1.goats_placed = 4  # Set to placement phase
     game_state_1.phase = "PLACEMENT"
-    game_state_1.turn = "TIGER"  # Explicitly set turn
+    game_state_1.turn = "GOAT"  # Explicitly set turn
     
     # Log the internal board representation
     print("\nInternal board representation:")

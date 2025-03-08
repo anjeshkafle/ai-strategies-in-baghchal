@@ -20,6 +20,53 @@ class MinimaxAgent:
         self.best_move = None
         self.move_scores = []  # Store scores for all top-level moves
     
+    def _order_moves(self, moves: List[Dict], player: str) -> List[Dict]:
+        """
+        Order moves based on player strategy to improve alpha-beta pruning.
+        
+        Args:
+            moves: List of valid moves
+            player: "TIGER" or "GOAT"
+            
+        Returns:
+            Ordered list of moves
+        """
+        if player == "TIGER":
+            # Tigers prioritize capture moves
+            return sorted(moves, key=lambda m: 1 if m.get('capture', False) else 0, reverse=True)
+        elif player == "GOAT":
+            # Goats prioritize moves that don't lead to captures
+            if moves and moves[0].get("type") == "movement":
+                # For movement phase, analyze which moves might lead to captures
+                def might_lead_to_capture(move):
+                    # Create a new board state with this move applied
+                    from models.game_state import GameState  # Import here to avoid circular imports
+                    
+                    # We need the original state to clone it
+                    if hasattr(self, 'current_state'):
+                        state = self.current_state.clone()
+                        state.apply_move(move)
+                        state.turn = "TIGER"  # Switch to tiger's turn
+                        
+                        # Get all possible tiger moves
+                        tiger_moves = state.get_valid_moves()
+                        
+                        # Check if any tiger move is a capture
+                        return any("capture" in m for m in tiger_moves)
+                    
+                    # If we don't have the current state, we can't analyze
+                    # Just use a default ordering
+                    return False
+                
+                # Try to sort by whether moves might lead to captures
+                # This is more expensive but more accurate
+                try:
+                    return sorted(moves, key=might_lead_to_capture)
+                except:
+                    # If analysis fails, fall back to default ordering
+                    return moves
+        return moves
+    
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
         Evaluates the current game state from Tiger's perspective.
@@ -219,7 +266,14 @@ class MinimaxAgent:
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using minimax with alpha-beta pruning."""
+        # Store the current state for move ordering analysis
+        self.current_state = state
+        
         valid_moves = state.get_valid_moves()
+        
+        # Order moves to improve alpha-beta pruning efficiency
+        valid_moves = self._order_moves(valid_moves, state.turn)
+        
         best_move = None
         best_value = float('-inf') if state.turn == "TIGER" else float('inf')
         alpha = float('-inf')
@@ -241,11 +295,18 @@ class MinimaxAgent:
                     best_value = value
                     best_move = move
                 beta = min(beta, value)
-            
+        
+        # Clean up
+        if hasattr(self, 'current_state'):
+            delattr(self, 'current_state')
+        
         return best_move
 
     def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool) -> float:
         """Minimax algorithm with alpha-beta pruning."""
+        # Store the current state for move ordering analysis
+        self.current_state = state
+        
         # Base cases first
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
@@ -255,9 +316,8 @@ class MinimaxAgent:
         if not valid_moves:
             return self.evaluate(state)
         
-        # Sort moves to prioritize captures for tigers (helps with alpha-beta pruning)
-        if state.turn == "TIGER":
-            valid_moves.sort(key=lambda m: 1 if m.get('capture', False) else 0, reverse=True)
+        # Order moves to improve alpha-beta pruning efficiency
+        valid_moves = self._order_moves(valid_moves, state.turn)
         
         value = -MinimaxAgent.INF if is_maximizing else MinimaxAgent.INF
         for move in valid_moves:
@@ -276,5 +336,5 @@ class MinimaxAgent:
                 
             if beta <= alpha:
                 break
-                
+        
         return value 
