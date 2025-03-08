@@ -225,34 +225,11 @@ class MinimaxAgent:
         alpha = float('-inf')
         beta = float('inf')
         
-        logger.info("\nALL CONSIDERED MOVES:\n")
-        
         for move in valid_moves:
             next_state = state.clone()
             next_state.apply_move(move)
             # Tiger maximizes (wants high scores), Goat minimizes (wants low scores)
             value = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_state.turn == "TIGER")
-            
-            # Log move details
-            if move['type'] == 'placement':
-                logger.info(f"\nPlace at ({move['x']}, {move['y']}):")
-            else:
-                logger.info(f"\nMove from ({move['from']['x']}, {move['from']['y']}) to ({move['to']['x']}, {move['to']['y']}):")
-                if move.get('capture', False):
-                    logger.info("This move includes a capture!")
-            logger.info(f"Score: {value}")
-            
-            # Log evaluation components for this move
-            tigers_score = self._count_movable_tigers(next_state) * 300
-            goats_captured = next_state.goats_captured * 700
-            closed_regions = self._count_closed_spaces(next_state)
-            closed_spaces_count = sum(len(region) for region in closed_regions)
-            closed_spaces_score = -700 * closed_spaces_count
-            
-            logger.info("Evaluation components:")
-            logger.info(f"- Movable tigers: {self._count_movable_tigers(next_state)} (score: {tigers_score})")
-            logger.info(f"- Goats captured: {next_state.goats_captured} (score: {goats_captured})")
-            logger.info(f"- Closed spaces: {closed_spaces_count} in {len(closed_regions)} regions (score: {closed_spaces_score})")
             
             if state.turn == "TIGER":
                 if value > best_value:

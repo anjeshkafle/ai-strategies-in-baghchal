@@ -52,12 +52,12 @@ def print_region_details(closed_regions):
 def test_count_functions(depth=6):
     # Test state with multiple closed regions
     test_state_1 = [
-        "_____",  # Top row
-        "_____",  # Second row
-        "GGGGG",  # Middle row
-        "GG_GG",  # Fourth row
-        "_TGT_"   # Bottom row
-    ]
+        "__G_T",
+        "T____",
+        "G____",
+        "_____",
+        "T___T"
+        ]
     
     print("\n" + "="*50)
     print("TESTING BOARD STATE")
