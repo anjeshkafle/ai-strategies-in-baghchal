@@ -18,6 +18,7 @@ class MinimaxAgent:
         self.max_depth = max_depth
         self.max_time = max_time  # Not used but kept for compatibility
         self.best_move = None
+        self.best_score = None  # Add storage for best score
         self.move_scores = []  # Store scores for all top-level moves
     
     def _order_moves(self, moves: List[Dict], player: str) -> List[Dict]:
@@ -83,9 +84,11 @@ class MinimaxAgent:
         # Check for terminal states first
         winner = state.get_winner()
         if winner == "TIGER":
-            return MinimaxAgent.INF - depth  # Prefer faster wins
+            final_score = MinimaxAgent.INF - depth  # Prefer faster wins
+            return final_score
         elif winner == "GOAT":
-            return -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
+            final_score = -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
+            return final_score
         
         # Core evaluation based on reference implementation
         score = 0
@@ -301,6 +304,9 @@ class MinimaxAgent:
                     best_move = move
                 beta = min(beta, value)
         
+        # Store the best score for later retrieval
+        self.best_score = best_value
+        
         # Clean up
         if hasattr(self, 'current_state'):
             delattr(self, 'current_state')
@@ -315,11 +321,13 @@ class MinimaxAgent:
         # Base cases first
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
-            return self.evaluate(state)
+            eval_score = self.evaluate(state, self.max_depth - depth)
+            return eval_score
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            return self.evaluate(state)
+            eval_score = self.evaluate(state, self.max_depth - depth)
+            return eval_score
         
         # Order moves to improve alpha-beta pruning efficiency
         valid_moves = self._order_moves(valid_moves, state.turn)
