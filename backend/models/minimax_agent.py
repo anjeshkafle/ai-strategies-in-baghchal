@@ -85,7 +85,7 @@ class MinimaxAgent:
         if winner == "TIGER":
             return MinimaxAgent.INF - depth  # Prefer faster wins
         elif winner == "GOAT":
-            return -MinimaxAgent.INF + depth  # Prefer faster losses
+            return -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
         
         # Core evaluation based on reference implementation
         score = 0
@@ -114,6 +114,11 @@ class MinimaxAgent:
                 'closed_regions': [len(region) for region in closed_regions],  # Add region sizes for logging
                 'total_score': score
             }
+        
+        # Always subtract depth for non-terminal states
+        # This reflects that Tiger always wants to reach its best outcome as quickly as possible
+        # regardless of whether the evaluation is positive or negative
+        score -= depth
         
         return score
     
