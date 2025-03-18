@@ -67,7 +67,7 @@ def test_count_functions(depth=4):
     game_state_1.board = convert_string_to_board(test_state_1)
     game_state_1.goats_placed = 4  # Set to placement phase
     game_state_1.phase = "PLACEMENT"
-    game_state_1.turn = "GOAT"  # Explicitly set turn
+    game_state_1.turn = "TIGER"  # Explicitly set turn
     
     # Log the internal board representation
     print("\nInternal board representation:")
