@@ -52,8 +52,8 @@ def print_region_details(closed_regions):
 def test_count_functions(depth=4):
     # Test state with multiple closed regions
     test_state_1 = [
-  "T____",
-  "__GT_",
+  "____T",
+  "_GGT_",
   "_____",
   "_____",
   "T___T"
