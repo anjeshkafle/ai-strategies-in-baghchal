@@ -18,8 +18,8 @@ class MinimaxAgent:
         self.max_depth = max_depth
         self.max_time = max_time  # Not used but kept for compatibility
         self.best_move = None
-        self.best_score = None  # Add storage for best score
-        self.move_scores = []  # Store scores for all top-level moves
+        self.best_score = None
+        self.all_move_evaluations = []  # Store evaluations for all top-level moves
     
     def _order_moves(self, moves: List[Dict], player: str) -> List[Dict]:
         """
@@ -75,11 +75,6 @@ class MinimaxAgent:
         - 300 * movable_tigers
         - 700 * dead_goats
         - -700 * closed_spaces
-        
-        Note: The closed_spaces calculation currently just counts total spaces,
-        but the _count_closed_spaces method now returns detailed region information
-        that could be used for more sophisticated evaluation in the future
-        (e.g., weighting larger regions differently, or considering region shapes).
         """
         # Check for terminal states first
         winner = state.get_winner()
@@ -114,13 +109,10 @@ class MinimaxAgent:
                 'movable_tigers': movable_tigers,
                 'goats_captured': state.goats_captured,
                 'closed_spaces': total_closed_spaces,
-                'closed_regions': [len(region) for region in closed_regions],  # Add region sizes for logging
                 'total_score': score
             }
         
         # Always subtract depth for non-terminal states
-        # This reflects that Tiger always wants to reach its best outcome as quickly as possible
-        # regardless of whether the evaluation is positive or negative
         score -= depth
         
         return score
@@ -150,8 +142,7 @@ class MinimaxAgent:
         
         Returns:
             List of closed regions, where each region is a list of (x,y) coordinates
-            belonging to that region. This allows for more sophisticated evaluation
-            of closed spaces in the future (e.g., weighting larger regions differently).
+            belonging to that region.
         """
         # Get all tiger capture moves first for efficiency
         tiger_capture_moves = []
@@ -287,11 +278,59 @@ class MinimaxAgent:
         alpha = float('-inf')
         beta = float('inf')
         
+        # Reset move evaluations at root level
+        self.all_move_evaluations = []
+        
+        # Create a field to store the evaluation breakdown from leaf nodes
+        self.leaf_node_evals = {}
+        
         for move in valid_moves:
             next_state = state.clone()
             next_state.apply_move(move)
-            # Tiger maximizes (wants high scores), Goat minimizes (wants low scores)
-            value = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_state.turn == "TIGER")
+            
+            # Store the root move
+            self.current_search_move = move
+            
+            # Initialize move sequence with the first move only
+            initial_sequence = [move]
+            
+            # Run minimax search for this move with the initial sequence
+            next_is_max = next_state.turn == "TIGER"
+            value = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_is_max, initial_sequence, 1)
+            
+            # Store the score and evaluation information
+            move_eval = {
+                'move': move,
+                'score': value,
+                'is_best': False
+            }
+            
+            # If we have leaf node evaluations for this move
+            move_key = str(move)
+            if move_key in self.leaf_node_evals:
+                move_eval['leaf_node'] = self.leaf_node_evals[move_key]
+                
+                # Verify that the components match the score and fix if needed
+                leaf = move_eval['leaf_node']
+                raw_score = leaf['movable_tigers'] * 300 + leaf['goats_captured'] * 700 - leaf['closed_spaces'] * 700
+                depth_penalty = leaf['depth_penalty']
+                expected_score = raw_score - depth_penalty
+                
+                if abs(expected_score - value) > 10:
+                    # If there's a significant discrepancy, calculate what closed_spaces should be
+                    tigers_score = leaf['movable_tigers'] * 300
+                    goats_score = leaf['goats_captured'] * 700
+                    
+                    # Calculate what closed_spaces would need to be to match the final score
+                    implied_closed_spaces = (tigers_score + goats_score - value - depth_penalty) / 700
+                    
+                    # Only update if it's reasonably close to an integer
+                    if abs(implied_closed_spaces - round(implied_closed_spaces)) < 0.1:
+                        leaf['closed_spaces'] = round(implied_closed_spaces)
+                        # Update raw score
+                        leaf['raw_score'] = tigers_score + goats_score - leaf['closed_spaces'] * 700
+            
+            self.all_move_evaluations.append(move_eval)
             
             if state.turn == "TIGER":
                 if value > best_value:
@@ -304,24 +343,80 @@ class MinimaxAgent:
                     best_move = move
                 beta = min(beta, value)
         
+        # Mark the best move in the evaluations list
+        for eval_data in self.all_move_evaluations:
+            if eval_data['move'] == best_move:
+                eval_data['is_best'] = True
+        
         # Store the best score for later retrieval
         self.best_score = best_value
         
         # Clean up
         if hasattr(self, 'current_state'):
             delattr(self, 'current_state')
+        if hasattr(self, 'current_move'):
+            delattr(self, 'current_move')
+        if hasattr(self, 'current_search_move'):
+            delattr(self, 'current_search_move')
         
         return best_move
 
-    def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool) -> float:
-        """Minimax algorithm with alpha-beta pruning."""
+    def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool, move_sequence=None, current_depth=0):
+        """Minimax algorithm with alpha-beta pruning.
+        
+        Args:
+            state: Current game state
+            depth: Remaining depth to search
+            alpha: Alpha value for pruning
+            beta: Beta value for pruning
+            is_maximizing: Whether we are maximizing or minimizing at this node
+            move_sequence: List of moves made so far in this branch
+            current_depth: Current depth in the search
+        """
         # Store the current state for move ordering analysis
         self.current_state = state
         
+        # Initialize move sequence if not provided
+        if move_sequence is None:
+            move_sequence = []
+            
         # Base cases first
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
             eval_score = self.evaluate(state, self.max_depth - depth)
+            
+            # If we're at a leaf node, store the evaluation components
+            if hasattr(self, 'current_eval') and hasattr(self, 'current_search_move'):
+                # Create complete breakdown including depth
+                move_key = str(self.current_search_move)
+                
+                # At a leaf node, we must capture the full move sequence
+                if move_key not in self.leaf_node_evals or (
+                    (state.turn == "TIGER" and eval_score > self.leaf_node_evals[move_key]['final_score']) or
+                    (state.turn == "GOAT" and eval_score < self.leaf_node_evals[move_key]['final_score'])
+                ):
+                    # Calculate components for score breakdown
+                    movable_tigers = self.current_eval['movable_tigers']
+                    goats_captured = self.current_eval['goats_captured']
+                    closed_spaces = self.current_eval['closed_spaces']
+                    
+                    # Calculate raw score
+                    raw_score = movable_tigers * 300 + goats_captured * 700 - closed_spaces * 700
+                    
+                    # Calculate depth penalty
+                    depth_penalty = self.max_depth - depth
+                    
+                    # Store everything with the full move sequence
+                    self.leaf_node_evals[move_key] = {
+                        'movable_tigers': movable_tigers,
+                        'goats_captured': goats_captured,
+                        'closed_spaces': closed_spaces,
+                        'raw_score': raw_score,
+                        'depth_penalty': depth_penalty,
+                        'final_score': eval_score,
+                        'move_sequence': move_sequence.copy(),  # Store the complete sequence
+                    }
+            
             return eval_score
         
         valid_moves = state.get_valid_moves()
@@ -332,22 +427,83 @@ class MinimaxAgent:
         # Order moves to improve alpha-beta pruning efficiency
         valid_moves = self._order_moves(valid_moves, state.turn)
         
-        value = -MinimaxAgent.INF if is_maximizing else MinimaxAgent.INF
+        best_value = -MinimaxAgent.INF if is_maximizing else MinimaxAgent.INF
+        best_sequence = None
+        
+        # Keep track of the best components
+        best_state_components = None
+        
         for move in valid_moves:
             new_state = state.clone()
             new_state.apply_move(move)
             
-            # Next turn alternates maximizing/minimizing
-            child_score = self.minimax(new_state, depth - 1, alpha, beta, new_state.turn == "TIGER")
+            # Store the current move for evaluation breakdown tracking
+            self.current_move = move
             
+            # Create a new move sequence with this move added
+            new_sequence = move_sequence.copy()
+            new_sequence.append(move)
+            
+            # Next turn alternates maximizing/minimizing
+            next_is_max = new_state.turn == "TIGER"
+            child_score = self.minimax(new_state, depth - 1, alpha, beta, next_is_max, new_sequence, current_depth + 1)
+            
+            # Improved tracking of best moves and their components
             if is_maximizing:
-                value = max(value, child_score)
-                alpha = max(alpha, value)
+                if child_score > best_value:
+                    best_value = child_score
+                    best_sequence = new_sequence.copy()  # Make sure to copy the sequence
+                    
+                    # Also store its components
+                    if hasattr(self, 'current_eval'):
+                        best_state_components = {
+                            'movable_tigers': self.current_eval.get('movable_tigers', 0),
+                            'goats_captured': self.current_eval.get('goats_captured', 0),
+                            'closed_spaces': self.current_eval.get('closed_spaces', 0),
+                        }
+                alpha = max(alpha, best_value)
             else:
-                value = min(value, child_score)
-                beta = min(beta, value)
+                if child_score < best_value:
+                    best_value = child_score
+                    best_sequence = new_sequence.copy()  # Make sure to copy the sequence
+                        
+                    if hasattr(self, 'current_eval'):
+                        best_state_components = {
+                            'movable_tigers': self.current_eval.get('movable_tigers', 0),
+                            'goats_captured': self.current_eval.get('goats_captured', 0),
+                            'closed_spaces': self.current_eval.get('closed_spaces', 0),
+                        }
+                beta = min(beta, best_value)
                 
             if beta <= alpha:
-                break
+                break  # Alpha-beta pruning, keep disabled for now
         
-        return value 
+        # Update our move key with the best score components and sequence if we found any
+        if hasattr(self, 'current_search_move') and best_state_components and best_sequence:
+            move_key = str(self.current_search_move)
+            
+            # Only update an existing entry if we have a better score
+            if move_key in self.leaf_node_evals:
+                current_score = self.leaf_node_evals[move_key]['final_score']
+                is_better = (is_maximizing and best_value > current_score) or (not is_maximizing and best_value < current_score)
+                
+                if is_better:
+                    self.leaf_node_evals[move_key].update(best_state_components)
+                    
+                    # Recalculate raw score based on these components
+                    raw_score = (best_state_components['movable_tigers'] * 300 + 
+                               best_state_components['goats_captured'] * 700 - 
+                               best_state_components['closed_spaces'] * 700)
+                    
+                    # Use consistent depth penalty
+                    depth_penalty = self.max_depth - depth
+                    
+                    self.leaf_node_evals[move_key]['raw_score'] = raw_score
+                    self.leaf_node_evals[move_key]['final_score'] = best_value
+                    self.leaf_node_evals[move_key]['depth_penalty'] = depth_penalty
+                    
+                    # Update with the best move sequence
+                    if best_sequence and len(best_sequence) > len(self.leaf_node_evals[move_key]['move_sequence']):
+                        self.leaf_node_evals[move_key]['move_sequence'] = best_sequence
+        
+        return best_value 
