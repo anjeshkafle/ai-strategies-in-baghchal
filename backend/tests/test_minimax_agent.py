@@ -109,7 +109,7 @@ def main():
     test_state_3 = [
       "T___T",
       "_____",
-      "___G_",
+      "_____",
       "_____",
       "T___T"
     ]
@@ -117,9 +117,9 @@ def main():
     # Create a game state from the board
     # You can modify these parameters as needed
     game_state = string_board_to_game_state(
-        test_state_2, 
+        test_state_3, 
         phase="PLACEMENT",
-        turn="TIGER",
+        turn="GOAT",
         goats_placed=1,
         goats_captured=0
     )
@@ -148,7 +148,7 @@ def main():
             print(f"  {i+1}. {format_move(move)}")
     
     # Create the minimax agent with depth=4
-    agent = MinimaxAgent(max_depth=4)
+    agent = MinimaxAgent(max_depth=1)
     
     # Get the best move
     best_move = agent.get_move(game_state)

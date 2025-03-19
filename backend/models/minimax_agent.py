@@ -18,9 +18,10 @@ class MinimaxAgent:
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
         Evaluates the current game state from Tiger's perspective.
-        Uses only three core heuristics:
+        Uses four core heuristics:
         - mobility_weight * movable_tigers (100 during placement, 600 during movement)
         - 700 * dead_goats
+        - 400 * threatened_goats
         - -mobility_weight * closed_spaces (100 during placement, 600 during movement)
         """
         # Check for terminal states first
@@ -47,6 +48,11 @@ class MinimaxAgent:
         capture_score = 700 * state.goats_captured
         score += capture_score
         
+        # Threatened goats (in danger of being captured)
+        threatened_goats = self._count_threatened_goats(state)
+        threatened_score = 400 * threatened_goats
+        score += threatened_score
+        
         # Count closed spaces (positions where tigers are trapped)
         closed_regions = self._count_closed_spaces(state)
         total_closed_spaces = sum(len(region) for region in closed_regions)
@@ -63,16 +69,16 @@ class MinimaxAgent:
         Counts the number of tigers that have at least one valid move.
         This matches the reference implementation's movable_tigers() function.
         """
-        movable_count = 0
-        for y in range(GameState.BOARD_SIZE):
-            for x in range(GameState.BOARD_SIZE):
-                piece = state.board[y][x]
-                if piece and piece["type"] == "TIGER":
-                    moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-                    tiger_moves = [m for m in moves if m["from"]["x"] == x and m["from"]["y"] == y]
-                    if len(tiger_moves) > 0:  # Tiger has at least one move
-                        movable_count += 1
-        return movable_count
+        # Get all possible tiger moves once
+        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        
+        # Count tigers with at least one move
+        movable_tigers = set()
+        for move in all_tiger_moves:
+            from_pos = (move["from"]["x"], move["from"]["y"])
+            movable_tigers.add(from_pos)
+        
+        return len(movable_tigers)
     
     def _count_closed_spaces(self, state: GameState) -> List[List[tuple[int, int]]]:
         """
@@ -85,17 +91,9 @@ class MinimaxAgent:
             List of closed regions, where each region is a list of (x,y) coordinates
             belonging to that region.
         """
-        # Get all tiger capture moves first for efficiency
-        tiger_capture_moves = []
-        for ty in range(GameState.BOARD_SIZE):
-            for tx in range(GameState.BOARD_SIZE):
-                piece = state.board[ty][tx]
-                if piece and piece["type"] == "TIGER":
-                    # Get all possible moves for this tiger
-                    moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-                    # Filter to only capture moves
-                    capture_moves = [move for move in moves if move.get("capture")]
-                    tiger_capture_moves.extend(capture_moves)
+        # Get all tiger capture moves once for efficiency
+        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        tiger_capture_moves = [move for move in all_tiger_moves if move.get("capture")]
         
         # Set of destinations that tigers can capture to
         capturable_positions = {(move["to"]["x"], move["to"]["y"]) for move in tiger_capture_moves}
@@ -165,6 +163,28 @@ class MinimaxAgent:
                 closed_regions.append(region)
         
         return closed_regions
+
+    def _count_threatened_goats(self, state: GameState) -> int:
+        """
+        Counts the number of goats that are in danger of being captured by tigers.
+        A goat is considered threatened if it could be captured by a tiger in a 
+        single move.
+        
+        Returns:
+            The number of threatened goats on the board.
+        """
+        # Get all possible tiger moves once
+        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        tiger_capture_moves = [move for move in all_tiger_moves if move.get("capture")]
+        
+        # Create a set of threatened goat positions (using their coordinates to avoid duplicates)
+        threatened_goats = set()
+        for move in tiger_capture_moves:
+            if move.get("capture"):
+                goat_x, goat_y = move["capture"]["x"], move["capture"]["y"]
+                threatened_goats.add((goat_x, goat_y))
+        
+        return len(threatened_goats)
 
     def _is_valid_connection(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
         """Helper method to check if two positions are validly connected on the board."""
