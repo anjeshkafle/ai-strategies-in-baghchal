@@ -1,98 +1,103 @@
+#!/usr/bin/env python3
 import sys
 import os
-# Add the parent directory to the path so that we can import from 'models'
+from typing import List, Dict, Optional
+import json
+
+# Add parent directory to path to make imports work in test
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
-import json
 
-def convert_string_to_board(board_state):
-    """Convert string representation to game board.
-    Each string in the list represents a row from top to bottom.
-    T = Tiger, G = Goat, _ = Empty
-    
-    Note: The internal board representation uses [y][x] indexing,
-    so we need to swap coordinates when converting from visual representation.
+
+def string_board_to_game_state(string_board: List[str], phase="PLACEMENT", turn="TIGER", goats_placed=1, goats_captured=0):
     """
+    Convert a string-based board representation to a GameState object.
+    
+    Args:
+        string_board: A list of strings representing the board state.
+        phase: The game phase (default: "PLACEMENT").
+        turn: Whose turn it is (default: "TIGER").
+        goats_placed: Number of goats placed (default: 1).
+        goats_captured: Number of goats captured (default: 0).
+        
+    Returns:
+        A GameState object initialized with the given board and settings.
+    """
+    # Create an empty board
     board = [[None for _ in range(5)] for _ in range(5)]
-    for row_idx, row in enumerate(board_state):
-        for col_idx, cell in enumerate(row):
+    
+    # Fill the board based on the string representation
+    for y, row in enumerate(string_board):
+        for x, cell in enumerate(row):
             if cell == 'T':
-                board[row_idx][col_idx] = {"type": "TIGER"}  # Don't swap - GameState uses [row][col]
+                board[y][x] = {"type": "TIGER"}
             elif cell == 'G':
-                board[row_idx][col_idx] = {"type": "GOAT"}
-            # _ represents empty cell, already None by default
-    return board
+                board[y][x] = {"type": "GOAT"}
+    
+    # Create the game state
+    state = GameState()
+    state.board = board
+    state.phase = phase
+    state.turn = turn
+    state.goats_placed = goats_placed
+    state.goats_captured = goats_captured
+    
+    return state
 
-def format_move(move):
-    """Format a move object for display in the move column"""
-    try:
-        if isinstance(move, str):
-            # Try to convert string representation to dict
-            try:
-                move_dict = eval(move)
-                return format_move(move_dict)
-            except:
-                return f"STR:{move[:20]}"  # Shortened string representation
+
+def print_board(state: GameState) -> None:
+    """
+    Print the current board state in a readable format.
+    """
+    print("Current Board State:")
+    print("-" * 11)
+    for y in range(GameState.BOARD_SIZE):
+        row = "|"
+        for x in range(GameState.BOARD_SIZE):
+            piece = state.board[y][x]
+            if piece is None:
+                row += " |"
+            elif piece["type"] == "TIGER":
+                row += "T|"
+            else:  # GOAT
+                row += "G|"
+        print(row)
+        print("-" * 11)
+
+
+def format_move(move: Optional[Dict]) -> str:
+    """
+    Format a move dictionary in a human-readable way.
+    """
+    if move is None:
+        return "No valid moves available"
+    
+    if move["type"] == "placement":
+        return f"Place goat at ({move['x']}, {move['y']})"
+    else:  # movement
+        from_x, from_y = move["from"]["x"], move["from"]["y"]
+        to_x, to_y = move["to"]["x"], move["to"]["y"]
         
-        if move['type'] == 'movement':
-            from_x = move['from']['x']
-            from_y = move['from']['y']
-            to_x = move['to']['x']
-            to_y = move['to']['y']
-            capture = "C" if move.get('capture', False) else ""
-            return f"({from_x},{from_y})→({to_x},{to_y}){capture}"
-        elif move['type'] == 'placement':
-            # Handle different formats of placement moves
-            if 'to' in move:
-                to_x = move['to']['x'] 
-                to_y = move['to']['y']
-            elif 'x' in move and 'y' in move:
-                to_x = move['x']
-                to_y = move['y']
-            else:
-                return f"P(?,?)"
-            return f"P({to_x},{to_y})"
-        return f"??{str(move)[:10]}"
-    except Exception as e:
-        return f"Error:{str(e)[:15]}"
+        if move.get("capture"):
+            cap_x, cap_y = move["capture"]["x"], move["capture"]["y"]
+            return f"Move from ({from_x}, {from_y}) to ({to_x}, {to_y}), capturing goat at ({cap_x}, {cap_y})"
+        else:
+            return f"Move from ({from_x}, {from_y}) to ({to_x}, {to_y})"
 
-def format_move_short(move):
-    """Format a move object for more concise display"""
-    try:
-        if isinstance(move, str):
-            # Try to convert string representation to dict
-            try:
-                move_dict = eval(move)
-                return format_move_short(move_dict)
-            except:
-                return f"STR:{move[:10]}"  # Shortened string representation
-        
-        if move['type'] == 'movement':
-            from_x = move['from']['x']
-            from_y = move['from']['y']
-            to_x = move['to']['x']
-            to_y = move['to']['y']
-            capture = "C" if move.get('capture', False) else ""
-            return f"({from_x},{from_y})-({to_x},{to_y}){capture}"
-        elif move['type'] == 'placement':
-            # Handle different formats of placement moves
-            if 'to' in move:
-                to_x = move['to']['x'] 
-                to_y = move['to']['y']
-            elif 'x' in move and 'y' in move:
-                to_x = move['x']
-                to_y = move['y']
-            else:
-                return f"P(?,?)"
-            return f"P({to_x},{to_y})"
-        return f"?{str(move)[:5]}"
-    except Exception as e:
-        # For debugging
-        return f"?{str(move)[:10]}"
 
-def test_minimax_agent(depth=4):
+def main():
+    """Run a minimax agent test with configurable parameters."""
+    # The board state in an easy-to-edit format
+    string_board = [
+        "T___T",
+        "_____",
+        "_____",
+        "____G",
+        "T___T"
+    ]
+    
     test_state_2 = [
       "_____",
       "_TGG_",
@@ -108,124 +113,69 @@ def test_minimax_agent(depth=4):
       "_____",
       "T___T"
     ]
-
-    test_state_1 = [
-        "TTT__",
-        "_____",
-        "_____",
-        "____G",
-        "____T"
-    ]
     
-    print("\n" + "="*50)
-    print("TESTING MINIMAX AGENT")
-    print("="*50)
+    # Create a game state from the board
+    # You can modify these parameters as needed
+    game_state = string_board_to_game_state(
+        string_board, 
+        phase="PLACEMENT",
+        turn="TIGER",
+        goats_placed=1,
+        goats_captured=0
+    )
     
-    # Create game state
-    game_state_1 = GameState()
-    game_state_1.board = convert_string_to_board(test_state_1)
-    game_state_1.goats_placed = 4  # Set to placement phase
-    game_state_1.phase = "PLACEMENT"
-    game_state_1.turn = "TIGER"  # Explicitly set turn
+    # Print the board state for verification
+    print_board(game_state)
     
-    # Create minimax agent with specified depth
-    agent = MinimaxAgent(max_depth=depth)
+    # Print state information
+    print(f"Turn: {game_state.turn}")
+    print(f"Phase: {game_state.phase}")
+    print(f"Goats placed: {game_state.goats_placed}")
+    print(f"Goats captured: {game_state.goats_captured}")
+    print(f"Game status: {game_state.game_status}")
     
-    # Get best move from minimax agent
-    best_move = agent.get_move(game_state_1)
-    print(f"\nBest move: {format_move(best_move)}")
-    print(f"Evaluation score: {agent.best_score}")
+    # Get all valid moves
+    valid_moves = game_state.get_valid_moves()
+    print(f"\nValid moves for {game_state.turn}: {len(valid_moves)}")
     
-    # Display evaluation breakdown for all moves
-    if hasattr(agent, 'all_move_evaluations') and agent.all_move_evaluations:
-        print("\n=== Move Evaluations ===")
-        headers = ["Move", "Score", "Tigers", "Goats", "Closed", "Depth", "Chosen", "Move Sequence"]
-        print(f"{headers[0]:25} | {headers[1]:6} | {headers[2]:6} | {headers[3]:6} | {headers[4]:6} | {headers[5]:5} | {headers[6]:6} | {headers[7]}")
-        print("-" * 100)
+    # Get capture moves
+    capture_moves = [move for move in valid_moves if move.get("capture")]
+    print(f"Capture moves available: {len(capture_moves)}")
+    
+    if capture_moves:
+        print("\nCapture moves:")
+        for i, move in enumerate(capture_moves):
+            print(f"  {i+1}. {format_move(move)}")
+    
+    # Create the minimax agent with depth=4
+    agent = MinimaxAgent(max_depth=4)
+    
+    # Get the best move
+    best_move = agent.get_move(game_state)
+    
+    # Print the best move
+    print("\nBest move according to Minimax agent:")
+    if best_move:
+        print(format_move(best_move))
+        print(f"Move score: {agent.best_score}")
         
-        for eval_data in sorted(agent.all_move_evaluations, 
-                              key=lambda x: x['score'], 
-                              reverse=(game_state_1.turn == "TIGER")):
-            # Format the move for display
-            move = eval_data['move']
-            if move['type'] == 'placement':
-                move_str = f"Place at ({move['to']['x']},{move['to']['y']})"
-            else:  # movement
-                move_str = f"Move({move['from']['x']},{move['from']['y']})-({move['to']['x']},{move['to']['y']})"
-                if move.get('capture', False):
-                    move_str += " [C]"
-            
-            # Get score and breakdown
-            minimax_score = eval_data['score']
-            is_best = "✓" if eval_data['is_best'] else ""
-            
-            # Get the leaf node evaluation components that determined this score
-            if 'leaf_node' in eval_data:
-                leaf = eval_data['leaf_node']
-                tigers = leaf['movable_tigers']
-                goats = leaf['goats_captured']
-                closed = leaf['closed_spaces']
-                depth = leaf.get('depth_penalty', 0)
-                
-                # Format the complete move sequence
-                sequence = ""
-                if 'move_sequence' in leaf and leaf['move_sequence']:
-                    move_seq = leaf['move_sequence']
-                    formatted_moves = []
-                    
-                    # Add sequence length
-                    sequence_length = len(move_seq)
-                    sequence = f"[{sequence_length} moves] "
-                    
-                    # Format each move with player prefix
-                    for i, m in enumerate(move_seq):
-                        player_prefix = "T:" if i % 2 == 0 else "G:"
-                        
-                        # For string representations, parse them to dictionaries
-                        if isinstance(m, str):
-                            try:
-                                # Convert string representation to dictionary by evaluating it
-                                m_dict = eval(m)
-                                formatted_moves.append(f"{player_prefix}{format_move_short(m_dict)}")
-                            except:
-                                formatted_moves.append(f"{player_prefix}{m[:15]}...")
-                        else:
-                            formatted_moves.append(f"{player_prefix}{format_move_short(m)}")
-                    
-                    # Join all moves with arrows
-                    sequence += " → ".join(formatted_moves)
-                
-                # Print the evaluation with each component
-                print(f"{move_str:25} | {minimax_score:6} | {tigers:6} | {goats:6} | {closed:6} | {depth:5} | {is_best:^6} | {sequence}")
+        # Apply the move to see the result
+        new_state = game_state.clone()
+        new_state.apply_move(best_move)
+        print("\nBoard state after applying the best move:")
+        print_board(new_state)
+        
+        # Check if the move was a capture move
+        if best_move.get("capture"):
+            print("✓ The agent chose a capture move!")
+        else:
+            if capture_moves:
+                print("✗ The agent did NOT choose a capture move, even though captures are available.")
             else:
-                # If no leaf node data, just show score with unknown components
-                print(f"{move_str:25} | {minimax_score:6} | {'?':6} | {'?':6} | {'?':6} | {'?':5} | {is_best:^6} | {'?'}")
-    
-    # Print the board for visualization
-    print("\nBoard state:")
-    for i in range(5):
-        row = ""
-        for j in range(5):
-            piece = game_state_1.board[i][j]
-            if piece is None:
-                row += "_ "
-            elif piece["type"] == "TIGER":
-                row += "T "
-            else:
-                row += "G "
-        print(row.strip())
-    
-    print(f"\nCurrent turn: {game_state_1.turn}")
-    print(f"Phase: {game_state_1.phase}")
-    print(f"Goats placed: {game_state_1.goats_placed}")
+                print("(No capture moves were available)")
+    else:
+        print("No move was returned by the agent.")
+
 
 if __name__ == "__main__":
-    test_minimax_agent()
-    
-# Add a pytest-compatible test function
-def test_minimax_function():
-    """Pytest-compatible test function for the minimax agent."""
-    # Test with a smaller depth for faster execution during automated testing
-    test_minimax_agent(depth=3)
-    # No assertions needed as this is primarily a visual test
-    # The test passes if no exceptions are raised
+    main() 
