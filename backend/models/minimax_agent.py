@@ -20,7 +20,7 @@ class MinimaxAgent:
         Evaluates the current game state from Tiger's perspective.
         Uses four core heuristics:
         - mobility_weight * movable_tigers (100 during placement, 600 during movement)
-        - 700 * dead_goats
+        - 900 * dead_goats
         - 400 * threatened_goats
         - -mobility_weight * closed_spaces (100 during placement, 600 during movement)
         """
@@ -48,7 +48,7 @@ class MinimaxAgent:
         score += tiger_score
         
         # Dead goats (captured)
-        capture_score = 700 * state.goats_captured
+        capture_score = 900 * state.goats_captured
         score += capture_score
         
         # Threatened goats (in danger of being captured)
@@ -226,12 +226,15 @@ class MinimaxAgent:
         """Get the best move for the current state using minimax with alpha-beta pruning."""
         valid_moves = state.get_valid_moves()
         
+        # Order moves based on a shallow evaluation
+        ordered_moves = self._order_moves(state, valid_moves)
+        
         best_move = None
         best_value = float('-inf') if state.turn == "TIGER" else float('inf')
         alpha = float('-inf')
         beta = float('inf')
         
-        for move in valid_moves:
+        for move in ordered_moves:
             next_state = state.clone()
             next_state.apply_move(move)
             
@@ -254,16 +257,40 @@ class MinimaxAgent:
         
         return best_move
 
-    def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool):
-        """Minimax algorithm with alpha-beta pruning.
-        
-        Args:
-            state: Current game state
-            depth: Remaining depth to search
-            alpha: Alpha value for pruning
-            beta: Beta value for pruning
-            is_maximizing: Whether we are maximizing or minimizing at this node
+    def _order_moves(self, state: GameState, moves: List[Dict]) -> List[Dict]:
         """
+        Order moves based on a shallow evaluation.
+        For tigers, prioritize captures and threatening moves.
+        For goats, prioritize moves that block tiger captures.
+        """
+        move_scores = []
+        
+        for move in moves:
+            # Apply the move to a cloned state
+            next_state = state.clone()
+            next_state.apply_move(move)
+            
+            # Get a quick evaluation score
+            score = self.evaluate(next_state)
+            
+            # For tigers, higher scores are better; for goats, lower scores are better
+            if state.turn == "GOAT":
+                score = -score  # Invert score for goats to sort in the same direction
+                
+            # Add a bonus for capture moves to prioritize them
+            if move.get("capture"):
+                score += 1000  # Large bonus to ensure captures are tried first
+                
+            move_scores.append((move, score))
+        
+        # Sort moves by score (descending)
+        move_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Return just the ordered moves
+        return [move for move, _ in move_scores]
+
+    def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool):
+        """Minimax algorithm with alpha-beta pruning."""
         # Base cases first
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
@@ -275,9 +302,12 @@ class MinimaxAgent:
             eval_score = self.evaluate(state, self.max_depth - depth)
             return eval_score
         
+        # Order moves for better pruning
+        ordered_moves = self._order_moves(state, valid_moves)
+        
         best_value = -MinimaxAgent.INF if is_maximizing else MinimaxAgent.INF
         
-        for move in valid_moves:
+        for move in ordered_moves:
             new_state = state.clone()
             new_state.apply_move(move)
             
