@@ -117,7 +117,7 @@ def main():
     # Create a game state from the board
     # You can modify these parameters as needed
     game_state = string_board_to_game_state(
-        string_board, 
+        test_state_2, 
         phase="PLACEMENT",
         turn="TIGER",
         goats_placed=1,

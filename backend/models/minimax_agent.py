@@ -18,10 +18,9 @@ class MinimaxAgent:
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
         Evaluates the current game state from Tiger's perspective.
-        Uses only three core heuristics:
+        Uses only two core heuristics:
         - 300 * movable_tigers
         - 700 * dead_goats
-        - -700 * closed_spaces
         """
         # Check for terminal states first
         winner = state.get_winner()
@@ -44,12 +43,6 @@ class MinimaxAgent:
         capture_score = 700 * state.goats_captured
         score += capture_score
         
-        # Count closed spaces (positions where tigers are trapped)
-        closed_regions = self._count_closed_spaces(state)
-        total_closed_spaces = sum(len(region) for region in closed_regions)
-        closed_score = -700 * total_closed_spaces
-        score += closed_score
-        
         # Always subtract depth for non-terminal states
         score -= depth
         
@@ -70,136 +63,6 @@ class MinimaxAgent:
                     if len(tiger_moves) > 0:  # Tiger has at least one move
                         movable_count += 1
         return movable_count
-    
-    def _count_closed_spaces(self, state: GameState) -> List[List[tuple[int, int]]]:
-        """
-        Identifies all closed regions in the current board state.
-        A region of connected empty positions is considered "closed" if:
-        1. All neighboring positions around the region are occupied by goats
-        2. No tiger can access any position in this region through a capture move
-        
-        Returns:
-            List of closed regions, where each region is a list of (x,y) coordinates
-            belonging to that region.
-        """
-        # Get all tiger capture moves first for efficiency
-        tiger_capture_moves = []
-        for ty in range(GameState.BOARD_SIZE):
-            for tx in range(GameState.BOARD_SIZE):
-                piece = state.board[ty][tx]
-                if piece and piece["type"] == "TIGER":
-                    # Get all possible moves for this tiger
-                    moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-                    # Filter to only capture moves
-                    capture_moves = [move for move in moves if move.get("capture")]
-                    tiger_capture_moves.extend(capture_moves)
-        
-        # Set of destinations that tigers can capture to
-        capturable_positions = {(move["to"]["x"], move["to"]["y"]) for move in tiger_capture_moves}
-        
-        # Get all empty positions
-        empty_positions = []
-        for y in range(GameState.BOARD_SIZE):
-            for x in range(GameState.BOARD_SIZE):
-                if state.board[y][x] is None:
-                    empty_positions.append((x, y))
-        
-        # Track visited positions to avoid reprocessing
-        visited = set()
-        closed_regions = []
-        
-        # For each empty position, find its connected region
-        for x, y in empty_positions:
-            if (x, y) in visited:
-                continue
-                
-            # Find the connected region of empty spaces
-            region = []
-            is_closed_region = True
-            
-            # Use BFS to find all connected empty spaces
-            queue = [(x, y)]
-            region_visited = {(x, y)}
-            
-            while queue:
-                curr_x, curr_y = queue.pop(0)
-                region.append((curr_x, curr_y))
-                
-                # Get neighboring positions
-                neighbors = []
-                for dx, dy in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
-                    new_x, new_y = curr_x + dx, curr_y + dy
-                    if (0 <= new_x < GameState.BOARD_SIZE and 
-                        0 <= new_y < GameState.BOARD_SIZE and 
-                        self._is_valid_connection(curr_x, curr_y, new_x, new_y)):
-                        neighbors.append((new_x, new_y))
-                
-                # Check neighbors: if empty, add to queue, if not goat, region not closed
-                for nx, ny in neighbors:
-                    piece = state.board[ny][nx]
-                    
-                    if piece is None:
-                        # Connected empty space
-                        if (nx, ny) not in region_visited:
-                            queue.append((nx, ny))
-                            region_visited.add((nx, ny))
-                    elif piece["type"] != "GOAT":
-                        # If any neighbor is not a goat, region is not closed
-                        is_closed_region = False
-            
-            # Mark all positions in this region as visited
-            visited.update(region_visited)
-            
-            # Check if any position in the region can be captured to
-            if is_closed_region:
-                for pos_x, pos_y in region:
-                    if (pos_x, pos_y) in capturable_positions:
-                        is_closed_region = False
-                        break
-            
-            # If the region is closed, add it to our list of closed regions
-            if is_closed_region:
-                closed_regions.append(region)
-        
-        return closed_regions
-
-    def _is_valid_connection(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
-        """Helper method to check if two positions are validly connected on the board."""
-        # Orthogonal moves are always valid if adjacent
-        if abs(from_x - to_x) + abs(from_y - to_y) == 1:
-            return True
-
-        # Diagonal moves need special handling
-        if abs(from_x - to_x) == 1 and abs(from_y - to_y) == 1:
-            # No diagonal moves for second and fourth nodes on outer edges
-            if self._is_outer_layer(from_x, from_y):
-                is_second_or_fourth_node = (
-                    ((from_x == 0 or from_x == 4) and (from_y == 1 or from_y == 3)) or
-                    ((from_y == 0 or from_y == 4) and (from_x == 1 or from_x == 3))
-                )
-                if is_second_or_fourth_node:
-                    return False
-
-            # No diagonal moves for middle nodes in second layer
-            if self._is_second_layer(from_x, from_y):
-                is_middle_node = (
-                    (from_x == 1 and from_y == 2) or
-                    (from_x == 2 and from_y == 1) or
-                    (from_x == 2 and from_y == 3) or
-                    (from_x == 3 and from_y == 2)
-                )
-                if is_middle_node:
-                    return False
-            return True
-        return False
-
-    def _is_outer_layer(self, x: int, y: int) -> bool:
-        """Check if a position is on the outer layer of the board."""
-        return x == 0 or y == 0 or x == 4 or y == 4
-
-    def _is_second_layer(self, x: int, y: int) -> bool:
-        """Check if a position is on the second layer of the board."""
-        return x == 1 or y == 1 or x == 3 or y == 3
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using minimax with alpha-beta pruning."""
