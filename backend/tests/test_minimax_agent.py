@@ -148,7 +148,7 @@ def main():
             print(f"  {i+1}. {format_move(move)}")
     
     # Create the minimax agent with depth=4
-    agent = MinimaxAgent(max_depth=1)
+    agent = MinimaxAgent(max_depth=4)
     
     # Get the best move
     best_move = agent.get_move(game_state)

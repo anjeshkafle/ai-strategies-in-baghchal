@@ -36,11 +36,14 @@ class MinimaxAgent:
         # Set mobility weight based on game phase
         mobility_weight = 100 if state.phase == "PLACEMENT" else 600
         
+        # Get all tiger moves once for all heuristics
+        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        
         # Core evaluation based on reference implementation
         score = 0
         
         # Count movable tigers (tigers with at least one valid move)
-        movable_tigers = self._count_movable_tigers(state)
+        movable_tigers = self._count_movable_tigers(all_tiger_moves)
         tiger_score = mobility_weight * movable_tigers
         score += tiger_score
         
@@ -49,12 +52,12 @@ class MinimaxAgent:
         score += capture_score
         
         # Threatened goats (in danger of being captured)
-        threatened_goats = self._count_threatened_goats(state)
+        threatened_goats = self._count_threatened_goats(all_tiger_moves)
         threatened_score = 400 * threatened_goats
         score += threatened_score
         
         # Count closed spaces (positions where tigers are trapped)
-        closed_regions = self._count_closed_spaces(state)
+        closed_regions = self._count_closed_spaces(state, all_tiger_moves)
         total_closed_spaces = sum(len(region) for region in closed_regions)
         closed_score = -mobility_weight * total_closed_spaces
         score += closed_score
@@ -64,14 +67,11 @@ class MinimaxAgent:
         
         return score
     
-    def _count_movable_tigers(self, state: GameState) -> int:
+    def _count_movable_tigers(self, all_tiger_moves) -> int:
         """
         Counts the number of tigers that have at least one valid move.
         This matches the reference implementation's movable_tigers() function.
         """
-        # Get all possible tiger moves once
-        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-        
         # Count tigers with at least one move
         movable_tigers = set()
         for move in all_tiger_moves:
@@ -80,7 +80,7 @@ class MinimaxAgent:
         
         return len(movable_tigers)
     
-    def _count_closed_spaces(self, state: GameState) -> List[List[tuple[int, int]]]:
+    def _count_closed_spaces(self, state: GameState, all_tiger_moves) -> List[List[tuple[int, int]]]:
         """
         Identifies all closed regions in the current board state.
         A region of connected empty positions is considered "closed" if:
@@ -91,8 +91,7 @@ class MinimaxAgent:
             List of closed regions, where each region is a list of (x,y) coordinates
             belonging to that region.
         """
-        # Get all tiger capture moves once for efficiency
-        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        # Filter to only capture moves
         tiger_capture_moves = [move for move in all_tiger_moves if move.get("capture")]
         
         # Set of destinations that tigers can capture to
@@ -164,7 +163,7 @@ class MinimaxAgent:
         
         return closed_regions
 
-    def _count_threatened_goats(self, state: GameState) -> int:
+    def _count_threatened_goats(self, all_tiger_moves) -> int:
         """
         Counts the number of goats that are in danger of being captured by tigers.
         A goat is considered threatened if it could be captured by a tiger in a 
@@ -173,8 +172,7 @@ class MinimaxAgent:
         Returns:
             The number of threatened goats on the board.
         """
-        # Get all possible tiger moves once
-        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        # Filter to only capture moves
         tiger_capture_moves = [move for move in all_tiger_moves if move.get("capture")]
         
         # Create a set of threatened goat positions (using their coordinates to avoid duplicates)
