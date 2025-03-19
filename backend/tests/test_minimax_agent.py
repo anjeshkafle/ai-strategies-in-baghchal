@@ -93,13 +93,28 @@ def format_move_short(move):
         return f"?{str(move)[:10]}"
 
 def test_minimax_agent(depth=4):
-    # Test state with multiple closed regions
-    test_state_1 = [
+    test_state_2 = [
       "_____",
       "_TGG_",
       "_____",
       "_____",
       "T__TT"
+    ]
+
+    test_state_3 = [
+      "T___T",
+      "_____",
+      "___G_",
+      "_____",
+      "T___T"
+    ]
+
+    test_state_1 = [
+        "TTT__",
+        "_____",
+        "_____",
+        "____G",
+        "____T"
     ]
     
     print("\n" + "="*50)
