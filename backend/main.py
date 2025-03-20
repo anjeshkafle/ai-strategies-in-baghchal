@@ -38,7 +38,7 @@ class MoveRequest(BaseModel):
 # Initialize agents
 agents = {
     "random": RandomAgent(),
-    "minimax": MinimaxAgent(max_depth=4)  # Remove max_time as it's not used
+    "minimax": MinimaxAgent(max_depth=5)  # Remove max_time as it's not used
 }
 
 @app.post("/get-best-move")

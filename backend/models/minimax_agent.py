@@ -18,11 +18,12 @@ class MinimaxAgent:
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
         Evaluates the current game state from Tiger's perspective.
-        Uses four core heuristics:
-        - mobility_weight * movable_tigers (100 during placement, 600 during movement)
-        - 900 * dead_goats
-        - 400 * threatened_goats
-        - -mobility_weight * closed_spaces (100 during placement, 600 during movement)
+        Uses five core heuristics:
+        - mobility_weight * movable_tigers (200 during placement, 300 during movement)
+        - 1000 * dead_goats
+        - 500 * threatened_goats
+        - -mobility_weight * closed_spaces (200 during placement, 300 during movement)
+        - dispersion_weight * tiger_dispersion (100 by default, normalized 0-1 score)
         """
         # Check for terminal states first
         winner = state.get_winner()
@@ -34,7 +35,7 @@ class MinimaxAgent:
             return final_score
         
         # Set mobility weight based on game phase
-        mobility_weight = 100 if state.phase == "PLACEMENT" else 600
+        mobility_weight = 200 if state.phase == "PLACEMENT" else 300
         
         # Get all tiger moves once for all heuristics
         all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
@@ -48,12 +49,12 @@ class MinimaxAgent:
         score += tiger_score
         
         # Dead goats (captured)
-        capture_score = 900 * state.goats_captured
+        capture_score = 1000 * state.goats_captured
         score += capture_score
         
         # Threatened goats (in danger of being captured)
-        threatened_goats = self._count_threatened_goats(all_tiger_moves)
-        threatened_score = 400 * threatened_goats
+        threatened_value = self._count_threatened_goats(all_tiger_moves)
+        threatened_score = 500 * threatened_value
         score += threatened_score
         
         # Count closed spaces (positions where tigers are trapped)
@@ -61,6 +62,11 @@ class MinimaxAgent:
         total_closed_spaces = sum(len(region) for region in closed_regions)
         closed_score = -mobility_weight * total_closed_spaces
         score += closed_score
+        
+        # Calculate tiger dispersion score (normalized 0-1)
+        dispersion_score = self._calculate_tiger_dispersion(state)
+        dispersion_weight = 100  # Weight for tiger dispersion
+        score += dispersion_weight * dispersion_score
         
         # Always subtract depth for non-terminal states
         score -= depth
@@ -163,26 +169,37 @@ class MinimaxAgent:
         
         return closed_regions
 
-    def _count_threatened_goats(self, all_tiger_moves) -> int:
+    def _count_threatened_goats(self, all_tiger_moves) -> float:
         """
-        Counts the number of goats that are in danger of being captured by tigers.
-        A goat is considered threatened if it could be captured by a tiger in a 
-        single move.
+        Evaluates the threat value of potential goat captures.
+        
+        This function uses a non-linear scale that:
+        1. Values 1 threatened goat at 1.0
+        2. Values 2 threatened goats at 1.9 (close to but less than a capture)
+        3. Values 3+ threatened goats at 2.0 (diminishing returns)
         
         Returns:
-            The number of threatened goats on the board.
+            A float representing the adjusted threat value.
         """
         # Filter to only capture moves
-        tiger_capture_moves = [move for move in all_tiger_moves if move.get("capture")]
+        capture_moves = [move for move in all_tiger_moves if move.get("capture")]
+        total_captures = len(capture_moves)
         
-        # Create a set of threatened goat positions (using their coordinates to avoid duplicates)
-        threatened_goats = set()
-        for move in tiger_capture_moves:
-            if move.get("capture"):
-                goat_x, goat_y = move["capture"]["x"], move["capture"]["y"]
-                threatened_goats.add((goat_x, goat_y))
-        
-        return len(threatened_goats)
+        # Apply the non-linear scale based on number of captures available
+        if total_captures == 0:
+            return 0
+        elif total_captures == 1:
+            return 1.0
+        elif total_captures == 2:
+            # Check if it's the same goat threatened twice
+            if capture_moves[0]["capture"]["x"] == capture_moves[1]["capture"]["x"] and \
+               capture_moves[0]["capture"]["y"] == capture_moves[1]["capture"]["y"]:
+                return 1.5  # Same goat threatened from two directions
+            else:
+                return 1.9  # Two different goats threatened
+        else:
+            # For 3+ threats, cap at 2.0
+            return 2.0
 
     def _is_valid_connection(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
         """Helper method to check if two positions are validly connected on the board."""
@@ -326,3 +343,55 @@ class MinimaxAgent:
                 break  # Alpha-beta pruning
         
         return best_value 
+
+    def _calculate_tiger_dispersion(self, state: GameState) -> float:
+        """
+        Calculates a normalized score (0-1) based on how well-dispersed the tigers are on the board.
+        Tigers that are too close together can interfere with each other's capture opportunities.
+        
+        Returns:
+            A normalized score representing how well the tigers are dispersed (higher is better).
+            The score is normalized to a range of 0.0 (minimum dispersion) to 1.0 (maximum dispersion).
+        """
+        # Find all tiger positions
+        tiger_positions = []
+        for y in range(GameState.BOARD_SIZE):
+            for x in range(GameState.BOARD_SIZE):
+                if state.board[y][x] is not None and state.board[y][x]["type"] == "TIGER":
+                    tiger_positions.append((x, y))
+        
+        # If we have fewer than 2 tigers, dispersion is not applicable
+        if len(tiger_positions) < 2:
+            return 0
+        
+        # Calculate the sum of pairwise distances between tigers
+        total_distance = 0
+        pairs_count = 0
+        
+        for i in range(len(tiger_positions)):
+            for j in range(i + 1, len(tiger_positions)):
+                x1, y1 = tiger_positions[i]
+                x2, y2 = tiger_positions[j]
+                
+                # Use Manhattan distance as it better represents movement on the board
+                distance = abs(x1 - x2) + abs(y1 - y2)
+                total_distance += distance
+                pairs_count += 1
+        
+        # Normalize by the number of pairs
+        avg_distance = total_distance / pairs_count if pairs_count > 0 else 0
+        
+        # Correct normalization based on actual possible values:
+        # For 4 tigers:
+        # - Maximum average distance is ~5.33 (32/6) when tigers are at corners
+        # - Minimum average distance is ~1.33 (8/6) when tigers are clustered
+        
+        # Normalize to 0-1 range
+        min_avg_distance = 1.33  # Theoretical minimum for 4 tigers
+        max_avg_distance = 5.33  # Theoretical maximum for 4 tigers
+        
+        # Ensure the value stays in range even with fewer tigers
+        normalized_score = (avg_distance - min_avg_distance) / (max_avg_distance - min_avg_distance)
+        normalized_score = max(0, min(1, normalized_score))  # Clamp to [0,1]
+        
+        return normalized_score 

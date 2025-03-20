@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
+from game_logic import get_all_possible_moves
 
 
 def string_board_to_game_state(string_board, phase="PLACEMENT", turn="TIGER", goats_placed=1, goats_captured=0):
@@ -55,10 +56,10 @@ def main():
     """Simple test for movable tigers and closed spaces."""
     # Define the three board states from test_minimax_agent
     board_1 = [
-        "_TG__",
+        "TT___",
         "_G___",
         "_____",
-        "____G",
+        "_____",
         "T_T_T"
     ]
     
@@ -71,11 +72,11 @@ def main():
     ]
 
     test_state_3 = [
-      "T___T",
+      "T_T__",
       "_____",
+      "T_T__",
       "_____",
-      "_____",
-      "T___T"
+      "_____"
     ]
     
     # A board to demonstrate threatened goats
@@ -105,15 +106,25 @@ def main():
     # Create the minimax agent
     agent = MinimaxAgent(max_depth=3)
     
+    # Get all tiger moves first (needed for multiple heuristics)
+    all_tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
+    
     # Print key heuristic information
-    movable_tigers = agent._count_movable_tigers(game_state)
-    closed_regions = agent._count_closed_spaces(game_state)
-    threatened_goats = agent._count_threatened_goats(game_state)
+    movable_tigers = agent._count_movable_tigers(all_tiger_moves)
+    closed_regions = agent._count_closed_spaces(game_state, all_tiger_moves)
+    threatened_goats = agent._count_threatened_goats(all_tiger_moves)
+    
+    # Calculate tiger dispersion (normalized 0-1 score)
+    dispersion_score = agent._calculate_tiger_dispersion(game_state)
+    dispersion_weight = 300  # Same weight as in evaluate function
+    weighted_dispersion = dispersion_weight * dispersion_score
     
     print(f"\nMovable Tigers: {movable_tigers}")
     print(f"Threatened Goats: {threatened_goats}")
     print(f"Closed Regions: {len(closed_regions)}")
     print(f"Total Closed Positions: {sum(len(region) for region in closed_regions)}")
+    print(f"Tiger Dispersion: {dispersion_score:.3f} (normalized 0-1)")
+    print(f"Weighted Dispersion: {weighted_dispersion:.1f} (weight: {dispersion_weight})")
     
     # Calculate the evaluation score
     eval_score = agent.evaluate(game_state)
