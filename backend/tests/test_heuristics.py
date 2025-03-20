@@ -56,11 +56,11 @@ def main():
     """Simple test for movable tigers and closed spaces."""
     # Define the three board states from test_minimax_agent
     board_1 = [
+        "_G__T",
+        "GG___",
+        "_____",
         "T___T",
-        "____G",
-        "____G",
-        "____G",
-        "T___T"
+        "____T"
     ]
     
     board_2 = [

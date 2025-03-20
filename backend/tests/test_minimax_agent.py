@@ -87,15 +87,58 @@ def format_move(move: Optional[Dict]) -> str:
             return f"Move from ({from_x}, {from_y}) to ({to_x}, {to_y})"
 
 
+def print_best_move_sequence(initial_state: GameState, max_depth: int) -> None:
+    """
+    Print the best move sequence from the current state up to max_depth.
+    
+    Args:
+        initial_state: The starting game state
+        max_depth: The maximum search depth
+    """
+    print("\n=== Best Move Sequence ===")
+    
+    current_state = initial_state.clone()
+    current_depth = max_depth
+    
+    for i in range(max_depth):
+        # Create a new agent with decreasing depth
+        agent = MinimaxAgent(max_depth=current_depth)
+        
+        # Get the best move
+        best_move = agent.get_move(current_state)
+        
+        if best_move is None:
+            print(f"  {i+1}. No valid moves available")
+            break
+            
+        # Print the move with player and score
+        print(f"\n  {i+1}. {current_state.turn} plays: {format_move(best_move)} (score: {agent.best_score:.1f})")
+        
+        # Apply the move
+        current_state.apply_move(best_move)
+        
+        # Print the board state after this move
+        print(f"\nBoard after move {i+1}:")
+        print_board(current_state)
+        
+        # Decrease depth for next iteration
+        current_depth -= 1
+    
+    # Print the final position evaluation
+    final_eval_agent = MinimaxAgent(max_depth=1)
+    static_eval = final_eval_agent.evaluate(current_state)
+    print(f"\nFinal position static evaluation: {static_eval:.1f}")
+
+
 def main():
     """Run a minimax agent test with configurable parameters."""
     # The board state in an easy-to-edit format
     string_board = [
+        "_G__T",
+        "GG___",
+        "_____",
         "T___T",
-        "_____",
-        "_____",
-        "____G",
-        "T___T"
+        "____T"
     ]
     
     test_state_2 = [
@@ -107,17 +150,17 @@ def main():
     ]
 
     test_state_3 = [
-  "TGGGT",
-  "____G",
-  "____G",
-  "____G",
-  "T___T"
-]
+      "TGGGT",
+      "____G",
+      "____G",
+      "____G",
+      "T___T"
+    ]
     
     # Create a game state from the board
     # You can modify these parameters as needed
     game_state = string_board_to_game_state(
-        test_state_3, 
+        string_board, 
         phase="PLACEMENT",
         turn="GOAT",
         goats_placed=1,
@@ -147,8 +190,11 @@ def main():
         for i, move in enumerate(capture_moves):
             print(f"  {i+1}. {format_move(move)}")
     
-    # Create the minimax agent with depth=4
-    agent = MinimaxAgent(max_depth=5)
+    # Define search depth
+    max_depth = 5
+    
+    # Create the minimax agent
+    agent = MinimaxAgent(max_depth=max_depth)
     
     # Get the best move
     best_move = agent.get_move(game_state)
@@ -173,6 +219,9 @@ def main():
                 print("✗ The agent did NOT choose a capture move, even though captures are available.")
             else:
                 print("(No capture moves were available)")
+                
+        # Print the best move sequence
+        print_best_move_sequence(game_state, max_depth)
     else:
         print("No move was returned by the agent.")
 
