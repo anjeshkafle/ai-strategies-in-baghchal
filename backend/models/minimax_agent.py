@@ -18,12 +18,13 @@ class MinimaxAgent:
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
         Evaluates the current game state from Tiger's perspective.
-        Uses five core heuristics:
+        Uses six core heuristics:
         - mobility_weight * movable_tigers (200 during placement, 300 during movement)
         - 1000 * dead_goats
         - 500 * threatened_goats
         - -mobility_weight * closed_spaces (200 during placement, 300 during movement)
         - dispersion_weight * tiger_dispersion (100 by default, normalized 0-1 score)
+        - -edge_weight * goat_edge_preference (150 by default, normalized 0-1 score)
         """
         # Check for terminal states first
         winner = state.get_winner()
@@ -67,6 +68,11 @@ class MinimaxAgent:
         dispersion_score = self._calculate_tiger_dispersion(state)
         dispersion_weight = 100  # Weight for tiger dispersion
         score += dispersion_weight * dispersion_score
+        
+        # Calculate goat edge preference score (normalized 0-1)
+        edge_score = self._calculate_goat_edge_preference(state)
+        edge_weight = 150  # Weight for goat edge preference (higher than dispersion)
+        score -= edge_weight * edge_score  # Subtract from score (negative for tigers)
         
         # Always subtract depth for non-terminal states
         score -= depth
@@ -395,3 +401,42 @@ class MinimaxAgent:
         normalized_score = max(0, min(1, normalized_score))  # Clamp to [0,1]
         
         return normalized_score 
+
+    def _calculate_goat_edge_preference(self, state: GameState) -> float:
+        """
+        Calculates a normalized score (0-1) based on how well goats are positioned on the edges.
+        The score is perfect (1.0) when all goats are optimally placed (outer layer preferred,
+        then middle layer, with center being worst).
+        
+        Returns:
+            A normalized score representing how well goats are positioned on edges (higher is better for goats).
+            The score is normalized to a range of 0.0 (worst positioning) to 1.0 (best positioning).
+        """
+        # Count goats in each layer
+        outer_layer_goats = 0
+        middle_layer_goats = 0
+        center_goats = 0
+        
+        for y in range(GameState.BOARD_SIZE):
+            for x in range(GameState.BOARD_SIZE):
+                if state.board[y][x] is not None and state.board[y][x]["type"] == "GOAT":
+                    if self._is_outer_layer(x, y):
+                        outer_layer_goats += 1
+                    elif self._is_second_layer(x, y):
+                        middle_layer_goats += 1
+                    else:  # Center position
+                        center_goats += 1
+        
+        # Total number of goats on the board
+        total_goats = outer_layer_goats + middle_layer_goats + center_goats
+        
+        # If no goats on the board, return 0
+        if total_goats == 0:
+            return 0
+        
+        # Calculate the actual score based on placement quality
+        # Perfect score (1.0) if all goats are on the outer layer
+        # Reduced score for goats on middle layer (0.67) or center (0.33)
+        placement_quality = (outer_layer_goats + (middle_layer_goats * 0.67) + (center_goats * 0.33)) / total_goats
+        
+        return placement_quality 

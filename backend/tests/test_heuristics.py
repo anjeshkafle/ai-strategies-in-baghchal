@@ -56,11 +56,11 @@ def main():
     """Simple test for movable tigers and closed spaces."""
     # Define the three board states from test_minimax_agent
     board_1 = [
-        "TT___",
-        "_G___",
-        "_____",
-        "_____",
-        "T_T_T"
+        "T___T",
+        "____G",
+        "____G",
+        "____G",
+        "T___T"
     ]
     
     board_2 = [
@@ -116,8 +116,13 @@ def main():
     
     # Calculate tiger dispersion (normalized 0-1 score)
     dispersion_score = agent._calculate_tiger_dispersion(game_state)
-    dispersion_weight = 300  # Same weight as in evaluate function
+    dispersion_weight = 100  # Same weight as in evaluate function
     weighted_dispersion = dispersion_weight * dispersion_score
+    
+    # Calculate goat edge preference (normalized 0-1 score)
+    edge_score = agent._calculate_goat_edge_preference(game_state)
+    edge_weight = 150  # Same weight as in evaluate function
+    weighted_edge = edge_weight * edge_score
     
     print(f"\nMovable Tigers: {movable_tigers}")
     print(f"Threatened Goats: {threatened_goats}")
@@ -125,6 +130,8 @@ def main():
     print(f"Total Closed Positions: {sum(len(region) for region in closed_regions)}")
     print(f"Tiger Dispersion: {dispersion_score:.3f} (normalized 0-1)")
     print(f"Weighted Dispersion: {weighted_dispersion:.1f} (weight: {dispersion_weight})")
+    print(f"Goat Edge Preference: {edge_score:.3f} (normalized 0-1)")
+    print(f"Weighted Edge Preference: {weighted_edge:.1f} (weight: {edge_weight})")
     
     # Calculate the evaluation score
     eval_score = agent.evaluate(game_state)
