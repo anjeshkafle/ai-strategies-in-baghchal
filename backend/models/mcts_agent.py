@@ -26,9 +26,15 @@ class MCTSNode:
         log_visits = math.log(self.visits) if self.visits > 0 else 0
         
         def uct_score(child):
+            # For exploitation term, we need to adjust based on perspective
             exploitation = child.value / child.visits if child.visits > 0 else 0
+            
+            # If it's goat's turn at the parent node, invert the score for correct maximization
+            if self.state.turn == "GOAT":
+                exploitation = 1.0 - exploitation
+            
             # Add a small epsilon to prevent division by zero
-            exploration = exploration_weight * math.sqrt(log_visits / (child.visits + 1e-10)) if child.visits > 0 else float('inf')
+            exploration = exploration_weight * math.sqrt(log_visits / (child.visits + 1e-10))
             return exploitation + exploration
             
         return max(self.children, key=uct_score)
@@ -159,9 +165,9 @@ class MCTSAgent:
                 # If timeout, use evaluation function
                 if self.use_minimax_eval:
                     eval_score = self.minimax_agent.evaluate(current_state)
-                    eval_score = max(min(eval_score, 10000), -10000)
-                    normalized_score = 1.0 / (1.0 + math.exp(-eval_score / 1000.0))
-                    return normalized_score
+                    # The evaluation function returns higher values for Tiger advantage
+                    # We need to normalize to [0,1] where 1 means Tiger win
+                    return self._normalize_eval_score(eval_score)
                 else:
                     return 0.5  # Draw if no evaluation function
             
@@ -186,11 +192,7 @@ class MCTSAgent:
         # If we hit max depth, use evaluation function
         if depth >= max_depth and self.use_minimax_eval:
             eval_score = self.minimax_agent.evaluate(current_state)
-            # Convert to [0,1] range where 1 is good for Tiger
-            # Add clamping to prevent extreme values
-            eval_score = max(min(eval_score, 10000), -10000)  # Clamp to reasonable range
-            normalized_score = 1.0 / (1.0 + math.exp(-eval_score / 1000.0))
-            return normalized_score
+            return self._normalize_eval_score(eval_score)
         
         # Otherwise score based on winner
         winner = current_state.get_winner()
@@ -230,7 +232,9 @@ class MCTSAgent:
                 # Evaluate all moves
                 move_scores = []
                 for move in valid_moves:
-                    score = self.evaluate_move(current_state, move)
+                    next_state = current_state.clone()
+                    next_state.apply_move(move)
+                    score = self.minimax_agent.evaluate(next_state)
                     
                     # Adjust score based on player
                     if current_state.turn == "GOAT":
@@ -257,11 +261,7 @@ class MCTSAgent:
         # If we hit max depth, use evaluation function
         if depth >= max_depth and self.use_minimax_eval:
             eval_score = self.minimax_agent.evaluate(current_state)
-            # Convert to [0,1] range where 1 is good for Tiger
-            # Add clamping to prevent extreme values
-            eval_score = max(min(eval_score, 10000), -10000)  # Clamp to reasonable range
-            normalized_score = 1.0 / (1.0 + math.exp(-eval_score / 1000.0))
-            return normalized_score
+            return self._normalize_eval_score(eval_score)
         
         # Otherwise score based on winner
         winner = current_state.get_winner()
@@ -302,7 +302,9 @@ class MCTSAgent:
                     # For tigers, prefer moves with higher evaluation
                     move_scores = []
                     for move in valid_moves:
-                        score = self.evaluate_move(current_state, move)
+                        next_state = current_state.clone()
+                        next_state.apply_move(move)
+                        score = self.minimax_agent.evaluate(next_state)
                         move_scores.append((move, score))
                     
                     move_scores.sort(key=lambda x: x[1], reverse=True)
@@ -313,7 +315,9 @@ class MCTSAgent:
                     # For goats, prefer moves with lower evaluation
                     move_scores = []
                     for move in valid_moves:
-                        score = self.evaluate_move(current_state, move)
+                        next_state = current_state.clone()
+                        next_state.apply_move(move)
+                        score = self.minimax_agent.evaluate(next_state)
                         move_scores.append((move, score))
                     
                     move_scores.sort(key=lambda x: x[1])
@@ -330,11 +334,7 @@ class MCTSAgent:
         # If we hit max depth, use evaluation function
         if depth >= max_depth and self.use_minimax_eval:
             eval_score = self.minimax_agent.evaluate(current_state)
-            # Convert to [0,1] range where 1 is good for Tiger
-            # Add clamping to prevent extreme values
-            eval_score = max(min(eval_score, 10000), -10000)  # Clamp to reasonable range
-            normalized_score = 1.0 / (1.0 + math.exp(-eval_score / 1000.0))
-            return normalized_score
+            return self._normalize_eval_score(eval_score)
         
         # Otherwise score based on winner
         winner = current_state.get_winner()
@@ -371,3 +371,16 @@ class MCTSAgent:
         else:
             # During placement phase, include goats_placed to ensure uniqueness
             return f"PLACEMENT_{state.goats_placed}_{state.turn}" 
+
+    def _normalize_eval_score(self, score: float) -> float:
+        """
+        Normalize a minimax evaluation score to a value in [0, 1] range.
+        1.0 represents Tiger win, 0.0 represents Goat win.
+        Uses a sigmoid function for smooth normalization.
+        """
+        # Clamp score to reasonable range
+        score = max(min(score, 10000), -10000)
+        
+        # Use a sigmoid function to map any score to [0, 1]
+        # The division by 1000 controls the steepness of the sigmoid
+        return 1.0 / (1.0 + math.exp(-score / 1000.0)) 
