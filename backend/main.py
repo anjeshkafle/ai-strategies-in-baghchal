@@ -5,6 +5,7 @@ from typing import List, Optional, Dict
 from models.random_agent import RandomAgent
 from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
+from models.mcts_agent import MCTSAgent
 import logging
 import time
 import json
@@ -38,7 +39,8 @@ class MoveRequest(BaseModel):
 # Initialize agents
 agents = {
     "random": RandomAgent(),
-    "minimax": MinimaxAgent(max_depth=5)  # Remove max_time as it's not used
+    "minimax": MinimaxAgent(max_depth=5),
+    "mcts": MCTSAgent(iterations=800, exploration_weight=1.0, rollout_policy="random", use_minimax_eval=True)
 }
 
 @app.post("/get-best-move")
@@ -76,21 +78,33 @@ async def get_best_move(request: MoveRequest):
         state.goats_captured = request.goats_captured
         
         # Get move using the agent
-        move = agents[request.model].get_move(state)
-        
-        elapsed = time.time() - start_time
-        
-        # Log the selected move concisely
-        if move:
-            if "type" in move and move["type"] == "placement":
-                logger.info(f"Selected: Place at ({move['x']}, {move['y']}) [{elapsed:.2f}s]")
+        try:
+            logger.info(f"Starting {request.model} agent calculation...")
+            move_start_time = time.time()
+            move = agents[request.model].get_move(state)
+            move_elapsed = time.time() - move_start_time
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Agent calculation completed in {move_elapsed:.2f}s (total request: {elapsed:.2f}s)")
+            
+            # Log the selected move concisely
+            if move:
+                if "type" in move and move["type"] == "placement":
+                    logger.info(f"Selected: Place at ({move['x']}, {move['y']}) [{elapsed:.2f}s]")
+                else:
+                    capture_info = " with capture" if move.get("capture") else ""
+                    logger.info(f"Selected: ({move['from']['x']}, {move['from']['y']}) -> ({move['to']['x']}, {move['to']['y']}){capture_info} [{elapsed:.2f}s]")
             else:
-                capture_info = " with capture" if move.get("capture") else ""
-                logger.info(f"Selected: ({move['from']['x']}, {move['from']['y']}) -> ({move['to']['x']}, {move['to']['y']}){capture_info} [{elapsed:.2f}s]")
-        
-        return move
+                logger.warning(f"Agent returned no move after {move_elapsed:.2f}s")
+            
+            return move
+        except Exception as e:
+            logger.error(f"Error in agent.get_move(): {str(e)}")
+            logger.exception("Detailed agent error traceback:")
+            raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
     except Exception as e:
-        logger.error(f"Error calculating move: {str(e)}")
+        logger.error(f"Error in request processing: {str(e)}")
+        logger.exception("Detailed error traceback:")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
