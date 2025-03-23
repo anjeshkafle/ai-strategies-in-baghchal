@@ -172,11 +172,11 @@ def main():
             print(f"  {i+1}. {format_move(move)}")
     
     # Configure MCTS parameters
-    iterations = 20000  # Increased from 1000 for more thorough tree search
-    exploration_weight = 1.5  # Increased to encourage more exploration of different paths
+    iterations = 1000  # Increased to 1000 for more thorough tree search
+    exploration_weight = 1.414  # root 2 to encourage more exploration of different paths
     rollout_policy = "guided"  # Use the guided rollout policy
     max_rollout_depth = 4  # Using a more balanced depth
-    guided_strictness = 1  # Medium strictness - balance between exploration and exploitation
+    guided_strictness = 1  # Maximum strictness - balance between exploration and exploitation
     
     print(f"\nInitializing MCTS agent with {iterations} iterations")
     print(f"Exploration weight: {exploration_weight}")

@@ -40,7 +40,12 @@ class MoveRequest(BaseModel):
 agents = {
     "random": RandomAgent(),
     "minimax": MinimaxAgent(max_depth=5),
-    "mcts": MCTSAgent(iterations=800, exploration_weight=1.0, rollout_policy="random", use_minimax_eval=True)
+    "mcts": MCTSAgent(
+        iterations=1000, 
+        exploration_weight=1.414, 
+        rollout_policy="guided",
+        guided_strictness=1.0
+    )
 }
 
 @app.post("/get-best-move")
