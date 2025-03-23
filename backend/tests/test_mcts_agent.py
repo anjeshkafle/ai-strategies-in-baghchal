@@ -104,7 +104,7 @@ def print_mcts_stats(root_node: MCTSNode) -> None:
         
         # Print top moves
         print("\nTop moves by visit count:")
-        for i, child in enumerate(sorted_children[:5]):  # Show top 5 moves only
+        for i, child in enumerate(sorted_children):  # Show all moves
             win_rate = child.value / child.visits if child.visits > 0 else 0
             print(f"  {i+1}. {format_move(child.move)} - Visits: {child.visits}, Win rate: {win_rate:.2f}")
     else:
@@ -119,7 +119,7 @@ def main():
         "_____",
         "_____",
         "_____",
-        "T___T"
+        "TG__T"
     ]
     
     test_state_2 = [
@@ -143,7 +143,7 @@ def main():
     game_state = string_board_to_game_state(
         string_board, 
         phase="PLACEMENT",
-        turn="GOAT",
+        turn="TIGER",
         goats_placed=1,
         goats_captured=0
     )
@@ -172,10 +172,11 @@ def main():
             print(f"  {i+1}. {format_move(move)}")
     
     # Configure MCTS parameters
-    iterations = 300  # Reduced from 1000 for faster computation
-    exploration_weight = 1.0
-    rollout_policy = "weighted"  # Keeping the same rollout policy
-    use_minimax_eval = True
+    iterations = 3000  # Increased from 1000 for more thorough tree search
+    exploration_weight = 1.5  # Increased to encourage more exploration of different paths
+    rollout_policy = "guided"  # Keeping the same rollout policy
+    # Set use_minimax_eval based on rollout policy
+    use_minimax_eval = rollout_policy != "random"  # True if not random, False if random
     
     print(f"\nInitializing MCTS agent with {iterations} iterations")
     print(f"Exploration weight: {exploration_weight}")
@@ -189,6 +190,14 @@ def main():
         rollout_policy=rollout_policy,
         use_minimax_eval=use_minimax_eval
     )
+    
+    # Print minimax evaluation of each move for reference
+    if use_minimax_eval:
+        print("\nMinimax evaluation of available moves:")
+        for i, move in enumerate(valid_moves):
+            minimax_score = agent.evaluate_move(game_state, move)
+            capture_str = " (CAPTURE)" if move.get("capture") else ""
+            print(f"  {i+1}. {format_move(move)}{capture_str} - Score: {minimax_score}")
     
     # Manually create the MCTS tree to access statistics
     root = MCTSNode(game_state)
