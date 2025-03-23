@@ -123,25 +123,25 @@ def main():
     ]
     
     test_state_2 = [
+      "T___T",
+      "__G__",
       "_____",
-      "_TGG_",
       "_____",
-      "_____",
-      "T__TT"
+      "T___T"
     ]
 
     test_state_3 = [
-      "TGGGT",
-      "____G",
-      "____G",
-      "____G",
+      "T___T",
+      "_G___",
+      "__G__",
+      "_____",
       "T___T"
     ]
     
     # Create a game state from the board
     # You can modify these parameters as needed
     game_state = string_board_to_game_state(
-        string_board, 
+        test_state_2, 
         phase="PLACEMENT",
         turn="TIGER",
         goats_placed=1,
@@ -172,32 +172,33 @@ def main():
             print(f"  {i+1}. {format_move(move)}")
     
     # Configure MCTS parameters
-    iterations = 3000  # Increased from 1000 for more thorough tree search
+    iterations = 20000  # Increased from 1000 for more thorough tree search
     exploration_weight = 1.5  # Increased to encourage more exploration of different paths
-    rollout_policy = "guided"  # Keeping the same rollout policy
-    # Set use_minimax_eval based on rollout policy
-    use_minimax_eval = rollout_policy != "random"  # True if not random, False if random
+    rollout_policy = "guided"  # Use the guided rollout policy
+    max_rollout_depth = 4  # Using a more balanced depth
+    guided_strictness = 1  # Medium strictness - balance between exploration and exploitation
     
     print(f"\nInitializing MCTS agent with {iterations} iterations")
     print(f"Exploration weight: {exploration_weight}")
     print(f"Rollout policy: {rollout_policy}")
-    print(f"Using minimax evaluation: {use_minimax_eval}")
+    print(f"Maximum rollout depth: {max_rollout_depth}")
+    print(f"Guided strictness: {guided_strictness}")
     
     # Create the MCTS agent
     agent = MCTSAgent(
         iterations=iterations,
         exploration_weight=exploration_weight,
         rollout_policy=rollout_policy,
-        use_minimax_eval=use_minimax_eval
+        max_rollout_depth=max_rollout_depth,
+        guided_strictness=guided_strictness
     )
     
     # Print minimax evaluation of each move for reference
-    if use_minimax_eval:
-        print("\nMinimax evaluation of available moves:")
-        for i, move in enumerate(valid_moves):
-            minimax_score = agent.evaluate_move(game_state, move)
-            capture_str = " (CAPTURE)" if move.get("capture") else ""
-            print(f"  {i+1}. {format_move(move)}{capture_str} - Score: {minimax_score}")
+    print("\nMinimax evaluation of available moves:")
+    for i, move in enumerate(valid_moves):
+        minimax_score = agent.evaluate_move(game_state, move)
+        capture_str = " (CAPTURE)" if move.get("capture") else ""
+        print(f"  {i+1}. {format_move(move)}{capture_str} - Score: {minimax_score}")
     
     # Manually create the MCTS tree to access statistics
     root = MCTSNode(game_state)
@@ -206,7 +207,7 @@ def main():
     start_time = time.time()
     
     # Set a max time limit
-    max_time_seconds = 8  # Limiting to 8 seconds max to stay under 10 seconds
+    max_time_seconds = 50  # Limiting to 8 seconds max to stay under 10 seconds
     
     # Run MCTS iterations with time limit
     iterations_completed = 0
