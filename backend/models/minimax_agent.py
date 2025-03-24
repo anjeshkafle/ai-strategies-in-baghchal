@@ -14,13 +14,27 @@ class MinimaxAgent:
         self.max_time = max_time  # Not used but kept for compatibility
         self.best_move = None
         self.best_score = None
+        
+        # Define all evaluation weights in one place for easy tuning
+        # Mobility and space control
+        self.mobility_weight_placement = 200     # Weight for movable tigers during placement
+        self.mobility_weight_movement = 300      # Weight for movable tigers during movement
+        
+        # Capture-related weights
+        self.base_capture_value = 3000           # Base value for each captured goat
+        self.capture_speed_weight = 400          # Weight for depth-sensitive capture bonus
+        self.threatened_goat_weight = 500        # Weight for threatened goats
+        
+        # Positioning weights
+        self.dispersion_weight = 100             # Weight for tiger dispersion
+        self.edge_weight = 150                   # Weight for goat edge preference
     
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
         Evaluates the current game state from Tiger's perspective.
         Uses six core heuristics:
         - mobility_weight * movable_tigers (200 during placement, 300 during movement)
-        - 1000 * dead_goats
+        - 3000 * dead_goats + capture_speed_bonus (to incentivize faster captures)
         - 500 * threatened_goats
         - -mobility_weight * closed_spaces (200 during placement, 300 during movement)
         - dispersion_weight * tiger_dispersion (100 by default, normalized 0-1 score)
@@ -36,7 +50,7 @@ class MinimaxAgent:
             return final_score
         
         # Set mobility weight based on game phase
-        mobility_weight = 200 if state.phase == "PLACEMENT" else 300
+        mobility_weight = self.mobility_weight_placement if state.phase == "PLACEMENT" else self.mobility_weight_movement
         
         # Get all tiger moves once for all heuristics
         all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
@@ -49,13 +63,23 @@ class MinimaxAgent:
         tiger_score = mobility_weight * movable_tigers
         score += tiger_score
         
-        # Dead goats (captured)
-        capture_score = 1000 * state.goats_captured
+        # Dead goats (captured) with depth-sensitive bonus
+        # Base score for captured goats
+        capture_score = self.base_capture_value * state.goats_captured
+        
+        # Add a capture speed bonus that decreases as depth increases
+        # For captures found deeper in the tree (higher depth values), the bonus is smaller
+        # For captures found at the root (depth = 0), the bonus will be maximum
+        if state.goats_captured > 0:
+            depth_bonus = max(0, self.max_depth - depth)
+            capture_speed_bonus = self.capture_speed_weight * state.goats_captured * depth_bonus
+            capture_score += capture_speed_bonus
+        
         score += capture_score
         
         # Threatened goats (in danger of being captured)
         threatened_value = self._count_threatened_goats(all_tiger_moves)
-        threatened_score = 500 * threatened_value
+        threatened_score = self.threatened_goat_weight * threatened_value
         score += threatened_score
         
         # Count closed spaces (positions where tigers are trapped)
@@ -66,13 +90,11 @@ class MinimaxAgent:
         
         # Calculate tiger dispersion score (normalized 0-1)
         dispersion_score = self._calculate_tiger_dispersion(state)
-        dispersion_weight = 100  # Weight for tiger dispersion
-        score += dispersion_weight * dispersion_score
+        score += self.dispersion_weight * dispersion_score
         
         # Calculate goat edge preference score (normalized 0-1)
         edge_score = self._calculate_goat_edge_preference(state)
-        edge_weight = 150  # Weight for goat edge preference (higher than dispersion)
-        score -= edge_weight * edge_score  # Subtract from score (negative for tigers)
+        score -= self.edge_weight * edge_score  # Subtract from score (negative for tigers)
         
         # Always subtract depth for non-terminal states
         score -= depth
@@ -264,6 +286,21 @@ class MinimaxAgent:
             next_is_max = next_state.turn == "TIGER"
             value = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_is_max)
             
+            # Apply a mathematically consistent immediate capture bonus
+            if state.turn == "TIGER" and move.get("capture"):
+                # We want to give the value of capturing these goats at depth 0
+                # versus capturing them at some unknown deeper depth.
+                #
+                # For a state with N goats at depth d, the evaluation gives:
+                # capture_speed_weight * N * (max_depth - d)
+                #
+                # The difference between capturing at depth 0 vs. max_depth is:
+                # capture_speed_weight * N * max_depth
+                #
+                # next_state already has the updated goats_captured count after the move
+                immediate_capture_bonus = self.capture_speed_weight * next_state.goats_captured * self.max_depth
+                value += immediate_capture_bonus
+            
             if state.turn == "TIGER":
                 if value > best_value:
                     best_value = value
@@ -300,9 +337,11 @@ class MinimaxAgent:
             if state.turn == "GOAT":
                 score = -score  # Invert score for goats to sort in the same direction
                 
-            # Add a bonus for capture moves to prioritize them
+            # Add a bonus for capture moves to prioritize them in move ordering
+            # This is just for efficiency in alpha-beta pruning
             if move.get("capture"):
-                score += 1000  # Large bonus to ensure captures are tried first
+                # Use the same capture_speed_weight for move ordering as well
+                score += self.capture_speed_weight
                 
             move_scores.append((move, score))
         

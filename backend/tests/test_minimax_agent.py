@@ -134,19 +134,19 @@ def main():
     """Run a minimax agent test with configurable parameters."""
     # The board state in an easy-to-edit format
     string_board = [
-        "_G__T",
-        "GG___",
-        "_____",
-        "T___T",
-        "____T"
+    "TGGGG",
+    "G_TGG",
+    "G_G_G",
+    "GT__G",
+    "_GGGT"
     ]
     
     test_state_2 = [
+      "T___T",
       "_____",
-      "_TGG_",
       "_____",
-      "_____",
-      "T__TT"
+      "G____",
+      "T___T"
     ]
 
     test_state_3 = [
@@ -162,8 +162,8 @@ def main():
     game_state = string_board_to_game_state(
         string_board, 
         phase="PLACEMENT",
-        turn="GOAT",
-        goats_placed=1,
+        turn="TIGER",
+        goats_placed=16,
         goats_captured=0
     )
     
