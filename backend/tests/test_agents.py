@@ -9,10 +9,68 @@ import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.mcts_agent import MCTSAgent, MCTSNode
+from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
 
+#-----------------------------------------------
+# CONFIGURATION SETTINGS - MODIFY THESE AS NEEDED
+#-----------------------------------------------
 
-def string_board_to_game_state(string_board: List[str], phase="PLACEMENT", turn="TIGER", goats_placed=1, goats_captured=0):
+# Board states in an easy-to-edit format
+BOARD_STRING_1 = [
+    "TGG_T",
+    "G__TG",
+    "G___G",
+    "G___G",
+    "TGGGT"
+]
+
+BOARD_STRING_2 = [
+    "T___T",
+    "__G__",
+    "_____",
+    "_____",
+    "T___T"
+]
+
+BOARD_STRING_3 = [
+    "T___T",
+    "_____",
+    "_____",
+    "_____",
+    "TG__T"
+]
+
+# Select which board to use (directly set to the board string variable)
+BOARD_TO_USE = BOARD_STRING_1
+
+# Configure game state settings
+GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
+TURN = "GOAT"            # "GOAT" or "TIGER"
+GOATS_PLACED = 1
+GOATS_CAPTURED = 0
+
+# Select which agent(s) to run (True/False)
+RUN_MINIMAX = False
+RUN_MCTS = True
+
+# Agent parameters
+# Minimax parameters
+MINIMAX_MAX_DEPTH = 5
+
+# MCTS parameters
+MCTS_ITERATIONS = 1000
+MCTS_EXPLORATION_WEIGHT = 1.414
+MCTS_ROLLOUT_POLICY = "guided"  # "random" or "guided"
+MCTS_MAX_ROLLOUT_DEPTH = 2
+MCTS_GUIDED_STRICTNESS = 0
+MCTS_MAX_TIME_SECONDS = 50
+
+#-----------------------------------------------
+# HELPER FUNCTIONS
+#-----------------------------------------------
+
+def string_board_to_game_state(string_board: List[str], phase=GAME_PHASE, turn=TURN, goats_placed=GOATS_PLACED, goats_captured=GOATS_CAPTURED):
     """
     Convert a string-based board representation to a GameState object.
     
@@ -88,6 +146,49 @@ def format_move(move: Optional[Dict]) -> str:
             return f"Move from ({from_x}, {from_y}) to ({to_x}, {to_y})"
 
 
+def print_best_move_sequence(initial_state: GameState, max_depth: int) -> None:
+    """
+    Print the best move sequence from the current state up to max_depth.
+    
+    Args:
+        initial_state: The starting game state
+        max_depth: The maximum search depth
+    """
+    print("\n=== Best Move Sequence ===")
+    
+    current_state = initial_state.clone()
+    current_depth = max_depth
+    
+    for i in range(max_depth):
+        # Create a new agent with decreasing depth
+        agent = MinimaxAgent(max_depth=current_depth)
+        
+        # Get the best move
+        best_move = agent.get_move(current_state)
+        
+        if best_move is None:
+            print(f"  {i+1}. No valid moves available")
+            break
+            
+        # Print the move with player and score
+        print(f"\n  {i+1}. {current_state.turn} plays: {format_move(best_move)} (score: {agent.best_score:.1f})")
+        
+        # Apply the move
+        current_state.apply_move(best_move)
+        
+        # Print the board state after this move
+        print(f"\nBoard after move {i+1}:")
+        print_board(current_state)
+        
+        # Decrease depth for next iteration
+        current_depth -= 1
+    
+    # Print the final position evaluation
+    final_eval_agent = MinimaxAgent(max_depth=1)
+    static_eval = final_eval_agent.evaluate(current_state)
+    print(f"\nFinal position static evaluation: {static_eval:.1f}")
+
+
 def print_mcts_stats(root_node: MCTSNode) -> None:
     """
     Print statistics about the MCTS tree.
@@ -111,52 +212,68 @@ def print_mcts_stats(root_node: MCTSNode) -> None:
         print("No children nodes found.")
 
 
-def main():
-    """Run a MCTS agent test with configurable parameters."""
-    # The board state in an easy-to-edit format
-    string_board = [
-        "T___T",
-        "_____",
-        "_____",
-        "_____",
-        "TG__T"
-    ]
+def run_minimax_test(game_state):
+    """Run the minimax agent test."""
+    print("\n" + "="*50)
+    print("RUNNING MINIMAX AGENT TEST")
+    print("="*50)
     
-    test_state_2 = [
-      "T___T",
-      "__G__",
-      "_____",
-      "_____",
-      "T___T"
-    ]
+    # Get all valid moves
+    valid_moves = game_state.get_valid_moves()
+    print(f"\nValid moves for {game_state.turn}: {len(valid_moves)}")
+    
+    # Get capture moves
+    capture_moves = [move for move in valid_moves if move.get("capture")]
+    print(f"Capture moves available: {len(capture_moves)}")
+    
+    if capture_moves:
+        print("\nCapture moves:")
+        for i, move in enumerate(capture_moves):
+            print(f"  {i+1}. {format_move(move)}")
+    
+    # Define search depth
+    max_depth = MINIMAX_MAX_DEPTH
+    
+    print(f"\nInitializing Minimax agent with max depth: {max_depth}")
+    
+    # Create the minimax agent
+    agent = MinimaxAgent(max_depth=max_depth)
+    
+    # Get the best move
+    best_move = agent.get_move(game_state)
+    
+    # Print the best move
+    print("\nBest move according to Minimax agent:")
+    if best_move:
+        print(format_move(best_move))
+        print(f"Move score: {agent.best_score}")
+        
+        # Apply the move to see the result
+        new_state = game_state.clone()
+        new_state.apply_move(best_move)
+        print("\nBoard state after applying the best move:")
+        print_board(new_state)
+        
+        # Check if the move was a capture move
+        if best_move.get("capture"):
+            print("✓ The agent chose a capture move!")
+        else:
+            if capture_moves:
+                print("✗ The agent did NOT choose a capture move, even though captures are available.")
+            else:
+                print("(No capture moves were available)")
+                
+        # Print the best move sequence
+        print_best_move_sequence(game_state, max_depth)
+    else:
+        print("No move was returned by the agent.")
 
-    test_state_3 = [
-      "T___T",
-      "_G___",
-      "__G__",
-      "_____",
-      "T___T"
-    ]
-    
-    # Create a game state from the board
-    # You can modify these parameters as needed
-    game_state = string_board_to_game_state(
-        test_state_2, 
-        phase="PLACEMENT",
-        turn="TIGER",
-        goats_placed=1,
-        goats_captured=0
-    )
-    
-    # Print the board state for verification
-    print_board(game_state)
-    
-    # Print state information
-    print(f"Turn: {game_state.turn}")
-    print(f"Phase: {game_state.phase}")
-    print(f"Goats placed: {game_state.goats_placed}")
-    print(f"Goats captured: {game_state.goats_captured}")
-    print(f"Game status: {game_state.game_status}")
+
+def run_mcts_test(game_state):
+    """Run the MCTS agent test."""
+    print("\n" + "="*50)
+    print("RUNNING MCTS AGENT TEST")
+    print("="*50)
     
     # Get all valid moves
     valid_moves = game_state.get_valid_moves()
@@ -172,11 +289,11 @@ def main():
             print(f"  {i+1}. {format_move(move)}")
     
     # Configure MCTS parameters
-    iterations = 1000  # Increased to 1000 for more thorough tree search
-    exploration_weight = 1.414  # root 2 to encourage more exploration of different paths
-    rollout_policy = "guided"  # Use the guided rollout policy
-    max_rollout_depth = 4  # Using a more balanced depth
-    guided_strictness = 1  # Maximum strictness - balance between exploration and exploitation
+    iterations = MCTS_ITERATIONS
+    exploration_weight = MCTS_EXPLORATION_WEIGHT
+    rollout_policy = MCTS_ROLLOUT_POLICY
+    max_rollout_depth = MCTS_MAX_ROLLOUT_DEPTH
+    guided_strictness = MCTS_GUIDED_STRICTNESS
     
     print(f"\nInitializing MCTS agent with {iterations} iterations")
     print(f"Exploration weight: {exploration_weight}")
@@ -207,7 +324,7 @@ def main():
     start_time = time.time()
     
     # Set a max time limit
-    max_time_seconds = 50  # Limiting to 8 seconds max to stay under 10 seconds
+    max_time_seconds = MCTS_MAX_TIME_SECONDS
     
     # Run MCTS iterations with time limit
     iterations_completed = 0
@@ -277,6 +394,38 @@ def main():
                 print("(No capture moves were available)")
     else:
         print("No move was returned by the agent.")
+
+
+def main():
+    """Run agent tests with configurable parameters."""
+    # Create a game state from the board
+    game_state = string_board_to_game_state(
+        BOARD_TO_USE, 
+        phase=GAME_PHASE,
+        turn=TURN,
+        goats_placed=GOATS_PLACED,
+        goats_captured=GOATS_CAPTURED
+    )
+    
+    # Print the board state for verification
+    print("\n" + "="*50)
+    print("GAME STATE INFORMATION")
+    print("="*50)
+    print_board(game_state)
+    
+    # Print state information
+    print(f"Turn: {game_state.turn}")
+    print(f"Phase: {game_state.phase}")
+    print(f"Goats placed: {game_state.goats_placed}")
+    print(f"Goats captured: {game_state.goats_captured}")
+    print(f"Game status: {game_state.game_status}")
+    
+    # Run the selected agent tests
+    if RUN_MINIMAX:
+        run_minimax_test(game_state)
+    
+    if RUN_MCTS:
+        run_mcts_test(game_state)
 
 
 if __name__ == "__main__":
