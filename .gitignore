@@ -19,6 +19,7 @@ backend/venv/
 backend/*.pyc
 backend/*.pyo
 backend/*.pyd
+backend/data/
 
 # Editor directories and files
 .vscode/
