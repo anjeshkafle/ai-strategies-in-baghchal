@@ -28,6 +28,22 @@ class MinimaxAgent:
         # Positioning weights
         self.dispersion_weight = 100             # Weight for tiger dispersion
         self.edge_weight = 150                   # Weight for goat edge preference
+        
+        # Initialize transposition table for symmetry-based optimizations
+        self.transposition_table = {}
+        
+        # Diagnostics for transposition table
+        self.tt_stats = {
+            "lookups": 0,       # Total table lookups
+            "hits": 0,          # Total cache hits
+            "exact_hits": 0,    # Exact score hits
+            "bound_hits": 0,    # Upper/lower bound hits
+            "cutoffs": 0,       # Cutoffs from transposition table
+            "stores": 0,        # Total entries stored
+        }
+        
+        # Debug mode flag
+        self.debug_mode = False
     
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
@@ -295,6 +311,19 @@ class MinimaxAgent:
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using minimax with alpha-beta pruning."""
+        # Clear the transposition table for each new move
+        self.transposition_table = {}
+        
+        # Reset statistics
+        self.tt_stats = {
+            "lookups": 0,
+            "hits": 0,
+            "exact_hits": 0,
+            "bound_hits": 0,
+            "cutoffs": 0,
+            "stores": 0,
+        }
+        
         valid_moves = state.get_valid_moves()
         
         # Order moves based on a shallow evaluation
@@ -341,6 +370,17 @@ class MinimaxAgent:
         # Store the best score for later retrieval
         self.best_score = best_value
         
+        # Print transposition table statistics only in debug mode
+        if self.debug_mode:
+            print(f"Transposition table stats:")
+            print(f"  Table entries: {len(self.transposition_table)}")
+            print(f"  Lookups: {self.tt_stats['lookups']}")
+            print(f"  Hits: {self.tt_stats['hits']} ({self.tt_stats['hits'] / max(1, self.tt_stats['lookups']) * 100:.2f}%)")
+            print(f"    - Exact hits: {self.tt_stats['exact_hits']}")
+            print(f"    - Bound hits: {self.tt_stats['bound_hits']}")
+            print(f"  Cutoffs: {self.tt_stats['cutoffs']}")
+            print(f"  Stores: {self.tt_stats['stores']}")
+        
         return best_move
 
     def _order_moves(self, state: GameState, moves: List[Dict]) -> List[Dict]:
@@ -378,16 +418,97 @@ class MinimaxAgent:
         return [move for move, _ in move_scores]
 
     def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool):
-        """Minimax algorithm with alpha-beta pruning."""
-        # Base cases first
+        """Minimax algorithm with alpha-beta pruning and symmetry-based transposition table."""
+        # Check for transposition table hit based on board symmetry
+        canonical_key = self._get_canonical_board_key(state.board, state.phase)
+        
+        # Increment lookup counter
+        self.tt_stats["lookups"] += 1
+        
+        # Check if we have already evaluated this position at sufficient depth
+        if canonical_key in self.transposition_table:
+            entry = self.transposition_table[canonical_key]
+            stored_depth = entry["depth"]
+            
+            # Only use the stored value if we explored it at least as deeply as we need now
+            if stored_depth >= depth:
+                # Get the stored raw score and adjust it for current state
+                raw_score = entry["raw_score"]
+                adjusted_score = self._adjust_score(raw_score, state, self.max_depth - depth)
+                
+                # Increment hit counter
+                self.tt_stats["hits"] += 1
+                
+                # Handle alpha-beta bounds
+                if entry["flag"] == "EXACT":
+                    self.tt_stats["exact_hits"] += 1
+                    if self.debug_mode:
+                        print(f"TT exact hit at depth {depth}: {adjusted_score}")
+                    return adjusted_score
+                elif entry["flag"] == "LOWER_BOUND" and adjusted_score > alpha:
+                    self.tt_stats["bound_hits"] += 1
+                    if self.debug_mode:
+                        old_alpha = alpha
+                        print(f"TT lower bound hit at depth {depth}: alpha improved {old_alpha} -> {adjusted_score}")
+                    alpha = adjusted_score
+                elif entry["flag"] == "UPPER_BOUND" and adjusted_score < beta:
+                    self.tt_stats["bound_hits"] += 1
+                    if self.debug_mode:
+                        old_beta = beta
+                        print(f"TT upper bound hit at depth {depth}: beta improved {old_beta} -> {adjusted_score}")
+                    beta = adjusted_score
+                
+                if alpha >= beta:
+                    self.tt_stats["cutoffs"] += 1
+                    if self.debug_mode:
+                        print(f"TT cutoff at depth {depth}: alpha={alpha}, beta={beta}")
+                    return adjusted_score
+        
+        # Base cases
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
-            eval_score = self.evaluate(state, self.max_depth - depth)
+            # Check if we've already split evaluation into raw_score and adjust_score methods
+            if hasattr(self, '_compute_raw_score') and hasattr(self, '_adjust_score'):
+                raw_score = self._compute_raw_score(state)
+                eval_score = self._adjust_score(raw_score, state, self.max_depth - depth)
+            else:
+                # Fall back to the old evaluate method
+                eval_score = self.evaluate(state, self.max_depth - depth)
+                raw_score = eval_score  # Approximation, will be slightly less optimal
+            
+            # Store in transposition table
+            self.transposition_table[canonical_key] = {
+                "raw_score": raw_score,
+                "depth": depth,
+                "flag": "EXACT"
+            }
+            
+            # Increment store counter
+            self.tt_stats["stores"] += 1
+            
             return eval_score
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            eval_score = self.evaluate(state, self.max_depth - depth)
+            # Check if we've already split evaluation into raw_score and adjust_score methods
+            if hasattr(self, '_compute_raw_score') and hasattr(self, '_adjust_score'):
+                raw_score = self._compute_raw_score(state)
+                eval_score = self._adjust_score(raw_score, state, self.max_depth - depth)
+            else:
+                # Fall back to the old evaluate method
+                eval_score = self.evaluate(state, self.max_depth - depth)
+                raw_score = eval_score  # Approximation, will be slightly less optimal
+            
+            # Store in transposition table
+            self.transposition_table[canonical_key] = {
+                "raw_score": raw_score,
+                "depth": depth,
+                "flag": "EXACT"
+            }
+            
+            # Increment store counter
+            self.tt_stats["stores"] += 1
+            
             return eval_score
         
         # Order moves for better pruning
@@ -413,8 +534,142 @@ class MinimaxAgent:
             if beta <= alpha:
                 break  # Alpha-beta pruning
         
-        return best_value 
+        # Store the result in the transposition table
+        # Determine the flag based on alpha-beta bounds
+        if best_value <= alpha:
+            flag = "UPPER_BOUND"
+        elif best_value >= beta:
+            flag = "LOWER_BOUND"
+        else:
+            flag = "EXACT"
+            
+        # Store the raw score without depth adjustment
+        if hasattr(self, '_compute_raw_score'):
+            raw_score = self._compute_raw_score(state)
+        else:
+            # Approximation if we don't have the split methods
+            raw_score = best_value
+            
+        self.transposition_table[canonical_key] = {
+            "raw_score": raw_score,
+            "depth": depth,
+            "flag": flag
+        }
+        
+        # Increment store counter
+        self.tt_stats["stores"] += 1
+        
+        return best_value
 
+    def _get_canonical_board_key(self, board, phase):
+        """
+        Generate a canonical key for the board by finding the lexicographically smallest
+        representation among all rotational symmetries.
+        
+        Args:
+            board: The 5x5 game board
+            phase: The game phase ("PLACEMENT" or "MOVEMENT")
+            
+        Returns:
+            A tuple (canonical_board_string, phase) to use as a key in the transposition table
+        """
+        # Generate all 4 rotations of the board
+        rotated_boards = [
+            board,                          # Original
+            self._rotate_90_degrees(board),  # 90 degrees clockwise
+            self._rotate_180_degrees(board), # 180 degrees
+            self._rotate_270_degrees(board)  # 270 degrees clockwise
+        ]
+        
+        # Convert each rotation to a string representation
+        board_strings = [self._board_to_string(rotated) for rotated in rotated_boards]
+        
+        # Find the lexicographically smallest string
+        canonical_board_string = min(board_strings)
+        
+        # Return tuple of (canonical_board_string, phase) as the key
+        return (canonical_board_string, phase)
+    
+    def _board_to_string(self, board):
+        """
+        Convert a board to a string representation.
+        Each position is encoded as "." (empty), "T" (tiger), or "G" (goat).
+        Positions are read left-to-right, top-to-bottom.
+        
+        Args:
+            board: The 5x5 game board
+            
+        Returns:
+            A 25-character string representing the board
+        """
+        result = ""
+        for row in board:
+            for cell in row:
+                if cell is None:
+                    result += "."
+                elif cell["type"] == "TIGER":
+                    result += "T"
+                else:  # GOAT
+                    result += "G"
+        return result
+    
+    def _rotate_90_degrees(self, board):
+        """
+        Rotate the board 90 degrees clockwise.
+        
+        Args:
+            board: The 5x5 game board
+            
+        Returns:
+            A new board rotated 90 degrees clockwise
+        """
+        size = len(board)
+        rotated = [[None for _ in range(size)] for _ in range(size)]
+        
+        for y in range(size):
+            for x in range(size):
+                rotated[x][size-1-y] = board[y][x]
+        
+        return rotated
+    
+    def _rotate_180_degrees(self, board):
+        """
+        Rotate the board 180 degrees.
+        
+        Args:
+            board: The 5x5 game board
+            
+        Returns:
+            A new board rotated 180 degrees
+        """
+        size = len(board)
+        rotated = [[None for _ in range(size)] for _ in range(size)]
+        
+        for y in range(size):
+            for x in range(size):
+                rotated[size-1-y][size-1-x] = board[y][x]
+        
+        return rotated
+    
+    def _rotate_270_degrees(self, board):
+        """
+        Rotate the board 270 degrees clockwise (90 degrees counter-clockwise).
+        
+        Args:
+            board: The 5x5 game board
+            
+        Returns:
+            A new board rotated 270 degrees clockwise
+        """
+        size = len(board)
+        rotated = [[None for _ in range(size)] for _ in range(size)]
+        
+        for y in range(size):
+            for x in range(size):
+                rotated[size-1-x][y] = board[y][x]
+        
+        return rotated
+    
     def _calculate_tiger_positional_score(self, state: GameState) -> float:
         """
         Calculates a normalized score (0-1) based on how well tigers are positioned on the board
