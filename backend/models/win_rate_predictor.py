@@ -861,17 +861,29 @@ class WinRateTable:
         Returns:
             Distance measure between the features
         """
-        # Define weights for different features
-        weights = {
+        # Define base weights for different features
+        base_weights = {
             'turn': 1.5,                     # Turn is significant
             'goats_placed': 1.0,             # Basic game state
-            'goats_captured': 1.5,           # Important for win condition
             'effective_closed_spaces': 1.2,  # Strategic metric
             'movable_tigers': 1.0,           # Tactical consideration
             'threatened_goats': 1.0,         # Tactical consideration
             'tiger_dispersion': 0.8,         # Spatial factor
             'goat_edge_preference': 0.8      # Spatial factor
         }
+        
+        # Adjust goats_captured weight based on context
+        goats_captured_weight = 1.5  # Base weight (default importance)
+        
+        # Critical threshold - capture count becomes extremely important
+        if features1['goats_captured'] == 4 or features2['goats_captured'] == 4:
+            goats_captured_weight = 3.0  # Much more important
+        # Similar capture counts - less distinguishing
+        elif abs(features1['goats_captured'] - features2['goats_captured']) <= 1:
+            goats_captured_weight = 1.0  # Lower weight
+            
+        # Combine base weights with dynamic goats_captured weight
+        weights = {**base_weights, 'goats_captured': goats_captured_weight}
         
         # Calculate distances for each feature
         distances = {}
@@ -910,19 +922,35 @@ class WinRateTable:
         Returns:
             Default win rate prediction
         """
-        # Default is balanced (0.5) but we adjust based on known influences
+        # Critical threshold - tiger is one capture away from winning
+        if features['goats_captured'] == 4:
+            # Tigers are heavily favored but not guaranteed to win
+            # Factor in the number of threatened goats
+            if features['threatened_goats'] > 0:
+                return 0.85  # Very high tiger win probability with threatened goats
+            return 0.75  # Still high tiger win probability
         
-        # Late game with more captured goats favors tigers
-        if features['goats_captured'] > 3:
-            return 0.7
+        # High capture count favors tigers significantly
+        elif features['goats_captured'] == 3:
+            return 0.65
             
-        # Late placement phase with few captures favors goats
-        if features['goats_placed'] > 15 and features['goats_captured'] < 2:
-            return 0.3
-            
-        # Beginning of movement phase with few captures slightly favors tigers
-        if features['goats_placed'] == 20 and features['goats_captured'] < 2:
+        # Mid-game with 2 captures - slight tiger advantage
+        elif features['goats_captured'] == 2:
             return 0.55
+            
+        # Early captures - balanced situation
+        elif features['goats_captured'] == 1:
+            return 0.5
+            
+        # Late placement phase with no captures favors goats
+        elif features['goats_placed'] >= 15 and features['goats_captured'] == 0:
+            return 0.4  # Goat advantage
+            
+        # Movement phase with no captures significantly favors goats
+        elif features['goats_placed'] == 20 and features['goats_captured'] == 0:
+            if features['effective_closed_spaces'] > 0:
+                return 0.3  # Stronger goat advantage with closed spaces
+            return 0.35  # Goat advantage
             
         # Otherwise balanced
         return 0.5
