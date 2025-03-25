@@ -50,33 +50,32 @@ class MinimaxAgent:
             final_score = -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
             return final_score
         
+        # Compute the raw score based on board state and phase
+        raw_score = self._compute_raw_score(state)
+        
+        # Adjust the score based on depth and captures
+        final_score = self._adjust_score(raw_score, state, depth)
+        
+        return final_score
+    
+    def _compute_raw_score(self, state: GameState) -> float:
+        """
+        Computes the raw evaluation score based solely on the board state and phase.
+        This does not include depth penalty or capture bonus, which will be applied separately.
+        """
         # Set mobility weight based on game phase
         mobility_weight = self.mobility_weight_placement if state.phase == "PLACEMENT" else self.mobility_weight_movement
         
         # Get all tiger moves once for all heuristics
         all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
         
-        # Core evaluation based on reference implementation
+        # Initialize score
         score = 0
         
         # Count movable tigers (tigers with at least one valid move)
         movable_tigers = self._count_movable_tigers(all_tiger_moves)
         tiger_score = mobility_weight * movable_tigers
         score += tiger_score
-        
-        # Dead goats (captured) with depth-sensitive bonus
-        # Base score for captured goats
-        capture_score = self.base_capture_value * state.goats_captured
-        
-        # Add a capture speed bonus that decreases as depth increases
-        # For captures found deeper in the tree (higher depth values), the bonus is smaller
-        # For captures found at the root (depth = 0), the bonus will be maximum
-        if state.goats_captured > 0:
-            depth_bonus = max(0, self.max_depth - depth)
-            capture_speed_bonus = self.capture_speed_weight * state.goats_captured * depth_bonus
-            capture_score += capture_speed_bonus
-        
-        score += capture_score
         
         # Threatened goats (in danger of being captured)
         threatened_value = self._count_threatened_goats(all_tiger_moves)
@@ -103,10 +102,30 @@ class MinimaxAgent:
         edge_score = self._calculate_goat_edge_preference(state)
         score -= self.edge_weight * edge_score  # Subtract from score (negative for tigers)
         
-        # Always subtract depth for non-terminal states
-        score -= depth
-        
         return score
+    
+    def _adjust_score(self, raw_score: float, state: GameState, depth: int) -> float:
+        """
+        Adjusts the raw evaluation score by applying depth penalty and capture bonuses.
+        """
+        # Start with the raw score
+        adjusted_score = raw_score
+        
+        # Add capture score 
+        capture_score = self.base_capture_value * state.goats_captured
+        
+        # Add a capture speed bonus that decreases as depth increases
+        if state.goats_captured > 0:
+            depth_bonus = max(0, self.max_depth - depth)
+            capture_speed_bonus = self.capture_speed_weight * state.goats_captured * depth_bonus
+            capture_score += capture_speed_bonus
+        
+        adjusted_score += capture_score
+        
+        # Apply depth penalty
+        adjusted_score -= depth
+        
+        return adjusted_score
     
     def _count_movable_tigers(self, all_tiger_moves) -> int:
         """
