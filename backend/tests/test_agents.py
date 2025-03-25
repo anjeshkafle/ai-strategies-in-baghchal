@@ -51,7 +51,7 @@ GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
-RUN_MINIMAX = False
+RUN_MINIMAX = True
 RUN_MCTS = True
 
 # Agent parameters
@@ -61,9 +61,9 @@ MINIMAX_MAX_DEPTH = 5
 # MCTS parameters
 MCTS_ITERATIONS = 1000
 MCTS_EXPLORATION_WEIGHT = 1.414
-MCTS_ROLLOUT_POLICY = "guided"  # "random" or "guided"
-MCTS_MAX_ROLLOUT_DEPTH = 2
-MCTS_GUIDED_STRICTNESS = 0
+MCTS_ROLLOUT_POLICY = "guided"  # Changed back to guided
+MCTS_MAX_ROLLOUT_DEPTH = 5
+MCTS_GUIDED_STRICTNESS = 0.5  # Increased from 0 to 0.5
 MCTS_MAX_TIME_SECONDS = 50
 
 #-----------------------------------------------

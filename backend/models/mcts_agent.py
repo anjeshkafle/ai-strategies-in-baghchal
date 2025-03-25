@@ -72,6 +72,7 @@ class MCTSAgent:
         self.rollout_policy = rollout_policy  # "random" or "guided"
         self.max_rollout_depth = max_rollout_depth  # Maximum depth for rollouts before using evaluation
         self.guided_strictness = max(0.0, min(1.0, guided_strictness))  # Clamp to [0, 1]
+        self._last_state = None  # Track the last state for normalization context
         
         # Create a minimax agent for evaluation
         # We only use the evaluation function, depth is not relevant here
@@ -181,6 +182,9 @@ class MCTSAgent:
     
     def rollout(self, state: GameState) -> float:
         """Perform a rollout from the given state based on the selected policy."""
+        # Store the initial state for normalization context
+        self._last_state = state.clone()
+        
         if self.rollout_policy == "random":
             return self._random_rollout(state)
         elif self.rollout_policy == "guided":
@@ -378,23 +382,43 @@ class MCTSAgent:
 
     def _normalize_eval_score(self, score: float) -> float:
         """
-        Normalize a minimax evaluation score to a value in [0, 1] range.
-        1.0 represents Tiger win, 0.0 represents Goat win.
+        Normalized evaluation scores to a [0,1] range where:
+        - 0.0 represents strong goat advantage
+        - 1.0 represents strong tiger advantage
+        - 0.5 represents a balanced position
         
-        Uses a simple sigmoid function to convert scores to probabilities.
+        Uses a piecewise linear mapping function to provide better discrimination
+        between good and bad moves.
         """
-        # First clamp the score to avoid overflow
-        MAX_SAFE_SCORE = 3000
-        score = max(min(score, MAX_SAFE_SCORE), -MAX_SAFE_SCORE)
+        # Clamp to reasonable range
+        MAX_SCORE = 3000
+        score = max(min(score, MAX_SCORE), -MAX_SCORE)
         
-        # Define a neutral score (balanced position)
-        NEUTRAL_SCORE = 800  # 4 movable tigers
-        
-        # Center the score around the neutral value
-        adjusted_score = score - NEUTRAL_SCORE
-        
-        # Apply sigmoid to the centered score
-        SCALING_FACTOR = 0.003  # Adjusted for better distribution
-        normalized = 1.0 / (1.0 + math.exp(-SCALING_FACTOR * adjusted_score))
-        
-        return normalized 
+        # Define thresholds based on general observations of the evaluation function
+        STRONG_GOAT = 0       # Very strong goat advantage
+        MILD_GOAT = 500       # Mild goat advantage
+        NEUTRAL = 1000        # Balanced position
+        MILD_TIGER = 1500     # Mild tiger advantage
+        STRONG_TIGER = 2000   # Strong tiger advantage
+
+        # Apply piecewise linear mapping
+        if score <= STRONG_GOAT:
+            return 0.05  # Strong goat advantage
+        elif score <= MILD_GOAT:
+            # Map [STRONG_GOAT, MILD_GOAT] to [0.05, 0.35]
+            t = (score - STRONG_GOAT) / (MILD_GOAT - STRONG_GOAT)
+            return 0.05 + t * 0.3
+        elif score <= NEUTRAL:
+            # Map [MILD_GOAT, NEUTRAL] to [0.35, 0.5]
+            t = (score - MILD_GOAT) / (NEUTRAL - MILD_GOAT)
+            return 0.35 + t * 0.15
+        elif score <= MILD_TIGER:
+            # Map [NEUTRAL, MILD_TIGER] to [0.5, 0.65]
+            t = (score - NEUTRAL) / (MILD_TIGER - NEUTRAL)
+            return 0.5 + t * 0.15
+        elif score <= STRONG_TIGER:
+            # Map [MILD_TIGER, STRONG_TIGER] to [0.65, 0.95]
+            t = (score - MILD_TIGER) / (STRONG_TIGER - MILD_TIGER)
+            return 0.65 + t * 0.3
+        else:
+            return 0.95  # Strong tiger advantage 
