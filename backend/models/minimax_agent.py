@@ -32,12 +32,13 @@ class MinimaxAgent:
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
         Evaluates the current game state from Tiger's perspective.
-        Uses six core heuristics:
+        Uses several core heuristics:
         - mobility_weight * movable_tigers (200 during placement, 300 during movement)
         - 3000 * dead_goats + capture_speed_bonus (to incentivize faster captures)
         - 500 * threatened_goats
         - -mobility_weight * closed_spaces (200 during placement, 300 during movement)
-        - dispersion_weight * tiger_dispersion (100 by default, normalized 0-1 score)
+        - dispersion_weight * tiger_position_score (100 by default, normalized 0-1 score)
+        - optimal_spacing_weight * tiger_optimal_spacing (150 by default, normalized 0-1 score)
         - -edge_weight * goat_edge_preference (150 by default, normalized 0-1 score)
         """
         # Check for terminal states first
@@ -88,9 +89,15 @@ class MinimaxAgent:
         closed_score = -mobility_weight * total_closed_spaces
         score += closed_score
         
-        # Calculate tiger dispersion score (normalized 0-1)
-        dispersion_score = self._calculate_tiger_dispersion(state)
-        score += self.dispersion_weight * dispersion_score
+        # Calculate tiger positional score (normalized 0-1)
+        position_score = self._calculate_tiger_positional_score(state)
+        score += self.dispersion_weight * position_score
+        
+        # Calculate tiger optimal spacing score (normalized 0-1)
+        # This heuristic is slightly more important than positional score
+        optimal_spacing_score = self._calculate_tiger_optimal_spacing(state)
+        optimal_spacing_weight = int(self.dispersion_weight * 1.5)  # 50% more weight than positional score
+        score += optimal_spacing_weight * optimal_spacing_score
         
         # Calculate goat edge preference score (normalized 0-1)
         edge_score = self._calculate_goat_edge_preference(state)
@@ -389,14 +396,62 @@ class MinimaxAgent:
         
         return best_value 
 
-    def _calculate_tiger_dispersion(self, state: GameState) -> float:
+    def _calculate_tiger_positional_score(self, state: GameState) -> float:
         """
-        Calculates a normalized score (0-1) based on how well-dispersed the tigers are on the board.
-        Tigers that are too close together can interfere with each other's capture opportunities.
+        Calculates a normalized score (0-1) based on how well tigers are positioned on the board
+        using a matrix of board weights that corresponds to the sum of legal moves and captures
+        available from each position.
         
         Returns:
-            A normalized score representing how well the tigers are dispersed (higher is better).
-            The score is normalized to a range of 0.0 (minimum dispersion) to 1.0 (maximum dispersion).
+            A normalized score representing how well tigers are positioned (higher is better).
+            The score is normalized to a range of 0.0 (worst positioning) to 1.0 (best positioning).
+        """
+        # Board weights matrix - each value represents the value of a position on the board
+        board_weights = [
+            [6, 5, 10, 5, 6],
+            [5, 11, 7, 11, 5],
+            [10, 7, 5, 7, 10],
+            [5, 11, 7, 11, 5],
+            [6, 5, 10, 5, 6]
+        ]
+        
+        # Maximum possible total position score (if all 4 tigers are on the highest valued positions)
+        # Take the 4 highest values from the board_weights matrix
+        flattened_weights = [weight for row in board_weights for weight in row]
+        flattened_weights.sort(reverse=True)
+        max_position_score = sum(flattened_weights[:4])  # Sum of the 4 highest position values
+        
+        # Minimum possible total position score (if all 4 tigers are on the lowest valued positions)
+        flattened_weights.sort()
+        min_position_score = sum(flattened_weights[:4])  # Sum of the 4 lowest position values
+        
+        # Find all tiger positions and calculate their position score
+        total_position_score = 0
+        for y in range(GameState.BOARD_SIZE):
+            for x in range(GameState.BOARD_SIZE):
+                if state.board[y][x] is not None and state.board[y][x]["type"] == "TIGER":
+                    total_position_score += board_weights[y][x]
+        
+        # Normalize to 0-1 range
+        score_range = max_position_score - min_position_score
+        if score_range > 0:
+            normalized_score = (total_position_score - min_position_score) / score_range
+        else:
+            normalized_score = 0
+        
+        return normalized_score
+    
+    def _calculate_tiger_optimal_spacing(self, state: GameState) -> float:
+        """
+        Calculates a normalized score (0-1) based on how many tiger pairs are optimally spaced
+        with exactly 3 nodes apart (2 empty nodes between them) respecting board connectivity rules.
+        
+        This is strategically important as goats can't place on either of those empty nodes without
+        getting captured.
+        
+        Returns:
+            A normalized score representing optimal tiger spacing (higher is better).
+            The score is normalized to a range of 0.0 (no optimal spacing) to 1.0 (maximum optimal spacing).
         """
         # Find all tiger positions
         tiger_positions = []
@@ -405,41 +460,79 @@ class MinimaxAgent:
                 if state.board[y][x] is not None and state.board[y][x]["type"] == "TIGER":
                     tiger_positions.append((x, y))
         
-        # If we have fewer than 2 tigers, dispersion is not applicable
+        # If we have fewer than 2 tigers, optimal spacing is not applicable
         if len(tiger_positions) < 2:
             return 0
         
-        # Calculate the sum of pairwise distances between tigers
-        total_distance = 0
-        pairs_count = 0
+        # Count pairs of tigers that are exactly 3 nodes apart
+        # (i.e., have exactly 2 empty nodes between them)
+        optimal_pairs = 0
+        total_pairs = 0
         
         for i in range(len(tiger_positions)):
             for j in range(i + 1, len(tiger_positions)):
                 x1, y1 = tiger_positions[i]
                 x2, y2 = tiger_positions[j]
+                total_pairs += 1
                 
-                # Use Manhattan distance as it better represents movement on the board
-                distance = abs(x1 - x2) + abs(y1 - y2)
-                total_distance += distance
-                pairs_count += 1
+                # Check for optimal spacing
+                # To be exactly 3 nodes apart (2 empty nodes between), tigers must be in the same row, same column,
+                # or along a valid diagonal with 2 empty nodes between them
+                
+                # Same row
+                if y1 == y2 and abs(x1 - x2) == 3:
+                    # Check if both intermediary nodes are empty
+                    middle_x1 = min(x1, x2) + 1
+                    middle_x2 = min(x1, x2) + 2
+                    
+                    if (state.board[y1][middle_x1] is None and 
+                        state.board[y1][middle_x2] is None and
+                        self._is_valid_connection(x1, y1, middle_x1, y1)):
+                        optimal_pairs += 1
+                        continue
+                
+                # Same column
+                if x1 == x2 and abs(y1 - y2) == 3:
+                    # Check if both intermediary nodes are empty
+                    middle_y1 = min(y1, y2) + 1
+                    middle_y2 = min(y1, y2) + 2
+                    
+                    if (state.board[middle_y1][x1] is None and 
+                        state.board[middle_y2][x1] is None and
+                        self._is_valid_connection(x1, y1, x1, middle_y1)):
+                        optimal_pairs += 1
+                        continue
+                
+                # Check for valid diagonal spacing
+                # For tigers to be 3 nodes apart diagonally, the distance must be 3,3
+                if abs(x1 - x2) == 3 and abs(y1 - y2) == 3:
+                    # Calculate the two intermediary positions
+                    dx = 1 if x2 > x1 else -1
+                    dy = 1 if y2 > y1 else -1
+                    
+                    middle_x1, middle_y1 = x1 + dx, y1 + dy
+                    middle_x2, middle_y2 = x1 + 2*dx, y1 + 2*dy
+                    
+                    # Check if both intermediary positions are empty
+                    if (state.board[middle_y1][middle_x1] is None and 
+                        state.board[middle_y2][middle_x2] is None):
+                        
+                        # Only need to check first connection to ensure valid diagonal path exists
+                        if self._is_valid_connection(x1, y1, middle_x1, middle_y1):
+                            optimal_pairs += 1
+                            continue
         
-        # Normalize by the number of pairs
-        avg_distance = total_distance / pairs_count if pairs_count > 0 else 0
+        # Normalize based on total possible pairs
+        # For 4 tigers, there are 6 possible pairs (4 choose 2)
+        # maximum theoretical optimal pairs is 6 if all tigers are optimally spaced
+        max_optimal_pairs = total_pairs
         
-        # Correct normalization based on actual possible values:
-        # For 4 tigers:
-        # - Maximum average distance is ~5.33 (32/6) when tigers are at corners
-        # - Minimum average distance is ~1.33 (8/6) when tigers are clustered
+        if max_optimal_pairs > 0:
+            normalized_score = optimal_pairs / max_optimal_pairs
+        else:
+            normalized_score = 0
         
-        # Normalize to 0-1 range
-        min_avg_distance = 1.33  # Theoretical minimum for 4 tigers
-        max_avg_distance = 5.33  # Theoretical maximum for 4 tigers
-        
-        # Ensure the value stays in range even with fewer tigers
-        normalized_score = (avg_distance - min_avg_distance) / (max_avg_distance - min_avg_distance)
-        normalized_score = max(0, min(1, normalized_score))  # Clamp to [0,1]
-        
-        return normalized_score 
+        return normalized_score
 
     def _calculate_goat_edge_preference(self, state: GameState) -> float:
         """
