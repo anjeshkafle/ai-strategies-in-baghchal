@@ -18,12 +18,12 @@ from models.game_state import GameState
 
 # Board states in an easy-to-edit format
 BOARD_STRING_1 = [
-    "TGG_T",
-    "GG_TG",
+    "TGGGT",
     "G___G",
-    "G___G",
-    "TGGGT"
-]
+    "G_G_G",
+    "_T_T_",
+    "GGGG_"
+    ]
 
 BOARD_STRING_2 = [
     "T___T",
@@ -47,7 +47,7 @@ BOARD_TO_USE = BOARD_STRING_1
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
 TURN = "TIGER"            # "GOAT" or "TIGER"
-GOATS_PLACED = 11
+GOATS_PLACED = 12
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
@@ -62,7 +62,7 @@ MINIMAX_MAX_DEPTH = 5
 MCTS_ITERATIONS = 1000
 MCTS_EXPLORATION_WEIGHT = 1.414
 MCTS_ROLLOUT_POLICY = "guided"  # Changed back to guided
-MCTS_MAX_ROLLOUT_DEPTH = 3
+MCTS_MAX_ROLLOUT_DEPTH = 6
 MCTS_GUIDED_STRICTNESS = 0.5  # Increased from 0 to 0.5
 MCTS_MAX_TIME_SECONDS = 50
 

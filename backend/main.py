@@ -44,7 +44,7 @@ agents = {
         iterations=1000, 
         exploration_weight=1.414, 
         rollout_policy="guided",
-        guided_strictness=1.0
+        guided_strictness=0.5
     )
 }
 
