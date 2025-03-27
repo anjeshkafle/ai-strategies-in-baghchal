@@ -27,7 +27,7 @@ BOARD_STRING_1 = [
 
 BOARD_STRING_2 = [
     "T___T",
-    "__G__",
+    "_____",
     "_____",
     "_____",
     "T___T"
@@ -37,17 +37,25 @@ BOARD_STRING_3 = [
     "T___T",
     "_____",
     "_____",
+    "_G___",
+    "T___T"
+]
+
+BOARD_STRING_4 = [
+    "T___T",
+    "_____",
+    "_____",
     "__G__",
     "T___T"
 ]
 
 # Select which board to use (directly set to the board string variable)
-BOARD_TO_USE = BOARD_STRING_1
+BOARD_TO_USE = BOARD_STRING_4
 
 # Configure game state settings
-GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
+GAME_PHASE = "MOVEMENT"  # "PLACEMENT" or "MOVEMENT"
 TURN = "TIGER"            # "GOAT" or "TIGER"
-GOATS_PLACED = 12
+GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
@@ -59,11 +67,11 @@ RUN_MCTS = True
 MINIMAX_MAX_DEPTH = 5
 
 # MCTS parameters
-MCTS_ITERATIONS = 1000
-MCTS_EXPLORATION_WEIGHT = 1.414
-MCTS_ROLLOUT_POLICY = "guided"  # Changed back to guided
+MCTS_ITERATIONS = 3000
+MCTS_EXPLORATION_WEIGHT = 1.2
+MCTS_ROLLOUT_POLICY = "guided"
 MCTS_MAX_ROLLOUT_DEPTH = 6
-MCTS_GUIDED_STRICTNESS = 0.5  # Increased from 0 to 0.5
+MCTS_GUIDED_STRICTNESS = 0.8
 MCTS_MAX_TIME_SECONDS = 50
 
 #-----------------------------------------------
@@ -286,9 +294,9 @@ def run_mcts_test(game_state):
     # Configure MCTS parameters
     iterations = MCTS_ITERATIONS
     exploration_weight = MCTS_EXPLORATION_WEIGHT
-    rollout_policy = MCTS_ROLLOUT_POLICY  # "random" or "guided"
+    rollout_policy = MCTS_ROLLOUT_POLICY
     max_rollout_depth = MCTS_MAX_ROLLOUT_DEPTH
-    guided_strictness = MCTS_GUIDED_STRICTNESS  # Only used if rollout_policy = "guided"
+    guided_strictness = MCTS_GUIDED_STRICTNESS
     
     print(f"\nInitializing MCTS agent with {iterations} iterations")
     print(f"Exploration weight: {exploration_weight}")

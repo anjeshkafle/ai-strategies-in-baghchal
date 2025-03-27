@@ -48,14 +48,44 @@ class MCTSNode:
             # Standard UCB exploration term
             exploration = exploration_weight * math.sqrt(log_visits / child.visits)
             
-            # Progressive bias for capture moves
-            # This bias diminishes as visits increase, preserving asymptotic UCB behavior
+            # Progressive bias term (initialized to 0)
             progressive_bias = 0.0
+            
+            # Tiger perspective: Add bias for capture moves
             if self.state.turn == "TIGER" and child.move and child.move.get("capture"):
                 # Add a bias for Tiger capture moves that diminishes with visits
                 # This is mathematically sound and preserves UCB properties
                 bias_weight = 100.0  # Significant initial weight
                 progressive_bias = bias_weight / (child.visits + 1)  # Diminishes with visits
+            
+            # Goat perspective: Add bias for safe placements (away from tigers)
+            elif self.state.turn == "GOAT" and child.move and child.move.get("type") == "placement":
+                x, y = child.move["x"], child.move["y"]
+                
+                # Check if this is an edge position and far from tigers
+                is_edge_position = x == 0 or x == 4 or y == 0 or y == 4
+                is_middle_position = (x == 2 and (y == 0 or y == 4)) or (y == 2 and (x == 0 or x == 4))
+                
+                # Count nearby tigers
+                nearby_tigers = 0
+                for dy in [-1, 0, 1]:
+                    for dx in [-1, 0, 1]:
+                        if dx == 0 and dy == 0:
+                            continue
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < 5 and 0 <= ny < 5 and self.state.board[ny][nx] is not None and self.state.board[ny][nx]["type"] == "TIGER":
+                            nearby_tigers += 1
+                
+                # Add bias for safe placements
+                if nearby_tigers == 0 and (is_edge_position or is_middle_position):
+                    bias_weight = 50.0  # Moderate bias for safe placements
+                    progressive_bias = bias_weight / (child.visits + 1)
+                
+                # Add negative bias for unsafe placements
+                elif nearby_tigers > 0:
+                    # This is an unsafe move for Goat
+                    bias_weight = -50.0 * nearby_tigers  # Avoid positions near tigers
+                    progressive_bias = bias_weight / (child.visits + 1)
             
             # Combined UCB formula with progressive bias
             return win_rate + exploration + progressive_bias
@@ -594,6 +624,23 @@ class MCTSAgent:
                 if effective_captures == 0:
                     # Gradual disadvantage for tiger as goats are placed
                     win_rate = 0.5 - (goats_placed * 0.005)  # Small gradual decrease
+                    
+                    # Special case for first few goat placements (critical for safe positioning)
+                    if goats_placed < 5:
+                        # Check if any goats are in dangerous positions (adjacent to tigers)
+                        for y in range(5):
+                            for x in range(5):
+                                if state.board[y][x] is not None and state.board[y][x]["type"] == "GOAT":
+                                    # Check if this goat is adjacent to a tiger
+                                    for dy in [-1, 0, 1]:
+                                        for dx in [-1, 0, 1]:
+                                            if dx == 0 and dy == 0:
+                                                continue  # Skip the goat's own position
+                                            nx, ny = x + dx, y + dy
+                                            if 0 <= nx < 5 and 0 <= ny < 5 and state.board[ny][nx] is not None and state.board[ny][nx]["type"] == "TIGER":
+                                                # Goat is adjacent to tiger (dangerous)
+                                                win_rate += 0.3  # Significant advantage for Tiger
+                                                break
                 elif effective_captures == 1:
                     win_rate = 0.8  # First capture gives major advantage
                 elif effective_captures == 2:
@@ -645,6 +692,30 @@ class MCTSAgent:
         # This rewards positions where Tiger has captures available, even if not Tiger's turn
         if threatened_goats > 0 and current_turn != "TIGER":
             win_rate += 0.05 * threatened_goats  # Bonus scales with threat level
+            
+        # For goat placements: Check if a goat is about to be placed in a capturable position
+        if state.phase == "PLACEMENT" and current_turn == "GOAT" and "type" in state.get_valid_moves()[0] and state.get_valid_moves()[0]["type"] == "placement":
+            for move in state.get_valid_moves():
+                x, y = move["x"], move["y"]
+                # Check if this position is adjacent to a tiger (unsafe)
+                for dy in [-1, 0, 1]:
+                    for dx in [-1, 0, 1]:
+                        if dx == 0 and dy == 0:
+                            continue  # Skip the position itself
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < 5 and 0 <= ny < 5 and state.board[ny][nx] is not None and state.board[ny][nx]["type"] == "TIGER":
+                            # This position is adjacent to a tiger - simulate the move
+                            next_state = state.clone()
+                            next_state.apply_move(move)
+                            # Check if this position allows a tiger capture
+                            next_tiger_moves = get_all_possible_moves(next_state.board, "MOVEMENT", "TIGER")
+                            for tiger_move in next_tiger_moves:
+                                if tiger_move.get("capture"):
+                                    # This placement would allow an immediate capture
+                                    if move["x"] == x and move["y"] == y:
+                                        # This is the move we're currently evaluating
+                                        # Adjust the win rate for this specific placement
+                                        return 0.8  # Very bad for goat (good for tiger)
         
         # Clamp final win rate to valid range [0.0, 1.0]
         return max(0.0, min(1.0, win_rate)) 
