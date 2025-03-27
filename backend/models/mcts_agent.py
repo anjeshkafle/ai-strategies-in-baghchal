@@ -3,6 +3,7 @@ import random
 import math
 from models.game_state import GameState
 from models.minimax_agent import MinimaxAgent
+from game_logic import get_all_possible_moves
 
 class MCTSNode:
     """Node in the MCTS tree."""
@@ -85,6 +86,19 @@ class MCTSAgent:
             start_time = time.time()
             max_time_seconds = 50  # Maximum time to spend on calculation
             
+            # Print current board state win rate prediction
+            current_win_rate = self.predict_win_rate(state)
+            print("\n======== INITIAL STATE ========")
+            print(f"Player turn: {state.turn}")
+            print(f"Phase: {state.phase}")
+            print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}")
+            print(f"Current win rate prediction: {current_win_rate:.4f}")
+            if state.turn == "TIGER":
+                print(f"(Higher values favor TIGER: 1.0=Tiger win, 0.0=Goat win)")
+            else:
+                print(f"(Lower values favor GOAT: 1.0=Tiger win, 0.0=Goat win)")
+            print("===============================\n")
+            
             # Check for edge cases first
             valid_moves = state.get_valid_moves()
             if not valid_moves:
@@ -93,6 +107,16 @@ class MCTSAgent:
             # If there's only one valid move, return it without running MCTS
             if len(valid_moves) == 1:
                 print(f"Only one valid move available, returning immediately")
+                
+                # Show win rate after applying the move
+                next_state = state.clone()
+                next_state.apply_move(valid_moves[0])
+                after_win_rate = self.predict_win_rate(next_state)
+                
+                win_rate_change = after_win_rate - current_win_rate
+                change_str = f"+{win_rate_change:.4f}" if win_rate_change >= 0 else f"{win_rate_change:.4f}"
+                print(f"Win rate after move: {after_win_rate:.4f} ({change_str})")
+                
                 return valid_moves[0]
             
             # Create root node
@@ -133,20 +157,30 @@ class MCTSAgent:
             debug = True
             
             if debug:
-                print("\nMCTS Node Statistics:")
-                print("=====================")
+                print("\n========== MOVE ANALYSIS ==========")
                 # Sort children by visits for display
                 sorted_children = sorted(root.children, key=lambda c: c.visits, reverse=True)
-                for i, child in enumerate(sorted_children):
+                for i, child in enumerate(sorted_children[:5]):  # Show top 5 moves
                     capture_str = " (CAPTURE)" if child.move.get("capture") else ""
-                    win_rate = child.value / child.visits if child.visits > 0 else 0
-                    print(f"{i+1}. Move: {child.move}{capture_str}")
-                    print(f"   Visits: {child.visits}, Value: {child.value:.2f}, Win rate: {win_rate:.2f}")
+                    mcts_win_rate = child.value / child.visits if child.visits > 0 else 0
                     
-                    # Evaluate move with minimax for comparison
-                    minimax_score = self.evaluate_move(state, child.move)
-                    print(f"   Minimax evaluation: {minimax_score}")
-                print("=====================\n")
+                    # Get win rate prediction for this move
+                    next_state = state.clone()
+                    next_state.apply_move(child.move)
+                    predicted_win_rate = self.predict_win_rate(next_state)
+                    
+                    # Calculate win rate change
+                    win_rate_change = predicted_win_rate - current_win_rate
+                    change_str = f"+{win_rate_change:.4f}" if win_rate_change >= 0 else f"{win_rate_change:.4f}"
+                    
+                    print(f"{i+1}. Move: {child.move}{capture_str}")
+                    print(f"   Visits: {child.visits} ({child.visits/root.visits*100:.1f}% of total)")
+                    print(f"   MCTS win rate: {mcts_win_rate:.4f}")
+                    print(f"   Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
+                    
+                    if i < 4:  # Add separator between moves, except after the last one
+                        print("   ---")
+                print("==================================\n")
             
             # Select the best child according to visits (standard MCTS approach)
             if not root.children:
@@ -156,18 +190,44 @@ class MCTSAgent:
             capture_moves = [(child, child.value / child.visits if child.visits > 0 else 0) 
                             for child in root.children if child.move.get("capture")]
             if capture_moves:
-                print("\nAll capture moves:")
-                for child, win_rate in capture_moves:
-                    print(f"  Capture move: visits={child.visits}, win_rate={win_rate:.2f}")
+                print("\n========== CAPTURE MOVES ==========")
+                for child, mcts_win_rate in capture_moves:
+                    next_state = state.clone()
+                    next_state.apply_move(child.move)
+                    predicted_win_rate = self.predict_win_rate(next_state)
+                    
+                    # Calculate win rate change
+                    win_rate_change = predicted_win_rate - current_win_rate
+                    change_str = f"+{win_rate_change:.4f}" if win_rate_change >= 0 else f"{win_rate_change:.4f}"
+                    
+                    print(f"  Capture move: {child.move}")
+                    print(f"    Visits: {child.visits} ({child.visits/root.visits*100:.1f}% of total)")
+                    print(f"    MCTS win rate: {mcts_win_rate:.4f}")
+                    print(f"    Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
+                print("==================================\n")
             
             # Standard MCTS selection: choose child with most visits
             best_child = max(root.children, key=lambda c: c.visits)
             
             # Output details about the selection
-            win_rate = best_child.value / best_child.visits if best_child.visits > 0 else 0
+            mcts_win_rate = best_child.value / best_child.visits if best_child.visits > 0 else 0
             capture_text = "CAPTURE MOVE" if best_child.move.get("capture") else "regular move"
-            print(f"\nSelected {capture_text} with {best_child.visits} visits ({best_child.visits/root.visits*100:.1f}% of total)")
-            print(f"Win rate: {win_rate:.2f}")
+            
+            # Show the predicted win rate for the selected move
+            next_state = state.clone()
+            next_state.apply_move(best_child.move)
+            predicted_win_rate = self.predict_win_rate(next_state)
+            
+            # Calculate win rate change
+            win_rate_change = predicted_win_rate - current_win_rate
+            change_str = f"+{win_rate_change:.4f}" if win_rate_change >= 0 else f"{win_rate_change:.4f}"
+            
+            print("\n========== SELECTED MOVE ==========")
+            print(f"Selected {capture_text} with {best_child.visits} visits ({best_child.visits/root.visits*100:.1f}% of total)")
+            print(f"Move details: {best_child.move}")
+            print(f"MCTS win rate: {mcts_win_rate:.4f}")
+            print(f"Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
+            print("==================================\n")
             
             return best_child.move
             
@@ -209,10 +269,7 @@ class MCTSAgent:
             # Check timeout to prevent infinite loops
             if depth % 5 == 0 and time.time() - start_time > rollout_timeout:
                 # If timeout, use evaluation function
-                eval_score = self.minimax_agent.evaluate(current_state)
-                # The evaluation function returns higher values for Tiger advantage
-                # We need to normalize to [0,1] where 1 means Tiger win
-                return self._normalize_eval_score(eval_score)
+                return self.predict_win_rate(current_state)
             
             # Only check for repetition in movement phase
             if current_state.phase == "MOVEMENT":
@@ -234,8 +291,7 @@ class MCTSAgent:
         
         # If we hit max depth, use evaluation function
         if depth >= max_depth:
-            eval_score = self.minimax_agent.evaluate(current_state)
-            return self._normalize_eval_score(eval_score)
+            return self.predict_win_rate(current_state)
         
         # Otherwise score based on winner
         winner = current_state.get_winner()
@@ -339,10 +395,9 @@ class MCTSAgent:
             current_state.apply_move(selected_move)
             depth += 1
         
-        # If we hit max depth, use evaluation function
+        # If we hit max depth, use win rate predictor
         if depth >= max_depth:
-            eval_score = self.minimax_agent.evaluate(current_state)
-            return self._normalize_eval_score(eval_score)
+            return self.predict_win_rate(current_state)
         
         # Otherwise score based on winner
         winner = current_state.get_winner()
@@ -422,3 +477,125 @@ class MCTSAgent:
             return 0.65 + t * 0.3
         else:
             return 0.95  # Strong tiger advantage 
+
+    def predict_win_rate(self, state: GameState) -> float:
+        """
+        Predicts the win rate [0.0, 1.0] for the given game state based directly on game heuristics.
+        
+        Returns:
+            - 0.0: Strong goat advantage (goat likely to win)
+            - 0.5: Balanced position (draw likely)
+            - 1.0: Strong tiger advantage (tiger likely to win)
+            
+        Note that unlike the MCTS win rates which are from the current player's perspective,
+        this always returns values from the Tiger's perspective:
+        - For Tiger player, higher values are better
+        - For Goat player, lower values are better
+        """
+        # Get critical game features directly from the state and heuristics
+        goats_placed = state.goats_placed
+        goats_captured = state.goats_captured
+        
+        # Calculate key heuristics
+        movable_tigers = self.minimax_agent._count_movable_tigers(
+            get_all_possible_moves(state.board, "MOVEMENT", "TIGER"))
+        
+        tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        threatened_goats = self.minimax_agent._count_threatened_goats(tiger_moves)
+        
+        closed_regions = self.minimax_agent._count_closed_spaces(state, tiger_moves)
+        closed_spaces = sum(len(region) for region in closed_regions)
+        
+        # Calculate positional scores
+        tiger_dispersion = self.minimax_agent._calculate_tiger_positional_score(state)
+        goat_edge_preference = self.minimax_agent._calculate_goat_edge_preference(state)
+        
+        # Effective closed spaces (adjusted by captures)
+        effective_closed_spaces = max(0, closed_spaces - goats_captured)
+        
+        # Start with a neutral position
+        win_rate = 0.5
+        
+        # Adjust based on game phase and captures
+        if state.phase == "PLACEMENT":
+            # Early placement phase (0-10 goats)
+            if goats_placed <= 10:
+                if goats_captured == 0:
+                    win_rate = 0.5  # Even position
+                elif goats_captured == 1:
+                    win_rate = 0.7  # Significant tiger advantage
+                else:  # 2+ captures
+                    win_rate = 0.9  # Strong tiger advantage
+                    
+            # Mid-placement (11-15 goats)
+            elif goats_placed <= 15:
+                if goats_captured == 0:
+                    win_rate = 0.4  # Slight goat advantage
+                elif goats_captured == 1:
+                    win_rate = 0.55  # Slight tiger advantage
+                elif goats_captured == 2:
+                    win_rate = 0.7   # Significant tiger advantage
+                else:  # 3+ captures
+                    win_rate = 0.85  # Strong tiger advantage
+                    
+            # Late placement (16-20 goats)
+            else:
+                if goats_captured == 0:
+                    win_rate = 0.35  # Goat advantage
+                elif goats_captured == 1:
+                    win_rate = 0.45  # Balanced with slight goat advantage
+                elif goats_captured == 2:
+                    win_rate = 0.6   # Moderate tiger advantage
+                elif goats_captured == 3:
+                    win_rate = 0.75  # Strong tiger advantage
+                else:  # 4+ captures
+                    win_rate = 0.9   # Very strong tiger advantage
+        else:  # MOVEMENT phase
+            # Base win rate depends on captures
+            if goats_captured == 0:
+                win_rate = 0.3       # Strong goat advantage
+            elif goats_captured == 1:
+                win_rate = 0.4       # Moderate goat advantage 
+            elif goats_captured == 2:
+                win_rate = 0.55      # Balanced with slight tiger advantage
+            elif goats_captured == 3:
+                win_rate = 0.7       # Strong tiger advantage
+            elif goats_captured == 4:
+                win_rate = 0.85      # Very strong tiger advantage
+            else:  # 5 captures (tiger win)
+                win_rate = 1.0       # Tiger victory
+        
+        # Apply adjustments for special conditions
+        
+        # Adjustment for threatened goats
+        if threatened_goats > 0:
+            # More significant in early game
+            if goats_placed < 15:
+                win_rate += threatened_goats * 0.15  # Strong effect early game
+            else:
+                win_rate += threatened_goats * 0.1   # Moderate effect late game
+                
+        # Adjustment for effective closed spaces
+        if effective_closed_spaces > 0:
+            # More significant in movement phase
+            if state.phase == "MOVEMENT":
+                win_rate -= effective_closed_spaces * 0.1  # Reduces tiger win probability
+            else:
+                win_rate -= effective_closed_spaces * 0.05  # Less impact in placement phase
+                
+        # Adjustment for movable tigers
+        if movable_tigers < 3:
+            win_rate -= (3 - movable_tigers) * 0.05  # Penalty for restricted tigers
+            
+        # Adjustment for tiger dispersion
+        win_rate += (tiger_dispersion - 0.5) * 0.1  # Better than average dispersion helps tigers
+            
+        # Adjustment for goat edge preference
+        win_rate -= (goat_edge_preference - 0.5) * 0.15  # Better than average edge placement helps goats
+        
+        # Adjustment for turn advantage
+        if state.turn == "TIGER" and threatened_goats > 0:
+            win_rate += 0.05  # Tiger has immediate capture opportunity
+        
+        # Clamp final win rate to valid range [0.0, 1.0]
+        return max(0.0, min(1.0, win_rate)) 

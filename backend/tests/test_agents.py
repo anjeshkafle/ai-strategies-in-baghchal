@@ -51,7 +51,7 @@ GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
-RUN_MINIMAX = True
+RUN_MINIMAX = False
 RUN_MCTS = True
 
 # Agent parameters
@@ -270,30 +270,25 @@ def run_minimax_test(game_state):
 
 
 def run_mcts_test(game_state):
-    """Run the MCTS agent test."""
+    """Run MCTS agent test with the given game state."""
     print("\n" + "="*50)
     print("RUNNING MCTS AGENT TEST")
     print("="*50)
     
-    # Get all valid moves
+    # Get valid moves for the current state
     valid_moves = game_state.get_valid_moves()
     print(f"\nValid moves for {game_state.turn}: {len(valid_moves)}")
     
-    # Get capture moves
+    # Check for capture moves
     capture_moves = [move for move in valid_moves if move.get("capture")]
     print(f"Capture moves available: {len(capture_moves)}")
-    
-    if capture_moves:
-        print("\nCapture moves:")
-        for i, move in enumerate(capture_moves):
-            print(f"  {i+1}. {format_move(move)}")
     
     # Configure MCTS parameters
     iterations = MCTS_ITERATIONS
     exploration_weight = MCTS_EXPLORATION_WEIGHT
-    rollout_policy = MCTS_ROLLOUT_POLICY
+    rollout_policy = MCTS_ROLLOUT_POLICY  # "random" or "guided"
     max_rollout_depth = MCTS_MAX_ROLLOUT_DEPTH
-    guided_strictness = MCTS_GUIDED_STRICTNESS
+    guided_strictness = MCTS_GUIDED_STRICTNESS  # Only used if rollout_policy = "guided"
     
     print(f"\nInitializing MCTS agent with {iterations} iterations")
     print(f"Exploration weight: {exploration_weight}")
@@ -317,68 +312,16 @@ def run_mcts_test(game_state):
         capture_str = " (CAPTURE)" if move.get("capture") else ""
         print(f"  {i+1}. {format_move(move)}{capture_str} - Score: {minimax_score}")
     
-    # Manually create the MCTS tree to access statistics
-    root = MCTSNode(game_state)
-    
-    # Record start time
+    # Use the agent's get_move method, which will display enhanced debug output
     start_time = time.time()
-    
-    # Set a max time limit
-    max_time_seconds = MCTS_MAX_TIME_SECONDS
-    
-    # Run MCTS iterations with time limit
-    iterations_completed = 0
-    for i in range(iterations):
-        # Check if we're approaching time limit (check every 10 iterations)
-        if i % 10 == 0 and time.time() - start_time > max_time_seconds:
-            print(f"Time limit reached after {i} iterations")
-            break
-            
-        # Selection phase - select a promising leaf node
-        node = root
-        while not node.state.is_terminal() and node.is_fully_expanded():
-            node = node.select_child(exploration_weight)
-        
-        # Expansion phase - if node is not terminal and has untried moves
-        if not node.state.is_terminal() and not node.is_fully_expanded():
-            node = node.expand()
-        
-        # Simulation phase - perform a rollout from the new node
-        result = agent.rollout(node.state)
-        
-        # Backpropagation phase - update statistics up the tree
-        while node is not None:
-            node.update(result)
-            node = node.parent
-            
-        iterations_completed = i + 1
-    
-    # Record end time
-    end_time = time.time()
-    elapsed_time = end_time - start_time
+    best_move = agent.get_move(game_state)
+    elapsed_time = time.time() - start_time
     
     # Print performance information
-    print(f"\nMCTS completed {iterations_completed} iterations in {elapsed_time:.2f} seconds")
-    if iterations_completed > 0:
-        print(f"Average time per iteration: {(elapsed_time/iterations_completed)*1000:.2f} ms")
-    else:
-        print("No iterations completed")
+    print(f"\nMCTS completed in {elapsed_time:.2f} seconds")
     
-    # Print MCTS statistics
-    print_mcts_stats(root)
-    
-    # Select the best move based on most visits
-    if root.children:
-        best_child = max(root.children, key=lambda c: c.visits)
-        best_move = best_child.move
-        
-        # Print the best move
-        print("\nBest move according to MCTS agent:")
-        print(format_move(best_move))
-        print(f"Visits: {best_child.visits} ({best_child.visits/root.visits:.1%} of total)")
-        print(f"Win rate: {best_child.value/best_child.visits:.2f}")
-        
-        # Apply the move to see the result
+    # Apply the move to see the result
+    if best_move:
         new_state = game_state.clone()
         new_state.apply_move(best_move)
         print("\nBoard state after applying the best move:")
