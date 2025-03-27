@@ -22,73 +22,24 @@ class MCTSNode:
         return len(self.untried_moves) == 0
     
     def select_child(self, exploration_weight: float = 1.0) -> 'MCTSNode':
-        """
-        Select a child node using the UCB formula with progressive bias for captures.
-        
-        The progressive bias adds a term to the UCB formula that diminishes with
-        increased visits, providing initial guidance while preserving asymptotic behavior.
-        """
+        """Select a child node using the standard UCB formula."""
         log_visits = math.log(self.visits) if self.visits > 0 else 0
         
         def ucb_score(child):
-            # Avoid division by zero
             if child.visits == 0:
-                return float('inf')  # Ensures unvisited children are explored first
+                return float('inf')
                 
-            # Calculate win rate (exploitation term)
+            # Calculate win rate
             win_rate = child.value / child.visits
             
-            # IMPORTANT: win_rate is already from the child's player perspective
-            # We need to convert it to the current (parent) player's perspective
-            # If the players are different, we need to invert the win rate
+            # Convert to parent's perspective
             if self.state.turn != child.state.turn:
-                # Invert win rate when switching players
                 win_rate = 1.0 - win_rate
                 
-            # Standard UCB exploration term
+            # Standard UCB formula
             exploration = exploration_weight * math.sqrt(log_visits / child.visits)
             
-            # Progressive bias term (initialized to 0)
-            progressive_bias = 0.0
-            
-            # Tiger perspective: Add bias for capture moves
-            if self.state.turn == "TIGER" and child.move and child.move.get("capture"):
-                # Add a bias for Tiger capture moves that diminishes with visits
-                # This is mathematically sound and preserves UCB properties
-                bias_weight = 100.0  # Significant initial weight
-                progressive_bias = bias_weight / (child.visits + 1)  # Diminishes with visits
-            
-            # Goat perspective: Add bias for safe placements (away from tigers)
-            elif self.state.turn == "GOAT" and child.move and child.move.get("type") == "placement":
-                x, y = child.move["x"], child.move["y"]
-                
-                # Check if this is an edge position and far from tigers
-                is_edge_position = x == 0 or x == 4 or y == 0 or y == 4
-                is_middle_position = (x == 2 and (y == 0 or y == 4)) or (y == 2 and (x == 0 or x == 4))
-                
-                # Count nearby tigers
-                nearby_tigers = 0
-                for dy in [-1, 0, 1]:
-                    for dx in [-1, 0, 1]:
-                        if dx == 0 and dy == 0:
-                            continue
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < 5 and 0 <= ny < 5 and self.state.board[ny][nx] is not None and self.state.board[ny][nx]["type"] == "TIGER":
-                            nearby_tigers += 1
-                
-                # Add bias for safe placements
-                if nearby_tigers == 0 and (is_edge_position or is_middle_position):
-                    bias_weight = 50.0  # Moderate bias for safe placements
-                    progressive_bias = bias_weight / (child.visits + 1)
-                
-                # Add negative bias for unsafe placements
-                elif nearby_tigers > 0:
-                    # This is an unsafe move for Goat
-                    bias_weight = -50.0 * nearby_tigers  # Avoid positions near tigers
-                    progressive_bias = bias_weight / (child.visits + 1)
-            
-            # Combined UCB formula with progressive bias
-            return win_rate + exploration + progressive_bias
+            return win_rate + exploration
         
         return max(self.children, key=ucb_score)
     
@@ -299,43 +250,21 @@ class MCTSAgent:
     
     def _random_rollout(self, state: GameState) -> float:
         """
-        Perform a completely random rollout.
-        
-        Returns a value in [0.0, 1.0] where:
-        - 1.0 means win for the CURRENT player at the start of the rollout
-        - 0.0 means loss for the CURRENT player at the start of the rollout
-        - 0.5 means draw
+        Simple random rollout with small depth.
+        Returns win rate from starting player's perspective.
         """
-        import time
-        start_time = time.time()
-        rollout_timeout = 0.5  # Maximum time for a single rollout in seconds
-        
-        starting_player = state.turn  # Remember who started the rollout
+        starting_player = state.turn
         current_state = state.clone()
-        max_depth = self.max_rollout_depth
         depth = 0
+        max_depth = 4  # Small depth to focus on immediate threats
         
         # Track visited states to detect repetition
         visited_states = {}  # Format: {state_hash: count}
         
         while not current_state.is_terminal() and depth < max_depth:
-            # Check timeout to prevent infinite loops
-            if depth % 5 == 0 and time.time() - start_time > rollout_timeout:
-                # If timeout, get win rate from Tiger's perspective
-                tiger_win_rate = self.predict_win_rate(current_state)
-                
-                # Convert to starting player's perspective
-                if starting_player == "TIGER":
-                    return tiger_win_rate  # Already in Tiger's perspective
-                else:
-                    return 1.0 - tiger_win_rate  # Convert to Goat's perspective
-            
-            # Only check for repetition in movement phase
+            # Check for threefold repetition in movement phase
             if current_state.phase == "MOVEMENT":
-                # Create a hash of the current state
                 state_hash = self._get_state_hash(current_state)
-                
-                # Check for threefold repetition
                 visited_states[state_hash] = visited_states.get(state_hash, 0) + 1
                 if visited_states[state_hash] >= 3:
                     return 0.5  # Draw due to threefold repetition
@@ -348,57 +277,32 @@ class MCTSAgent:
             current_state.apply_move(move)
             depth += 1
         
-        # If we hit max depth, use win rate predictor
-        if depth >= max_depth:
-            # Get win rate from Tiger's perspective
-            tiger_win_rate = self.predict_win_rate(current_state)
-            
-            # Convert to starting player's perspective
-            if starting_player == "TIGER":
-                return tiger_win_rate  # Already in Tiger's perspective
-            else:
-                return 1.0 - tiger_win_rate  # Convert to Goat's perspective
+        # Use win rate predictor at leaf node
+        tiger_win_rate = self.predict_win_rate(current_state)
         
-        # Otherwise score based on winner
-        winner = current_state.get_winner()
-        
-        # Return from starting player's perspective
-        if winner == starting_player:
-            return 1.0  # Starting player won
-        elif winner is None:
-            return 0.5  # Draw
+        # Convert to starting player's perspective
+        if starting_player == "TIGER":
+            return tiger_win_rate
         else:
-            return 0.0  # Starting player lost
+            return 1.0 - tiger_win_rate
     
     def _guided_rollout(self, state: GameState) -> float:
         """
-        Perform a rollout guided by evaluation function with controllable strictness.
-        
-        Returns a value in [0.0, 1.0] where:
-        - 1.0 means win for the CURRENT player at the start of the rollout
-        - 0.0 means loss for the CURRENT player at the start of the rollout
-        - 0.5 means draw
-        
-        The strictness parameter (0.0 to 1.0) controls how deterministic the rollout is:
-        - 0.0: Fully probabilistic selection based on evaluation scores
-        - 1.0: Always selects the best evaluated move
-        - Values between: Increasingly favor the best moves
+        Simple guided rollout that uses evaluation scores with random selection for ties.
+        Returns win rate from starting player's perspective.
         """
-        starting_player = state.turn  # Remember who started the rollout
+        starting_player = state.turn
         current_state = state.clone()
-        max_depth = self.max_rollout_depth
         depth = 0
+        max_depth = 4  # Small depth to focus on immediate threats
         
         # Track visited states to detect repetition
         visited_states = {}  # Format: {state_hash: count}
         
         while not current_state.is_terminal() and depth < max_depth:
-            # Only check for repetition in movement phase
+            # Check for threefold repetition in movement phase
             if current_state.phase == "MOVEMENT":
-                # Create a hash of the current state
                 state_hash = self._get_state_hash(current_state)
-                
-                # Check for threefold repetition
                 visited_states[state_hash] = visited_states.get(state_hash, 0) + 1
                 if visited_states[state_hash] >= 3:
                     return 0.5  # Draw due to threefold repetition
@@ -407,158 +311,31 @@ class MCTSAgent:
             if not valid_moves:
                 break
             
-            # Check if there are any capture moves available
-            capture_moves = [move for move in valid_moves if move.get("capture")]
+            # Evaluate all moves
+            move_scores = []
+            for move in valid_moves:
+                next_state = current_state.clone()
+                next_state.apply_move(move)
+                score = self.minimax_agent.evaluate(next_state)
+                move_scores.append((move, score))
             
-            # If Tiger has capture moves available, prioritize them
-            if current_state.turn == "TIGER" and capture_moves:
-                # Either select deterministically or probabilistically based on strictness
-                if self.guided_strictness >= 0.7:  # High strictness = always capture
-                    # Get minimax scores for capture moves to pick the best one
-                    capture_scores = []
-                    for move in capture_moves:
-                        next_state = current_state.clone()
-                        next_state.apply_move(move)
-                        score = self.minimax_agent.evaluate(next_state)
-                        capture_scores.append((move, score))
-                    
-                    # Select the best capture move
-                    selected_move = max(capture_scores, key=lambda x: x[1])[0]
-                else:
-                    # Select a random capture move with some bias toward better ones
-                    selected_move = random.choice(capture_moves)
-            else:
-                # Get base evaluation of current state
-                base_eval = self.minimax_agent.evaluate(current_state)
-                
-                # Calculate delta (improvement) for each move
-                move_deltas = []
-                for move in valid_moves:
-                    next_state = current_state.clone()
-                    next_state.apply_move(move)
-                    
-                    # Get raw score from minimax
-                    next_eval = self.minimax_agent.evaluate(next_state)
-                    
-                    # Apply a capture bonus for Tiger moves
-                    if current_state.turn == "TIGER" and move.get("capture"):
-                        next_eval *= 1.5  # Significant bonus for captures
-                    
-                    # Calculate delta (improvement from current position)
-                    delta = next_eval - base_eval
-                    
-                    # Store the move and its delta
-                    move_deltas.append((move, delta))
-                
-                # Select move based on strictness parameter
-                if self.guided_strictness >= 1.0:
-                    # Fully deterministic: always select the best move
-                    if current_state.turn == "TIGER":
-                        # For Tiger: higher delta is better
-                        selected_move = max(move_deltas, key=lambda x: x[1])[0]
-                    else:
-                        # For Goat: lower delta is better (but avoid suicide moves)
-                        # First, identify moves that lead to immediate capture
-                        goat_moves_with_risk = []
-                        for move, delta in move_deltas:
-                            next_state = current_state.clone()
-                            next_state.apply_move(move)
-                            
-                            # Check if this move allows Tiger to capture immediately
-                            tiger_moves = get_all_possible_moves(next_state.board, "MOVEMENT", "TIGER")
-                            has_capture = any(m.get("capture") for m in tiger_moves)
-                            goat_moves_with_risk.append((move, delta, has_capture))
-                        
-                        # First try to find the best move without immediate capture risk
-                        safe_moves = [(move, d) for move, d, has_risk in goat_moves_with_risk if not has_risk]
-                        if safe_moves:
-                            selected_move = min(safe_moves, key=lambda x: x[1])[0]
-                        else:
-                            # If all moves are risky, just pick the best one
-                            selected_move = min(move_deltas, key=lambda x: x[1])[0]
-                else:
-                    # Probabilistic selection with strictness-based contrast
-                    # Higher strictness = more emphasis on better moves
-                    
-                    # Calculate power factor based on strictness
-                    # At strictness=0, power=1 (no change to scores)
-                    # At strictness=0.9, power=10 (extreme contrast)
-                    power = 1.0 + (self.guided_strictness * 9.0)  # Ranges from 1.0 to 10.0
-                    
-                    # Identify capture moves and non-capture moves
-                    capture_moves = [(move, delta) for move, delta in move_deltas if move.get("capture")]
-                    non_capture_moves = [(move, delta) for move, delta in move_deltas if not move.get("capture")]
-                    
-                    # Apply different adjustment for Tiger and Goat
-                    if current_state.turn == "TIGER":
-                        # For Tiger: favor capture moves strongly, but still consider good non-captures
-                        if capture_moves:
-                            # Boost capture moves' scores
-                            adjusted_scores = [(move, max(0, delta) * 2.0 + 0.1) for move, delta in capture_moves]
-                            # Include non-captures with lower weight
-                            adjusted_scores += [(move, max(0, delta) + 0.1) for move, delta in non_capture_moves]
-                        else:
-                            # No captures available, use standard adjustment
-                            adjusted_scores = [(move, max(0, delta) + 0.1) for move, delta in move_deltas]
-                    else:
-                        # For Goat: strongly avoid moves that allow Tiger to capture
-                        adjusted_scores = []
-                        for move, delta in move_deltas:
-                            next_state = current_state.clone()
-                            next_state.apply_move(move)
-                            
-                            # Check if this move allows Tiger to capture immediately
-                            tiger_moves = get_all_possible_moves(next_state.board, "MOVEMENT", "TIGER")
-                            has_capture = any(m.get("capture") for m in tiger_moves)
-                            
-                            if has_capture:
-                                # Heavily penalize moves that lead to immediate capture
-                                score = max(0, -delta) * 0.1 + 0.01  # Very small score
-                            else:
-                                # Favor moves that don't allow capture
-                                score = max(0, -delta) + 0.1
-                            
-                            adjusted_scores.append((move, score))
-                    
-                    # Apply the power function to increase contrast between scores
-                    adjusted_scores = [(move, score**power) for move, score in adjusted_scores]
-                    
-                    # Calculate probabilities proportional to adjusted scores
-                    total_score = sum(score for _, score in adjusted_scores)
-                    if total_score > 0:  # Protect against division by zero
-                        probabilities = [score/total_score for _, score in adjusted_scores]
-                        
-                        # Select move based on probabilities (weighted random)
-                        moves = [move for move, _ in adjusted_scores]
-                        selected_move = random.choices(moves, weights=probabilities, k=1)[0]
-                    else:
-                        # Fallback to random if all scores are zero
-                        selected_move = random.choice(valid_moves)
+            # Group moves by score to handle ties
+            max_score = max(score for _, score in move_scores)
+            best_moves = [move for move, score in move_scores if score == max_score]
             
+            # Random selection among best moves
+            selected_move = random.choice(best_moves)
             current_state.apply_move(selected_move)
             depth += 1
         
-        # If we hit max depth, use win rate predictor
-        if depth >= max_depth:
-            # Get win rate from Tiger's perspective
-            tiger_win_rate = self.predict_win_rate(current_state)
-            
-            # Convert to starting player's perspective
-            if starting_player == "TIGER":
-                return tiger_win_rate  # Already in Tiger's perspective
-            else:
-                return 1.0 - tiger_win_rate  # Convert to Goat's perspective
+        # Use win rate predictor at leaf node
+        tiger_win_rate = self.predict_win_rate(current_state)
         
-        # Otherwise score based on winner
-        winner = current_state.get_winner()
-        
-        # Return from starting player's perspective
-        if winner == starting_player:
-            return 1.0  # Starting player won
-        elif winner is None:
-            return 0.5  # Draw
+        # Convert to starting player's perspective
+        if starting_player == "TIGER":
+            return tiger_win_rate
         else:
-            return 0.0  # Starting player lost
+            return 1.0 - tiger_win_rate
 
     def evaluate_move(self, state: GameState, move) -> float:
         """Evaluate a move using the minimax evaluation function."""
@@ -589,133 +366,24 @@ class MCTSAgent:
 
     def predict_win_rate(self, state: GameState) -> float:
         """
-        Simplified win rate predictor that focuses primarily on captures and avoids sudden jumps.
-        
+        Simplified win rate predictor that ONLY cares about captures.
         Returns values from Tiger's perspective:
-        - 0.0: Strong goat advantage (goat likely to win)
-        - 0.5: Balanced position (draw likely)
-        - 1.0: Strong tiger advantage (tiger likely to win)
-        
-        For Tiger player, higher values are better.
-        For Goat player, lower values are better.
+        - 0.0: No captures (best for Goat)
+        - 0.5: One capture (significant disadvantage for Goat)
+        - 0.8: Two captures (severe disadvantage for Goat)
+        - 0.9: Three captures (near-loss for Goat)
+        - 1.0: Four or more captures (Tiger victory approaching)
         """
-        # Get basic game state information
-        goats_placed = state.goats_placed
         goats_captured = state.goats_captured
-        current_turn = state.turn
         
-        # Check for capture opportunities for tiger
-        tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-        threatened_goats = self.minimax_agent._count_threatened_goats(tiger_moves)
-        
-        # If it's Tiger's turn and there are threatened goats, we consider this capture "certain"
-        # This effectively means we calculate the win rate as if the capture has already happened
-        effective_captures = goats_captured
-        if current_turn == "TIGER" and threatened_goats > 0:
-            effective_captures += 1
-        
-        # Start with a balanced position
-        win_rate = 0.5
-        
-        # Adjust win rate based on game phase and captures
-        if state.phase == "PLACEMENT":
-            # Early placement phase (0-10 goats)
-            if goats_placed <= 10:
-                if effective_captures == 0:
-                    # Gradual disadvantage for tiger as goats are placed
-                    win_rate = 0.5 - (goats_placed * 0.005)  # Small gradual decrease
-                    
-                    # Special case for first few goat placements (critical for safe positioning)
-                    if goats_placed < 5:
-                        # Check if any goats are in dangerous positions (adjacent to tigers)
-                        for y in range(5):
-                            for x in range(5):
-                                if state.board[y][x] is not None and state.board[y][x]["type"] == "GOAT":
-                                    # Check if this goat is adjacent to a tiger
-                                    for dy in [-1, 0, 1]:
-                                        for dx in [-1, 0, 1]:
-                                            if dx == 0 and dy == 0:
-                                                continue  # Skip the goat's own position
-                                            nx, ny = x + dx, y + dy
-                                            if 0 <= nx < 5 and 0 <= ny < 5 and state.board[ny][nx] is not None and state.board[ny][nx]["type"] == "TIGER":
-                                                # Goat is adjacent to tiger (dangerous)
-                                                win_rate += 0.3  # Significant advantage for Tiger
-                                                break
-                elif effective_captures == 1:
-                    win_rate = 0.8  # First capture gives major advantage
-                elif effective_captures == 2:
-                    win_rate = 0.85  # Second capture increases advantage slightly
-                else:  # 3+ captures
-                    win_rate = 0.9  # Strong tiger advantage
-                    
-            # Mid-placement (11-15 goats)
-            elif goats_placed <= 15:
-                if effective_captures == 0:
-                    # Gradual advantage for goats
-                    win_rate = 0.45 - ((goats_placed - 10) * 0.01)  # More goats = better for goats
-                elif effective_captures == 1:
-                    win_rate = 0.7  # First capture still gives advantage but less than early game
-                elif effective_captures == 2:
-                    win_rate = 0.8  # Second capture gives strong advantage
-                else:  # 3+ captures
-                    win_rate = 0.85  # Very strong tiger advantage
-                    
-            # Late placement (16-20 goats)
-            else:
-                if effective_captures == 0:
-                    # Strong goat advantage without captures
-                    win_rate = 0.35 - ((goats_placed - 15) * 0.01)  # More goats = better for goats
-                elif effective_captures == 1:
-                    win_rate = 0.6  # First capture balances the game
-                elif effective_captures == 2:
-                    win_rate = 0.75  # Second capture gives tiger advantage
-                elif effective_captures == 3:
-                    win_rate = 0.85  # Third capture gives strong advantage
-                else:  # 4+ captures
-                    win_rate = 0.9   # Very strong tiger advantage
-        else:  # MOVEMENT phase
-            # Base win rate depends on captures
-            if effective_captures == 0:
-                win_rate = 0.3       # Strong goat advantage 
-            elif effective_captures == 1:
-                win_rate = 0.4       # Moderate goat advantage 
-            elif effective_captures == 2:
-                win_rate = 0.55      # Balanced with slight tiger advantage
-            elif effective_captures == 3:
-                win_rate = 0.7       # Strong tiger advantage
-            elif effective_captures == 4:
-                win_rate = 0.85      # Very strong tiger advantage
-            else:  # 5 captures (tiger win)
-                win_rate = 1.0       # Tiger victory
-        
-        # Additional adjustment for non-immediate capture opportunities
-        # This rewards positions where Tiger has captures available, even if not Tiger's turn
-        if threatened_goats > 0 and current_turn != "TIGER":
-            win_rate += 0.05 * threatened_goats  # Bonus scales with threat level
-            
-        # For goat placements: Check if a goat is about to be placed in a capturable position
-        if state.phase == "PLACEMENT" and current_turn == "GOAT" and "type" in state.get_valid_moves()[0] and state.get_valid_moves()[0]["type"] == "placement":
-            for move in state.get_valid_moves():
-                x, y = move["x"], move["y"]
-                # Check if this position is adjacent to a tiger (unsafe)
-                for dy in [-1, 0, 1]:
-                    for dx in [-1, 0, 1]:
-                        if dx == 0 and dy == 0:
-                            continue  # Skip the position itself
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < 5 and 0 <= ny < 5 and state.board[ny][nx] is not None and state.board[ny][nx]["type"] == "TIGER":
-                            # This position is adjacent to a tiger - simulate the move
-                            next_state = state.clone()
-                            next_state.apply_move(move)
-                            # Check if this position allows a tiger capture
-                            next_tiger_moves = get_all_possible_moves(next_state.board, "MOVEMENT", "TIGER")
-                            for tiger_move in next_tiger_moves:
-                                if tiger_move.get("capture"):
-                                    # This placement would allow an immediate capture
-                                    if move["x"] == x and move["y"] == y:
-                                        # This is the move we're currently evaluating
-                                        # Adjust the win rate for this specific placement
-                                        return 0.8  # Very bad for goat (good for tiger)
-        
-        # Clamp final win rate to valid range [0.0, 1.0]
-        return max(0.0, min(1.0, win_rate)) 
+        # Extremely simple logic based only on captures
+        if goats_captured == 0:
+            return 0.0
+        elif goats_captured == 1:
+            return 0.5
+        elif goats_captured == 2:
+            return 0.8
+        elif goats_captured == 3:
+            return 0.9
+        else:
+            return 1.0 
