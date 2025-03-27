@@ -35,8 +35,11 @@ class MCTSNode:
             # Calculate win rate (exploitation term)
             win_rate = child.value / child.visits
             
-            # If it's Goat's turn at parent, invert the win rate for correct maximization
-            if self.state.turn == "GOAT":
+            # IMPORTANT: win_rate is already from the child's player perspective
+            # We need to convert it to the current (parent) player's perspective
+            # If the players are different, we need to invert the win rate
+            if self.state.turn != child.state.turn:
+                # Invert win rate when switching players
                 win_rate = 1.0 - win_rate
                 
             # Standard UCB exploration term
@@ -160,7 +163,7 @@ class MCTSAgent:
                 print("\n========== MOVE ANALYSIS ==========")
                 # Sort children by visits for display
                 sorted_children = sorted(root.children, key=lambda c: c.visits, reverse=True)
-                for i, child in enumerate(sorted_children[:5]):  # Show top 5 moves
+                for i, child in enumerate(sorted_children):  # Show all moves
                     capture_str = " (CAPTURE)" if child.move.get("capture") else ""
                     mcts_win_rate = child.value / child.visits if child.visits > 0 else 0
                     
@@ -253,11 +256,19 @@ class MCTSAgent:
             return self._random_rollout(state)  # Default to random
     
     def _random_rollout(self, state: GameState) -> float:
-        """Perform a completely random rollout."""
+        """
+        Perform a completely random rollout.
+        
+        Returns a value in [0.0, 1.0] where:
+        - 1.0 means win for the CURRENT player at the start of the rollout
+        - 0.0 means loss for the CURRENT player at the start of the rollout
+        - 0.5 means draw
+        """
         import time
         start_time = time.time()
         rollout_timeout = 0.5  # Maximum time for a single rollout in seconds
         
+        starting_player = state.turn  # Remember who started the rollout
         current_state = state.clone()
         max_depth = self.max_rollout_depth
         depth = 0
@@ -268,8 +279,14 @@ class MCTSAgent:
         while not current_state.is_terminal() and depth < max_depth:
             # Check timeout to prevent infinite loops
             if depth % 5 == 0 and time.time() - start_time > rollout_timeout:
-                # If timeout, use evaluation function
-                return self.predict_win_rate(current_state)
+                # If timeout, get win rate from Tiger's perspective
+                tiger_win_rate = self.predict_win_rate(current_state)
+                
+                # Convert to starting player's perspective
+                if starting_player == "TIGER":
+                    return tiger_win_rate  # Already in Tiger's perspective
+                else:
+                    return 1.0 - tiger_win_rate  # Convert to Goat's perspective
             
             # Only check for repetition in movement phase
             if current_state.phase == "MOVEMENT":
@@ -289,28 +306,43 @@ class MCTSAgent:
             current_state.apply_move(move)
             depth += 1
         
-        # If we hit max depth, use evaluation function
+        # If we hit max depth, use win rate predictor
         if depth >= max_depth:
-            return self.predict_win_rate(current_state)
+            # Get win rate from Tiger's perspective
+            tiger_win_rate = self.predict_win_rate(current_state)
+            
+            # Convert to starting player's perspective
+            if starting_player == "TIGER":
+                return tiger_win_rate  # Already in Tiger's perspective
+            else:
+                return 1.0 - tiger_win_rate  # Convert to Goat's perspective
         
         # Otherwise score based on winner
         winner = current_state.get_winner()
-        if winner == "TIGER":
-            return 1.0
-        elif winner == "GOAT":
-            return 0.0
-        else:
+        
+        # Return from starting player's perspective
+        if winner == starting_player:
+            return 1.0  # Starting player won
+        elif winner is None:
             return 0.5  # Draw
+        else:
+            return 0.0  # Starting player lost
     
     def _guided_rollout(self, state: GameState) -> float:
         """
         Perform a rollout guided by evaluation function with controllable strictness.
+        
+        Returns a value in [0.0, 1.0] where:
+        - 1.0 means win for the CURRENT player at the start of the rollout
+        - 0.0 means loss for the CURRENT player at the start of the rollout
+        - 0.5 means draw
         
         The strictness parameter (0.0 to 1.0) controls how deterministic the rollout is:
         - 0.0: Fully probabilistic selection based on evaluation scores
         - 1.0: Always selects the best evaluated move
         - Values between: Increasingly favor the best moves
         """
+        starting_player = state.turn  # Remember who started the rollout
         current_state = state.clone()
         max_depth = self.max_rollout_depth
         depth = 0
@@ -397,16 +429,25 @@ class MCTSAgent:
         
         # If we hit max depth, use win rate predictor
         if depth >= max_depth:
-            return self.predict_win_rate(current_state)
+            # Get win rate from Tiger's perspective
+            tiger_win_rate = self.predict_win_rate(current_state)
+            
+            # Convert to starting player's perspective
+            if starting_player == "TIGER":
+                return tiger_win_rate  # Already in Tiger's perspective
+            else:
+                return 1.0 - tiger_win_rate  # Convert to Goat's perspective
         
         # Otherwise score based on winner
         winner = current_state.get_winner()
-        if winner == "TIGER":
-            return 1.0
-        elif winner == "GOAT":
-            return 0.0
-        else:
+        
+        # Return from starting player's perspective
+        if winner == starting_player:
+            return 1.0  # Starting player won
+        elif winner is None:
             return 0.5  # Draw
+        else:
+            return 0.0  # Starting player lost
 
     def evaluate_move(self, state: GameState, move) -> float:
         """Evaluate a move using the minimax evaluation function."""
@@ -434,49 +475,6 @@ class MCTSAgent:
         else:
             # During placement phase, include goats_placed to ensure uniqueness
             return f"PLACEMENT_{state.goats_placed}_{state.turn}" 
-
-    def _normalize_eval_score(self, score: float) -> float:
-        """
-        Normalized evaluation scores to a [0,1] range where:
-        - 0.0 represents strong goat advantage
-        - 1.0 represents strong tiger advantage
-        - 0.5 represents a balanced position
-        
-        Uses a piecewise linear mapping function to provide better discrimination
-        between good and bad moves.
-        """
-        # Clamp to reasonable range
-        MAX_SCORE = 3000
-        score = max(min(score, MAX_SCORE), -MAX_SCORE)
-        
-        # Define thresholds based on general observations of the evaluation function
-        STRONG_GOAT = 0       # Very strong goat advantage
-        MILD_GOAT = 500       # Mild goat advantage
-        NEUTRAL = 1000        # Balanced position
-        MILD_TIGER = 1500     # Mild tiger advantage
-        STRONG_TIGER = 2000   # Strong tiger advantage
-
-        # Apply piecewise linear mapping
-        if score <= STRONG_GOAT:
-            return 0.05  # Strong goat advantage
-        elif score <= MILD_GOAT:
-            # Map [STRONG_GOAT, MILD_GOAT] to [0.05, 0.35]
-            t = (score - STRONG_GOAT) / (MILD_GOAT - STRONG_GOAT)
-            return 0.05 + t * 0.3
-        elif score <= NEUTRAL:
-            # Map [MILD_GOAT, NEUTRAL] to [0.35, 0.5]
-            t = (score - MILD_GOAT) / (NEUTRAL - MILD_GOAT)
-            return 0.35 + t * 0.15
-        elif score <= MILD_TIGER:
-            # Map [NEUTRAL, MILD_TIGER] to [0.5, 0.65]
-            t = (score - NEUTRAL) / (MILD_TIGER - NEUTRAL)
-            return 0.5 + t * 0.15
-        elif score <= STRONG_TIGER:
-            # Map [MILD_TIGER, STRONG_TIGER] to [0.65, 0.95]
-            t = (score - MILD_TIGER) / (STRONG_TIGER - MILD_TIGER)
-            return 0.65 + t * 0.3
-        else:
-            return 0.95  # Strong tiger advantage 
 
     def predict_win_rate(self, state: GameState) -> float:
         """
