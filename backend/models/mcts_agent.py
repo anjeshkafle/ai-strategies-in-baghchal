@@ -56,10 +56,36 @@ class MCTSNode:
         """Update node statistics with simulation result."""
         self.visits += 1
         self.value += result
+        
+    def backpropagate(self, result: float) -> None:
+        """
+        Update this node and all its ancestors with the result,
+        flipping the perspective at each level.
+        """
+        self.update(result)
+        
+        if self.parent:
+            # Flip result when passing up to parent (important for two-player zero-sum games)
+            self.parent.backpropagate(1.0 - result)
 
 
 class MCTSAgent:
-    """Monte Carlo Tree Search agent for the Bagh Chal game."""
+    """
+    Monte Carlo Tree Search agent for the Bagh Chal game.
+    
+    This implementation uses the standard MCTS algorithm with the following components:
+    1. Selection: UCB formula to select promising nodes
+    2. Expansion: Create child nodes for untried moves
+    3. Simulation: Random or guided rollouts to a fixed depth followed by win rate prediction
+    4. Backpropagation: Update node statistics up the tree, flipping the result between levels
+    
+    All win rates and values are stored from each node's perspective, where:
+    - Higher values (closer to 1.0) favor the player whose turn it is at that node
+    - Lower values (closer to 0.0) favor the opponent
+    
+    The win rate predictor returns values from the Tiger's perspective, which are
+    converted to the appropriate player's perspective during rollouts and backpropagation.
+    """
     
     def __init__(self, iterations: int = 1000, exploration_weight: float = 1.0, 
                  rollout_policy: str = "random", max_rollout_depth: int = 6,
@@ -141,9 +167,7 @@ class MCTSAgent:
                 result = self.rollout(node.state)
                 
                 # Backpropagation phase - update statistics up the tree
-                while node is not None:
-                    node.update(result)
-                    node = node.parent
+                node.backpropagate(result)
                     
                 iterations_completed = i + 1
             
@@ -250,13 +274,13 @@ class MCTSAgent:
     
     def _random_rollout(self, state: GameState) -> float:
         """
-        Simple random rollout with small depth.
+        Simple random rollout with configurable depth.
         Returns win rate from starting player's perspective.
         """
         starting_player = state.turn
         current_state = state.clone()
         depth = 0
-        max_depth = 4  # Small depth to focus on immediate threats
+        max_depth = self.max_rollout_depth
         
         # Track visited states to detect repetition
         visited_states = {}  # Format: {state_hash: count}
@@ -294,7 +318,7 @@ class MCTSAgent:
         starting_player = state.turn
         current_state = state.clone()
         depth = 0
-        max_depth = 4  # Small depth to focus on immediate threats
+        max_depth = self.max_rollout_depth
         
         # Track visited states to detect repetition
         visited_states = {}  # Format: {state_hash: count}
@@ -368,22 +392,22 @@ class MCTSAgent:
         """
         Simplified win rate predictor that ONLY cares about captures.
         Returns values from Tiger's perspective:
-        - 0.0: No captures (best for Goat)
-        - 0.5: One capture (significant disadvantage for Goat)
-        - 0.8: Two captures (severe disadvantage for Goat)
+        - 0.1: No captures (best for Goat)
+        - 0.8: One capture (significant disadvantage for Goat)
+        - 0.85: Two captures (severe disadvantage for Goat)
         - 0.9: Three captures (near-loss for Goat)
-        - 1.0: Four or more captures (Tiger victory approaching)
+        - 0.99: Four or more captures (Tiger victory approaching)
         """
         goats_captured = state.goats_captured
         
         # Extremely simple logic based only on captures
         if goats_captured == 0:
-            return 0.0
+            return 0.1
         elif goats_captured == 1:
-            return 0.5
-        elif goats_captured == 2:
             return 0.8
+        elif goats_captured == 2:
+            return 0.85
         elif goats_captured == 3:
             return 0.9
         else:
-            return 1.0 
+            return 0.99 

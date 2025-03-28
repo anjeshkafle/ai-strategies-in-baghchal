@@ -4,6 +4,7 @@ import os
 from typing import List, Dict, Optional
 import json
 import time
+import random
 
 # Add parent directory to path to make imports work in test
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -53,7 +54,7 @@ BOARD_STRING_4 = [
 BOARD_TO_USE = BOARD_STRING_4
 
 # Configure game state settings
-GAME_PHASE = "MOVEMENT"  # "PLACEMENT" or "MOVEMENT"
+GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
 TURN = "TIGER"            # "GOAT" or "TIGER"
 GOATS_PLACED = 1
 GOATS_CAPTURED = 0
@@ -70,7 +71,7 @@ MINIMAX_MAX_DEPTH = 5
 MCTS_ITERATIONS = 50000
 MCTS_EXPLORATION_WEIGHT = 1.414
 MCTS_ROLLOUT_POLICY = "random"
-MCTS_MAX_ROLLOUT_DEPTH = 5
+MCTS_MAX_ROLLOUT_DEPTH = 6
 MCTS_GUIDED_STRICTNESS = 0.8
 MCTS_MAX_TIME_SECONDS = 50
 
