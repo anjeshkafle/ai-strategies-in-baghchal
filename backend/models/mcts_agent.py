@@ -60,13 +60,16 @@ class MCTSNode:
     def backpropagate(self, result: float) -> None:
         """
         Update this node and all its ancestors with the result,
-        flipping the perspective at each level.
+        flipping the perspective only when the player changes.
         """
         self.update(result)
         
         if self.parent:
-            # Flip result when passing up to parent (important for two-player zero-sum games)
-            self.parent.backpropagate(1.0 - result)
+            # Only flip result when the player changes
+            if self.state.turn != self.parent.state.turn:
+                self.parent.backpropagate(1.0 - result)
+            else:
+                self.parent.backpropagate(result)
 
 
 class MCTSAgent:
@@ -182,7 +185,13 @@ class MCTSAgent:
                 sorted_children = sorted(root.children, key=lambda c: c.visits, reverse=True)
                 for i, child in enumerate(sorted_children):  # Show all moves
                     capture_str = " (CAPTURE)" if child.move.get("capture") else ""
-                    mcts_win_rate = child.value / child.visits if child.visits > 0 else 0
+                    # Calculate win rate properly considering perspective
+                    raw_win_rate = child.value / child.visits if child.visits > 0 else 0
+                    # Convert to root's perspective if players are different
+                    if root.state.turn != child.state.turn:
+                        mcts_win_rate = 1.0 - raw_win_rate
+                    else:
+                        mcts_win_rate = raw_win_rate
                     
                     # Get win rate prediction for this move
                     next_state = state.clone()
@@ -211,7 +220,13 @@ class MCTSAgent:
                             for child in root.children if child.move.get("capture")]
             if capture_moves:
                 print("\n========== CAPTURE MOVES ==========")
-                for child, mcts_win_rate in capture_moves:
+                for child, raw_win_rate in capture_moves:
+                    # Convert to root's perspective if players are different
+                    if root.state.turn != child.state.turn:
+                        mcts_win_rate = 1.0 - raw_win_rate
+                    else:
+                        mcts_win_rate = raw_win_rate
+                        
                     next_state = state.clone()
                     next_state.apply_move(child.move)
                     predicted_win_rate = self.predict_win_rate(next_state)
@@ -230,7 +245,14 @@ class MCTSAgent:
             best_child = max(root.children, key=lambda c: c.visits)
             
             # Output details about the selection
-            mcts_win_rate = best_child.value / best_child.visits if best_child.visits > 0 else 0
+            # Calculate win rate properly considering perspective
+            raw_win_rate = best_child.value / best_child.visits if best_child.visits > 0 else 0
+            # Convert to root's perspective if players are different
+            if root.state.turn != best_child.state.turn:
+                mcts_win_rate = 1.0 - raw_win_rate
+            else:
+                mcts_win_rate = raw_win_rate
+                
             capture_text = "CAPTURE MOVE" if best_child.move.get("capture") else "regular move"
             
             # Show the predicted win rate for the selected move

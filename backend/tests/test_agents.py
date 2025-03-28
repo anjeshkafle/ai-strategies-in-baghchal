@@ -38,7 +38,7 @@ BOARD_STRING_3 = [
     "T___T",
     "_____",
     "_____",
-    "_G___",
+    "__G__",
     "T___T"
 ]
 
@@ -47,16 +47,16 @@ BOARD_STRING_4 = [
     "_____",
     "_____",
     "_____",
-    "TG__T"
+    "T___T"
 ]
 
 # Select which board to use (directly set to the board string variable)
-BOARD_TO_USE = BOARD_STRING_4
+BOARD_TO_USE = BOARD_STRING_3
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
 TURN = "TIGER"            # "GOAT" or "TIGER"
-GOATS_PLACED = 1
+GOATS_PLACED = 0
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
