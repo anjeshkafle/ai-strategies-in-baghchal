@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Tuple
 import random
 import math
+import heapq
 from models.game_state import GameState
 from models.minimax_agent import MinimaxAgent
 from game_logic import get_all_possible_moves
@@ -103,6 +104,9 @@ class MCTSAgent:
         # Create a minimax agent for evaluation
         # We only use the evaluation function, depth is not relevant here
         self.minimax_agent = MinimaxAgent()
+        
+        # Cache for position evaluations during rollouts
+        self._eval_cache = {}  # Format: {state_hash: evaluation_score}
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using MCTS."""
@@ -334,7 +338,9 @@ class MCTSAgent:
     
     def _guided_rollout(self, state: GameState) -> float:
         """
-        Simple guided rollout that uses evaluation scores with random selection for ties.
+        Optimized guided rollout that uses a blend of minimax and randomness.
+        The guided_strictness parameter controls how often we follow the best move vs random selection.
+        Uses heap selection instead of full sorting for better performance.
         Returns win rate from starting player's perspective.
         """
         starting_player = state.turn
@@ -357,20 +363,48 @@ class MCTSAgent:
             if not valid_moves:
                 break
             
-            # Evaluate all moves
-            move_scores = []
-            for move in valid_moves:
-                next_state = current_state.clone()
-                next_state.apply_move(move)
-                score = self.minimax_agent.evaluate(next_state)
-                move_scores.append((move, score))
+            # Decide whether to use guided selection or random selection
+            if random.random() < self.guided_strictness and len(valid_moves) > 1:
+                # Pre-allocate list for better performance
+                move_count = len(valid_moves)
+                move_scores = [(None, 0)] * move_count
+                
+                # Guided selection - evaluate all moves using cache when possible
+                for i, move in enumerate(valid_moves):
+                    next_state = current_state.clone()
+                    next_state.apply_move(move)
+                    
+                    # Check cache for this position
+                    state_hash = self._get_state_hash(next_state)
+                    if state_hash in self._eval_cache:
+                        score = self._eval_cache[state_hash]
+                    else:
+                        score = self.minimax_agent.evaluate(next_state)
+                        # Store in cache (limit cache size to prevent memory issues)
+                        if len(self._eval_cache) < 10000:  # Arbitrary limit
+                            self._eval_cache[state_hash] = score
+                    
+                    move_scores[i] = (move, score)
+                
+                # Calculate the number of top moves to consider
+                top_count = max(1, int(move_count * 0.3))
+                
+                # Use heap operations to find only the top N moves
+                if current_state.turn == "TIGER":
+                    # For Tiger, higher scores are better
+                    top_moves_with_scores = heapq.nlargest(top_count, move_scores, key=lambda x: x[1])
+                    top_moves = [move for move, _ in top_moves_with_scores]
+                else:
+                    # For Goat, lower scores are better
+                    top_moves_with_scores = heapq.nsmallest(top_count, move_scores, key=lambda x: x[1])
+                    top_moves = [move for move, _ in top_moves_with_scores]
+                
+                # Select randomly from top moves
+                selected_move = random.choice(top_moves)
+            else:
+                # Random selection
+                selected_move = random.choice(valid_moves)
             
-            # Determine optimal score based on player (max for Tiger, min for Goat)
-            optimal_score = max(score for _, score in move_scores) if current_state.turn == "TIGER" else min(score for _, score in move_scores)
-            best_moves = [move for move, score in move_scores if score == optimal_score]
-            
-            # Random selection among best moves
-            selected_move = random.choice(best_moves)
             current_state.apply_move(selected_move)
             depth += 1
         

@@ -46,7 +46,7 @@ BOARD_STRING_4 = [
     "T___T",
     "_____",
     "_____",
-    "_____",
+    "_G___",
     "T___T"
 ]
 
@@ -68,11 +68,11 @@ RUN_MCTS = True
 MINIMAX_MAX_DEPTH = 5
 
 # MCTS parameters
-MCTS_ITERATIONS = 100000
+MCTS_ITERATIONS = 5000
 MCTS_EXPLORATION_WEIGHT = 1.414
-MCTS_ROLLOUT_POLICY = "random"
-MCTS_MAX_ROLLOUT_DEPTH = 3
-MCTS_GUIDED_STRICTNESS = 0.8
+MCTS_ROLLOUT_POLICY = "guided"
+MCTS_MAX_ROLLOUT_DEPTH = 6
+MCTS_GUIDED_STRICTNESS = 0.7
 MCTS_MAX_TIME_SECONDS = 50
 
 #-----------------------------------------------
