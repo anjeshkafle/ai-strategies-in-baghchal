@@ -106,7 +106,7 @@ class MCTSAgent:
                  guided_strictness: float = 0.5, max_time_seconds: int = 50):
         self.iterations = iterations
         self.exploration_weight = exploration_weight
-        self.rollout_policy = rollout_policy  # "random" or "guided"
+        self.rollout_policy = rollout_policy  # "random", "guided", or "lightweight"
         self.max_rollout_depth = max_rollout_depth  # Maximum depth for rollouts before using evaluation
         self.guided_strictness = max(0.0, min(1.0, guided_strictness))  # Clamp to [0, 1]
         self.max_time_seconds = max_time_seconds  # Maximum time to spend on calculation
@@ -320,6 +320,8 @@ class MCTSAgent:
             return self._random_rollout(state)
         elif self.rollout_policy == "guided":
             return self._guided_rollout(state)
+        elif self.rollout_policy == "lightweight":
+            return self._lightweight_guided_rollout(state)
         else:
             return self._random_rollout(state)  # Default to random
     
@@ -441,6 +443,138 @@ class MCTSAgent:
                 # Random selection
                 selected_move = random.choice(valid_moves)
             
+            current_state.apply_move(selected_move)
+            depth += 1
+        
+        # Check if we've reached a terminal state during rollout
+        if current_state.is_terminal():
+            winner = current_state.get_winner()
+            
+            if winner == "TIGER":
+                return 1.0 if starting_player == "TIGER" else 0.0
+            elif winner == "GOAT":
+                return 0.0 if starting_player == "TIGER" else 1.0
+            else:
+                return 0.5  # Draw
+        
+        # Use win rate predictor at leaf node for non-terminal states
+        tiger_win_rate = self.predict_win_rate(current_state)
+        
+        # Convert to starting player's perspective
+        if starting_player == "TIGER":
+            return tiger_win_rate
+        else:
+            return 1.0 - tiger_win_rate
+
+    def _lightweight_guided_rollout(self, state: GameState) -> float:
+        """
+        Lightweight guided rollout that uses simple strategic rules:
+        - Tigers always take captures when available
+        - Goats avoid immediate captures, with progressive bias toward exploring risky moves
+        
+        Returns win rate from starting player's perspective.
+        """
+        starting_player = state.turn
+        current_state = state.clone()
+        depth = 0
+        max_depth = self.max_rollout_depth
+        
+        # Track visited states to detect repetition
+        visited_states = {}  # Format: {state_hash: count}
+        
+        while not current_state.is_terminal() and depth < max_depth:
+            # Check for threefold repetition in movement phase
+            if current_state.phase == "MOVEMENT":
+                state_hash = self._get_state_hash(current_state)
+                visited_states[state_hash] = visited_states.get(state_hash, 0) + 1
+                if visited_states[state_hash] >= 3:
+                    return 0.5  # Draw due to threefold repetition
+            
+            valid_moves = current_state.get_valid_moves()
+            if not valid_moves:
+                break
+            
+            selected_move = None
+            
+            # Tiger's turn - prioritize captures
+            if current_state.turn == "TIGER":
+                # Find all capture moves
+                capture_moves = [move for move in valid_moves if move.get("capture")]
+                
+                # If there are capture moves, select one randomly
+                if capture_moves:
+                    selected_move = random.choice(capture_moves)
+                else:
+                    selected_move = random.choice(valid_moves)
+            
+            # Goat's turn - avoid immediate captures with progressive bias
+            else:  # GOAT's turn
+                # Calculate how many empty cells remain (simple formula)
+                initial_empty = 21  # 5x5 board minus 4 initial tigers
+                empty_cells = initial_empty - current_state.goats_placed + current_state.goats_captured
+                
+                # Find safe moves (where this specific goat won't be immediately captured)
+                safe_moves = []
+                unsafe_moves = []
+                
+                for move in valid_moves:
+                    # Apply the move
+                    test_state = current_state.clone()
+                    test_state.apply_move(move)
+                    
+                    # Get the target position where the goat was placed/moved
+                    if move["type"] == "placement":
+                        target_x, target_y = move["x"], move["y"]
+                    else:  # movement
+                        target_x, target_y = move["to"]["x"], move["to"]["y"]
+                    
+                    # Check if this specific goat would be captured in the next move
+                    is_unsafe = False
+                    tiger_moves = test_state.get_valid_moves()
+                    
+                    # Look directly for capture moves that target our goat
+                    for tiger_move in tiger_moves:
+                        # If it's a capture move, check the capture coordinates
+                        if tiger_move.get("capture"):
+                            capture_coords = tiger_move["capture"]
+                            # Check if the captured coordinates match our target position
+                            if capture_coords["x"] == target_x and capture_coords["y"] == target_y:
+                                is_unsafe = True
+                                break
+                    
+                    if is_unsafe:
+                        unsafe_moves.append(move)
+                    else:
+                        safe_moves.append(move)
+                
+                # Calculate progressive bias - as empty cells decrease, allow more exploration
+                # Early game: almost always choose safe moves
+                # Late game: consider unsafe moves more frequently
+                safe_bias = min(1.0, empty_cells / initial_empty + 0.2)
+                
+                # Properly mutually exclusive choice between safe and unsafe moves:
+                if safe_moves and unsafe_moves:
+                    # Both options are available - use bias to choose between categories
+                    if random.random() < safe_bias:
+                        # Choose from ONLY safe moves
+                        selected_move = random.choice(safe_moves)
+                    else:
+                        # Choose from ONLY unsafe moves
+                        selected_move = random.choice(unsafe_moves)
+                elif safe_moves:
+                    # Only safe moves available
+                    selected_move = random.choice(safe_moves)
+                elif unsafe_moves:
+                    # Only unsafe moves available
+                    selected_move = random.choice(unsafe_moves)
+                else:
+                    # No valid categorization (shouldn't happen but just in case)
+                    selected_move = random.choice(valid_moves)
+            
+            # If we somehow didn't select a move, fall back to random
+            if selected_move is None:
+                selected_move = random.choice(valid_moves)
+                
             current_state.apply_move(selected_move)
             depth += 1
         
