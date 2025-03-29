@@ -298,12 +298,14 @@ def run_mcts_test(game_state):
     rollout_policy = MCTS_ROLLOUT_POLICY
     max_rollout_depth = MCTS_MAX_ROLLOUT_DEPTH
     guided_strictness = MCTS_GUIDED_STRICTNESS
+    max_time_seconds = MCTS_MAX_TIME_SECONDS
     
     print(f"\nInitializing MCTS agent with {iterations} iterations")
     print(f"Exploration weight: {exploration_weight}")
     print(f"Rollout policy: {rollout_policy}")
     print(f"Maximum rollout depth: {max_rollout_depth}")
     print(f"Guided strictness: {guided_strictness}")
+    print(f"Maximum time: {max_time_seconds} seconds")
     
     # Create the MCTS agent
     agent = MCTSAgent(
@@ -311,7 +313,8 @@ def run_mcts_test(game_state):
         exploration_weight=exploration_weight,
         rollout_policy=rollout_policy,
         max_rollout_depth=max_rollout_depth,
-        guided_strictness=guided_strictness
+        guided_strictness=guided_strictness,
+        max_time_seconds=max_time_seconds
     )
     
     # Print minimax evaluation of each move for reference

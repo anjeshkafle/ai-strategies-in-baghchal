@@ -93,12 +93,13 @@ class MCTSAgent:
     
     def __init__(self, iterations: int = 1000, exploration_weight: float = 1.0, 
                  rollout_policy: str = "random", max_rollout_depth: int = 6,
-                 guided_strictness: float = 0.5):
+                 guided_strictness: float = 0.5, max_time_seconds: int = 50):
         self.iterations = iterations
         self.exploration_weight = exploration_weight
         self.rollout_policy = rollout_policy  # "random" or "guided"
         self.max_rollout_depth = max_rollout_depth  # Maximum depth for rollouts before using evaluation
         self.guided_strictness = max(0.0, min(1.0, guided_strictness))  # Clamp to [0, 1]
+        self.max_time_seconds = max_time_seconds  # Maximum time to spend on calculation
         self._last_state = None  # Track the last state for normalization context
         
         # Create a minimax agent for evaluation
@@ -113,7 +114,6 @@ class MCTSAgent:
         try:
             import time
             start_time = time.time()
-            max_time_seconds = 50  # Maximum time to spend on calculation
             
             # Print current board state win rate prediction
             current_win_rate = self.predict_win_rate(state)
@@ -157,7 +157,7 @@ class MCTSAgent:
                 # Check for timeout
                 if i % 100 == 0:  # Check time periodically to avoid performance impact
                     current_time = time.time()
-                    if current_time - start_time > max_time_seconds:
+                    if current_time - start_time > self.max_time_seconds:
                         print(f"MCTS timeout after {i} iterations ({current_time - start_time:.2f} seconds)")
                         break
                 
