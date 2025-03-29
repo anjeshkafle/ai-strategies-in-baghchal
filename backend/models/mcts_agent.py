@@ -365,9 +365,9 @@ class MCTSAgent:
                 score = self.minimax_agent.evaluate(next_state)
                 move_scores.append((move, score))
             
-            # Group moves by score to handle ties
-            max_score = max(score for _, score in move_scores)
-            best_moves = [move for move, score in move_scores if score == max_score]
+            # Determine optimal score based on player (max for Tiger, min for Goat)
+            optimal_score = max(score for _, score in move_scores) if current_state.turn == "TIGER" else min(score for _, score in move_scores)
+            best_moves = [move for move, score in move_scores if score == optimal_score]
             
             # Random selection among best moves
             selected_move = random.choice(best_moves)
