@@ -43,7 +43,7 @@ BOARD_STRING_3 = [
 ]
 
 BOARD_STRING_4 = [
-    "TGGGT",
+    "T_GGT",
     "GGGGG",
     "G_G__",
     "GGGGG",

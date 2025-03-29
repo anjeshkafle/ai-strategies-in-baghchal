@@ -24,6 +24,10 @@ class MCTSNode:
     
     def select_child(self, exploration_weight: float = 1.0) -> 'MCTSNode':
         """Select a child node using the standard UCB formula."""
+        # We need at least one child to select from
+        if not self.children:
+            return self  # Return self to avoid max() on empty sequence
+        
         log_visits = math.log(self.visits) if self.visits > 0 else 0
         
         def ucb_score(child):
@@ -46,11 +50,17 @@ class MCTSNode:
     
     def expand(self) -> 'MCTSNode':
         """Add a new child node and return it."""
+        # Pop a move from untried_moves
         move = self.untried_moves.pop()
+        
+        # Apply the move to a new state
         next_state = self.state.clone()
         next_state.apply_move(move)
+        
+        # Create a new child node
         child = MCTSNode(next_state, parent=self, move=move)
         self.children.append(child)
+        
         return child
     
     def update(self, result: float) -> None:
@@ -164,7 +174,10 @@ class MCTSAgent:
                 # Selection phase - select a promising leaf node
                 node = root
                 while not node.state.is_terminal() and node.is_fully_expanded():
-                    node = node.select_child(self.exploration_weight)
+                    selected_node = node.select_child(self.exploration_weight)
+                    if selected_node == node:  # No children case
+                        break
+                    node = selected_node
                 
                 # Expansion phase - if node is not terminal and has untried moves
                 if not node.state.is_terminal() and not node.is_fully_expanded():
