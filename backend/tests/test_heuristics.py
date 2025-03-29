@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
+from models.mcts_agent import MCTSAgent
 from game_logic import get_all_possible_moves
 
 
@@ -50,6 +51,154 @@ def print_board(state):
                 row += "G|"
         print(row)
         print("-" * 11)
+
+
+def test_mcts_win_rate_predictor():
+    """Test the MCTS agent's advanced win rate predictor on different board configurations."""
+    # Create boards with different captures and positions
+    test_boards = [
+        # Board 1: No captures, early placement
+        {
+            "board": [
+                "T___T",
+                "_____",
+                "_____",
+                "_____",
+                "T___T"
+            ],
+            "phase": "PLACEMENT",
+            "turn": "GOAT",
+            "goats_placed": 5,
+            "goats_captured": 0,
+            "desc": "Early placement, no captures"
+        },
+        # Board 2: Optimal tiger position, no captures
+        {
+            "board": [
+                "_____",
+                "_T_T_",
+                "_____",
+                "_T_T_",
+                "_____"
+            ],
+            "phase": "PLACEMENT",
+            "turn": "GOAT",
+            "goats_placed": 10,
+            "goats_captured": 0,
+            "desc": "Optimal tiger position, no captures"
+        },
+        # Board 3: One capture, mid-placement
+        {
+            "board": [
+                "T___T",
+                "_GG__",
+                "__G__",
+                "_G___",
+                "T___T"
+            ],
+            "phase": "PLACEMENT",
+            "turn": "GOAT",
+            "goats_placed": 15,
+            "goats_captured": 1,
+            "desc": "Mid-placement with one capture"
+        },
+        # Board 4: Closed spaces for tigers
+        {
+            "board": [
+                "T_G_T",
+                "GGGGG",
+                "_GGG_",
+                "GGGGG",
+                "T_G_T"
+            ],
+            "phase": "MOVEMENT",
+            "turn": "TIGER",
+            "goats_placed": 20,
+            "goats_captured": 0,
+            "desc": "Many closed spaces (good for goats)"
+        },
+        # Board 5: Three captures, movement phase
+        {
+            "board": [
+                "T___T",
+                "_G___",
+                "_____",
+                "___G_",
+                "T___T"
+            ],
+            "phase": "MOVEMENT",
+            "turn": "TIGER",
+            "goats_placed": 20,
+            "goats_captured": 3,
+            "desc": "Movement phase with three captures"
+        }
+    ]
+    
+    # Create agents
+    mcts_agent = MCTSAgent()
+    
+    print("\n===== TESTING MCTS WIN RATE PREDICTOR =====")
+    print("Comparing simple vs. advanced win rate prediction")
+    print("=============================================")
+    
+    for board_data in test_boards:
+        # Create the game state
+        game_state = string_board_to_game_state(
+            board_data["board"],
+            phase=board_data["phase"],
+            turn=board_data["turn"],
+            goats_placed=board_data["goats_placed"],
+            goats_captured=board_data["goats_captured"]
+        )
+        
+        # Print board and state info
+        print(f"\n***** {board_data['desc']} *****")
+        print_board(game_state)
+        print(f"Phase: {game_state.phase}, Turn: {game_state.turn}")
+        print(f"Goats placed: {game_state.goats_placed}, Goats captured: {game_state.goats_captured}")
+        
+        # Calculate win rates with both methods
+        simple_win_rate = mcts_agent.basic_win_rate_predictor(game_state)
+        advanced_win_rate = mcts_agent.predict_win_rate(game_state)
+        
+        print("\nWin Rate Predictions (from Tiger's perspective):")
+        print(f"Simple win rate: {simple_win_rate:.4f}")
+        print(f"Advanced win rate: {advanced_win_rate:.4f}")
+        
+        # Get detailed heuristic values
+        all_tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
+        
+        # Calculate key heuristics
+        movable_tigers = mcts_agent.minimax_agent._count_movable_tigers(all_tiger_moves)
+        closed_regions = mcts_agent.minimax_agent._count_closed_spaces(game_state, all_tiger_moves)
+        total_closed_spaces = sum(len(region) for region in closed_regions)
+        threatened_goats = mcts_agent.minimax_agent._count_threatened_goats(all_tiger_moves)
+        position_score = mcts_agent.minimax_agent._calculate_tiger_positional_score(game_state)
+        optimal_spacing_score = mcts_agent.minimax_agent._calculate_tiger_optimal_spacing(game_state)
+        edge_score = mcts_agent.minimax_agent._calculate_goat_edge_preference(game_state)
+        
+        print("\nContributing Heuristics:")
+        print(f"Movable Tigers: {movable_tigers}/4")
+        print(f"Closed Spaces: {total_closed_spaces}")
+        print(f"Threatened Goats: {threatened_goats}")
+        print(f"Tiger Position Score: {position_score:.3f}")
+        print(f"Optimal Spacing Score: {optimal_spacing_score:.3f}")
+        print(f"Goat Edge Preference: {edge_score:.3f}")
+        
+        # Calculate expected captures
+        if game_state.goats_placed < 15:
+            expected_captures = 0
+        else:
+            expected_captures = (game_state.goats_placed - 15) * (2 / 5)
+        
+        # Calculate capture deficit
+        capture_deficit = game_state.goats_captured - expected_captures
+        
+        print(f"\nExpected captures at this stage: {expected_captures:.2f}")
+        print(f"Actual captures: {game_state.goats_captured}")
+        print(f"Capture deficit: {capture_deficit:.2f}")
+        
+        print("---------------------------------------------")
 
 
 def main():
@@ -189,4 +338,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
+    test_mcts_win_rate_predictor() 

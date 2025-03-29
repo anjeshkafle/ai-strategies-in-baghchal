@@ -68,11 +68,11 @@ RUN_MCTS = True
 MINIMAX_MAX_DEPTH = 5
 
 # MCTS parameters
-MCTS_ITERATIONS = 5000
+MCTS_ITERATIONS = 1000
 MCTS_EXPLORATION_WEIGHT = 1.414
 MCTS_ROLLOUT_POLICY = "guided"
 MCTS_MAX_ROLLOUT_DEPTH = 6
-MCTS_GUIDED_STRICTNESS = 0.7
+MCTS_GUIDED_STRICTNESS = 0.7 # in order to always prefer the best move, set to 1.0.
 MCTS_MAX_TIME_SECONDS = 50
 
 #-----------------------------------------------
