@@ -41,10 +41,12 @@ agents = {
     "random": RandomAgent(),
     "minimax": MinimaxAgent(max_depth=5),
     "mcts": MCTSAgent(
-        iterations=1000, 
+        iterations=3000, 
         exploration_weight=1.414, 
         rollout_policy="guided",
-        guided_strictness=0.5
+        guided_strictness=0.7,
+        max_rollout_depth=6,
+        max_time_seconds=50
     )
 }
 
