@@ -291,6 +291,18 @@ class MCTSAgent:
         # Store the initial state for normalization context
         self._last_state = state.clone()
         
+        # Check if the state is already terminal
+        if state.is_terminal():
+            starting_player = state.turn
+            winner = state.get_winner()
+            
+            if winner == "TIGER":
+                return 1.0 if starting_player == "TIGER" else 0.0
+            elif winner == "GOAT":
+                return 0.0 if starting_player == "TIGER" else 1.0
+            else:
+                return 0.5  # Draw
+        
         if self.rollout_policy == "random":
             return self._random_rollout(state)
         elif self.rollout_policy == "guided":
@@ -327,7 +339,18 @@ class MCTSAgent:
             current_state.apply_move(move)
             depth += 1
         
-        # Use win rate predictor at leaf node
+        # Check if we've reached a terminal state during rollout
+        if current_state.is_terminal():
+            winner = current_state.get_winner()
+            
+            if winner == "TIGER":
+                return 1.0 if starting_player == "TIGER" else 0.0
+            elif winner == "GOAT":
+                return 0.0 if starting_player == "TIGER" else 1.0
+            else:
+                return 0.5  # Draw
+        
+        # Use win rate predictor at leaf node for non-terminal states
         tiger_win_rate = self.predict_win_rate(current_state)
         
         # Convert to starting player's perspective
@@ -408,7 +431,18 @@ class MCTSAgent:
             current_state.apply_move(selected_move)
             depth += 1
         
-        # Use win rate predictor at leaf node
+        # Check if we've reached a terminal state during rollout
+        if current_state.is_terminal():
+            winner = current_state.get_winner()
+            
+            if winner == "TIGER":
+                return 1.0 if starting_player == "TIGER" else 0.0
+            elif winner == "GOAT":
+                return 0.0 if starting_player == "TIGER" else 1.0
+            else:
+                return 0.5  # Draw
+        
+        # Use win rate predictor at leaf node for non-terminal states
         tiger_win_rate = self.predict_win_rate(current_state)
         
         # Convert to starting player's perspective
@@ -465,5 +499,7 @@ class MCTSAgent:
             return 0.85
         elif goats_captured == 3:
             return 0.9
+        elif goats_captured == 4:
+            return 0.95 
         else:
-            return 0.99 
+            return 0.99
