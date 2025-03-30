@@ -60,12 +60,12 @@ GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
-RUN_MINIMAX = False
-RUN_MCTS = True
+RUN_MINIMAX = True
+RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 5
+MINIMAX_MAX_DEPTH = 4
 
 # MCTS parameters
 MCTS_ITERATIONS = 20000

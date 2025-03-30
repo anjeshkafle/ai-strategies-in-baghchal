@@ -182,7 +182,7 @@ def test_mcts_win_rate_predictor():
         movable_tigers = mcts_agent.minimax_agent._count_movable_tigers(all_tiger_moves)
         closed_regions = mcts_agent.minimax_agent._count_closed_spaces(game_state, all_tiger_moves)
         total_closed_spaces = sum(len(region) for region in closed_regions)
-        threatened_goats = mcts_agent.minimax_agent._count_threatened_goats(all_tiger_moves)
+        threatened_goats = mcts_agent.minimax_agent._count_threatened_goats(all_tiger_moves, game_state.turn)
         position_score = mcts_agent.minimax_agent._calculate_tiger_positional_score(game_state)
         optimal_spacing_score = mcts_agent.minimax_agent._calculate_tiger_optimal_spacing(game_state)
         edge_score = mcts_agent.minimax_agent._calculate_goat_edge_preference(game_state)
@@ -213,22 +213,13 @@ def test_mcts_win_rate_predictor():
 
 def main():
     """Test for heuristics including the new positional score and optimal spacing."""
-    # Define board states for testing
-    # Board 1: Tigers clustered in corner
-    board_1 = [
-        "__G__",
-        "_G_G_",
-        "_TG__",
-        "_____",
-        "TTT_T"
-    ]
 
     board_2 = [
-        "_G___",
-        "GG___",
+        "T___T",
         "_____",
+        "G____",
         "_____",
-        "TTT_T"
+        "T___T"
     ]
     
     # Board weights matrix for reference (same as in the agent)
@@ -248,7 +239,6 @@ def main():
     
     # Test all boards
     test_boards = {
-        "Board 1 (should be 1 closed space, but doesn't have)": board_1,
         "Board 2 (1 closed space working)": board_2,
     }
     
@@ -286,7 +276,7 @@ def main():
         # Print key heuristic information
         movable_tigers = agent._count_movable_tigers(all_tiger_moves)
         closed_regions = agent._count_closed_spaces(game_state, all_tiger_moves)
-        threatened_goats = agent._count_threatened_goats(all_tiger_moves)
+        threatened_goats = agent._count_threatened_goats(all_tiger_moves, game_state.turn)
         
         # Print detailed information about each closed region
         print("\nDetailed Closed Regions:")

@@ -39,7 +39,7 @@ class MoveRequest(BaseModel):
 # Initialize agents
 agents = {
     "random": RandomAgent(),
-    "minimax": MinimaxAgent(max_depth=5),
+    "minimax": MinimaxAgent(max_depth=5, randomize_equal_moves=True),
     "mcts": MCTSAgent(
         iterations=20000, 
         exploration_weight=1.414, 
