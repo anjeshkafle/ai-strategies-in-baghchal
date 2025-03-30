@@ -60,7 +60,21 @@ def test_mcts_win_rate_predictor():
         # Board 1: No captures, early placement
         {
             "board": [
-                "T___T",
+                "TG__T",
+                "_____",
+                "_____",
+                "_____",
+                "T___T"
+            ],
+            "phase": "PLACEMENT",
+            "turn": "TIGER",
+            "goats_placed": 5,
+            "goats_captured": 0,
+            "desc": "Early placement, no captures, 1 threat (balanced) - tiger turn"
+        },
+         {
+            "board": [
+                "TGG_T",
                 "_____",
                 "_____",
                 "_____",
@@ -70,39 +84,84 @@ def test_mcts_win_rate_predictor():
             "turn": "GOAT",
             "goats_placed": 5,
             "goats_captured": 0,
-            "desc": "Early placement, no captures"
+            "desc": "Early placement, no captures, 1 threat (balanced) - goat turn"
         },
-        # Board 2: Optimal tiger position, no captures
-        {
-            "board": [
-                "_____",
-                "_T_T_",
-                "_____",
-                "_T_T_",
-                "_____"
-            ],
-            "phase": "PLACEMENT",
-            "turn": "GOAT",
-            "goats_placed": 10,
-            "goats_captured": 0,
-            "desc": "Optimal tiger position, no captures"
-        },
-        # Board 3: One capture, mid-placement
+        # Board 2: One capture, early placement
         {
             "board": [
                 "T___T",
-                "_GG__",
-                "__G__",
-                "_G___",
+                "_____",
+                "_____",
+                "_____",
                 "T___T"
             ],
             "phase": "PLACEMENT",
             "turn": "GOAT",
-            "goats_placed": 15,
+            "goats_placed": 14,
             "goats_captured": 1,
-            "desc": "Mid-placement with one capture"
+            "desc": "Early placement, one capture (tiger advantage)"
         },
-        # Board 4: Closed spaces for tigers
+        # Board 3: Two captures, mid placement
+        {
+            "board": [
+                "T___T",
+                "_G___",
+                "_____",
+                "_____",
+                "T___T"
+            ],
+            "phase": "PLACEMENT",
+            "turn": "GOAT",
+            "goats_placed": 18,
+            "goats_captured": 1,
+            "desc": "Mid placement, two captures (strong tiger advantage)"
+        },
+        # Board 4: Three captures
+        {
+            "board": [
+                "T___T",
+                "_G___",
+                "_____",
+                "_____",
+                "T___T"
+            ],
+            "phase": "MOVEMENT",
+            "turn": "GOAT",
+            "goats_placed": 20,
+            "goats_captured": 3,
+            "desc": "Movement phase, three captures (severe tiger advantage)"
+        },
+        # Board 5: Four captures (one away from terminal)
+        {
+            "board": [
+                "T___T",
+                "_G___",
+                "_____",
+                "_____",
+                "T___T"
+            ],
+            "phase": "MOVEMENT",
+            "turn": "GOAT",
+            "goats_placed": 20,
+            "goats_captured": 4,
+            "desc": "Movement phase, four captures (near-terminal tiger advantage)"
+        },
+        # Board 6: Expected captures, no deficit
+        {
+            "board": [
+                "T___T",
+                "_G___",
+                "_____",
+                "_____",
+                "T___T"
+            ],
+            "phase": "MOVEMENT",
+            "turn": "GOAT",
+            "goats_placed": 18,
+            "goats_captured": 1,
+            "desc": "Expected captures (no deficit, balanced)"
+        },
+        # Board 7: Negative deficit (goat advantage)
         {
             "board": [
                 "T_G_T",
@@ -115,22 +174,7 @@ def test_mcts_win_rate_predictor():
             "turn": "TIGER",
             "goats_placed": 20,
             "goats_captured": 0,
-            "desc": "Many closed spaces (good for goats)"
-        },
-        # Board 5: Three captures, movement phase
-        {
-            "board": [
-                "T___T",
-                "_G___",
-                "_____",
-                "___G_",
-                "T___T"
-            ],
-            "phase": "MOVEMENT",
-            "turn": "TIGER",
-            "goats_placed": 20,
-            "goats_captured": 3,
-            "desc": "Movement phase with three captures"
+            "desc": "No captures in movement phase (negative deficit, goat advantage)"
         }
     ]
     
@@ -169,7 +213,7 @@ def test_mcts_win_rate_predictor():
         print("="*35)
         
         # Calculate win rates with both methods
-        simple_win_rate = mcts_agent.predict_win_rate(game_state)
+        simple_win_rate = mcts_agent.predict_win_rate_basic(game_state)
         advanced_win_rate = mcts_agent.predict_win_rate_advanced(game_state)
         
         print("\nWin Rate Predictions (from Tiger's perspective):")
@@ -205,9 +249,17 @@ def test_mcts_win_rate_predictor():
         # Calculate capture deficit
         capture_deficit = game_state.goats_captured - expected_captures
         
-        print(f"\nExpected captures at this stage: {expected_captures:.2f}")
+        # Calculate the internal components for advanced win rate
+        capture_effect = mcts_agent._map_captures_to_win_rate(capture_deficit)
+        capture_influence = mcts_agent._calculate_dynamic_influence(game_state.goats_captured)
+        
+        print(f"\nAdvanced Win Rate Components:")
+        print(f"Expected captures at this stage: {expected_captures:.2f}")
         print(f"Actual captures: {game_state.goats_captured}")
         print(f"Capture deficit: {capture_deficit:.2f}")
+        print(f"Capture effect (non-linear mapping): {capture_effect:.4f}")
+        print(f"Capture influence: {capture_influence:.2%}")
+        print(f"Positional influence: {(1-capture_influence):.2%}")
         
         print("---------------------------------------------")
 

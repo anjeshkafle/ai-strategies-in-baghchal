@@ -670,7 +670,7 @@ class MCTSAgent:
         Set use_advanced_predictor to True/False to switch between implementations.
         """
         # Toggle this flag to switch between predictors
-        use_advanced_predictor = True  # Set to True when you want to use advanced
+        use_advanced_predictor = False  # Set to True when you want to use advanced
         
         if use_advanced_predictor:
             return self.predict_win_rate_advanced(state)
@@ -703,14 +703,74 @@ class MCTSAgent:
         else:
             return 0.99
 
+    def _map_captures_to_win_rate(self, capture_deficit: float) -> float:
+        """
+        Maps capture deficit to a non-linear win rate effect.
+        
+        For deficit:
+          0 → 0.0 (balanced position = 0.5)
+          1 → 0.25 (resulting in 0.75 win rate)
+          2 → 0.35 (resulting in 0.85 win rate)
+          3 → 0.43 (resulting in 0.93 win rate)
+          4 → 0.48 (resulting in 0.98 win rate)
+          
+        Uses a smooth function to interpolate between these points.
+        Returns the effect centered at 0 (will be added to 0.5 later).
+        """
+        # Handle negative deficits (goat advantage) by mirroring the function
+        is_negative = capture_deficit < 0
+        deficit_abs = abs(capture_deficit)
+        
+        # Clamp to reasonable range for interpolation
+        deficit_abs = min(4.0, max(0.0, deficit_abs))
+        
+        # Define key points on our curve
+        if deficit_abs <= 1.0:
+            # Linear interpolation between 0 and 0.25
+            effect = deficit_abs * 0.25
+        elif deficit_abs <= 2.0:
+            # Linear interpolation between 0.25 and 0.35
+            effect = 0.25 + (deficit_abs - 1.0) * 0.10
+        elif deficit_abs <= 3.0:
+            # Linear interpolation between 0.35 and 0.43
+            effect = 0.35 + (deficit_abs - 2.0) * 0.08
+        else:  # deficit_abs <= 4.0
+            # Linear interpolation between 0.43 and 0.48
+            effect = 0.43 + (deficit_abs - 3.0) * 0.05
+        
+        # Apply negative sign if original deficit was negative
+        return effect if not is_negative else -effect
+        
+    def _calculate_dynamic_influence(self, effective_captures: float) -> float:
+        """
+        Calculate capture influence that scales with the number of effective captures.
+        
+        As captures approach 4 (one before terminal), the influence of captures increases.
+        
+        Args:
+            effective_captures: The effective capture count (can be negative for goat advantage)
+        
+        Returns:
+            Influence percentage (0.85 to 0.99)
+        """
+        # Use absolute value to ensure proper scaling for both tiger and goat advantage
+        capture_abs = min(4.0, max(0.0, abs(effective_captures)))
+        
+        # Base and maximum influence percentages
+        base_influence = 0.85
+        max_influence = 0.99
+        
+        # Linear interpolation based on capture count
+        return base_influence + (capture_abs / 4.0) * (max_influence - base_influence)
+
     def predict_win_rate_advanced(self, state: GameState) -> float:
         """
         Advanced win rate predictor based on effective captures and positional heuristics.
         
         This function uses the following approach:
         1. Calculate effective captures based on actual captures, expected captures, and key heuristics
-        2. Use the effective captures to determine a base win rate
-        3. Apply small modifiers from additional positional heuristics
+        2. Apply non-linear mapping to get capture effect with dynamic influence
+        3. Apply small modifiers from additional positional heuristics with remaining influence
         
         Returns values from Tiger's perspective (0.0-1.0 range):
         - Values closer to 0.0 favor goats
@@ -746,7 +806,7 @@ class MCTSAgent:
         effective_captures -= closed_space_value
         
         # Threatened goats (using updated function that returns normalized value)
-        threatened_value = self.minimax_agent._count_threatened_goats(all_tiger_moves)
+        threatened_value = self.minimax_agent._count_threatened_goats(all_tiger_moves, state.turn)
         
         # Add threatened value to effective captures
         effective_captures += threatened_value
@@ -770,15 +830,22 @@ class MCTSAgent:
         # Convert to -0.5 to 0.5 range (centered at 0, inverted since higher edge score favors goats)
         edge_factor = 0.5 - edge_score
         
-        # STEP 5: Combine all factors with appropriate weights
-        # Effective captures (85% of influence)
-        capture_component = 0.5 + (0.15 * capture_deficit * 0.85)
+        # STEP 5: Non-linear mapping of capture deficit to win rate effect
+        capture_effect = self._map_captures_to_win_rate(capture_deficit)
         
-        # Additional heuristics (15% of influence, split evenly)
-        heuristic_weight = 0.15 / 3
+        # STEP 6: Calculate dynamic influence based on effective captures
+        capture_influence = self._calculate_dynamic_influence(effective_captures)
+        
+        # STEP 7: Combine components with dynamic weighting
+        # Capture component with non-linear effect and dynamic influence
+        capture_component = 0.5 + capture_effect * capture_influence
+        
+        # Additional heuristics with remaining influence (split evenly)
+        heuristic_influence = 1.0 - capture_influence
+        heuristic_weight = heuristic_influence / 3.0
         heuristic_component = 0.5 + ((position_factor + spacing_factor + edge_factor) * heuristic_weight)
         
-        # Combine components
+        # Combine components preserving 0.5 as neutral
         final_win_rate = 0.5 + ((capture_component - 0.5) + (heuristic_component - 0.5))
         
         # Ensure win rate stays within valid range
