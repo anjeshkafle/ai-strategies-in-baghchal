@@ -1,7 +1,6 @@
 from typing import List, Dict, Optional, Tuple
 import random
 import math
-import heapq
 from models.game_state import GameState
 from models.minimax_agent import MinimaxAgent
 from game_logic import get_all_possible_moves
@@ -103,7 +102,7 @@ class MCTSAgent:
     
     def __init__(self, iterations: int = 1000, exploration_weight: float = 1.0, 
                  rollout_policy: str = "random", max_rollout_depth: int = 6,
-                 guided_strictness: float = 0.5, max_time_seconds: int = 50):
+                 guided_strictness: float = 0.8, max_time_seconds: int = 50):
         self.iterations = iterations
         self.exploration_weight = exploration_weight
         self.rollout_policy = rollout_policy  # "random", "guided", or "lightweight"
