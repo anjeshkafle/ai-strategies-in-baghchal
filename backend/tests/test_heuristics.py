@@ -251,15 +251,37 @@ def test_mcts_win_rate_predictor():
         
         # Calculate the internal components for advanced win rate
         capture_effect = mcts_agent._map_captures_to_win_rate(capture_deficit)
-        capture_influence = mcts_agent._calculate_dynamic_influence(game_state.goats_captured)
+        
+        # Debug the effective captures calculation
+        all_tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
+        closed_regions = mcts_agent.minimax_agent._count_closed_spaces(game_state, all_tiger_moves)
+        total_closed_spaces = sum(len(region) for region in closed_regions)
+        placement_progress = min(1.0, game_state.goats_placed / 20)
+        closed_space_value = total_closed_spaces * (0.3 + (0.5 * placement_progress))
+        threatened_value = mcts_agent.minimax_agent._count_threatened_goats(all_tiger_moves, game_state.turn)
+        
+        # Calculate effective captures
+        effective_captures = game_state.goats_captured
+        effective_captures -= closed_space_value
+        effective_captures += threatened_value
+        real_capture_deficit = effective_captures - expected_captures
+        
+        # Calculate dynamic influence based on different values
+        capture_influence_actual = mcts_agent._calculate_dynamic_influence(game_state.goats_captured)
+        capture_influence_effective = mcts_agent._calculate_dynamic_influence(effective_captures)
         
         print(f"\nAdvanced Win Rate Components:")
         print(f"Expected captures at this stage: {expected_captures:.2f}")
         print(f"Actual captures: {game_state.goats_captured}")
-        print(f"Capture deficit: {capture_deficit:.2f}")
+        print(f"Threatened value: {threatened_value:.2f}")
+        print(f"Closed space value: {closed_space_value:.2f}")
+        print(f"Effective captures: {effective_captures:.2f}")
+        print(f"Raw deficit (actual - expected): {capture_deficit:.2f}")
+        print(f"Actual deficit (effective - expected): {real_capture_deficit:.2f}")
         print(f"Capture effect (non-linear mapping): {capture_effect:.4f}")
-        print(f"Capture influence: {capture_influence:.2%}")
-        print(f"Positional influence: {(1-capture_influence):.2%}")
+        print(f"Capture influence (actual captures): {capture_influence_actual:.2%}")
+        print(f"Capture influence (effective captures): {capture_influence_effective:.2%}")
+        print(f"Positional influence: {(1-capture_influence_actual):.2%}")
         
         print("---------------------------------------------")
 
