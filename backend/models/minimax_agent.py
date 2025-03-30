@@ -19,6 +19,7 @@ class MinimaxAgent:
         # Mobility and space control
         self.mobility_weight_placement = 200     # Weight for movable tigers during placement
         self.mobility_weight_movement = 300      # Weight for movable tigers during movement
+        self.closed_spaces_weight = 1000         # Weight for closed spaces (always 1000)
         
         # Capture-related weights
         self.base_capture_value = 3000           # Base value for each captured goat
@@ -50,12 +51,12 @@ class MinimaxAgent:
         Evaluates the current game state from Tiger's perspective.
         Uses several core heuristics:
         - mobility_weight * movable_tigers (200 during placement, 300 during movement)
-        - 3000 * dead_goats + capture_speed_bonus (to incentivize faster captures)
-        - 500 * threatened_goats
-        - -mobility_weight * closed_spaces (200 during placement, 300 during movement)
-        - dispersion_weight * tiger_position_score (100 by default, normalized 0-1 score)
-        - optimal_spacing_weight * tiger_optimal_spacing (150 by default, normalized 0-1 score)
-        - -edge_weight * goat_edge_preference (150 by default, normalized 0-1 score)
+        - closed_spaces_weight * closed_spaces (1000)
+        - base_capture_value * dead_goats + capture_speed_bonus
+        - base_capture_value * threatened_goats (turn-dependent)
+        - dispersion_weight * tiger_position_score (normalized 0-1 score)
+        - optimal_spacing_weight * tiger_optimal_spacing (normalized 0-1 score)
+        - -edge_weight * goat_edge_preference (normalized 0-1 score)
         """
         # Check for terminal states first
         winner = state.get_winner()
@@ -94,14 +95,14 @@ class MinimaxAgent:
         score += tiger_score
         
         # Threatened goats (in danger of being captured)
-        threatened_value = self._count_threatened_goats(all_tiger_moves)
-        threatened_score = self.threatened_goat_weight * threatened_value
+        threatened_value = self._count_threatened_goats(all_tiger_moves, state.turn)
+        threatened_score = self.base_capture_value * threatened_value
         score += threatened_score
         
         # Count closed spaces (positions where tigers are trapped)
         closed_regions = self._count_closed_spaces(state, all_tiger_moves)
         total_closed_spaces = sum(len(region) for region in closed_regions)
-        closed_score = -mobility_weight * total_closed_spaces
+        closed_score = -self.closed_spaces_weight * total_closed_spaces
         score += closed_score
         
         # Calculate tiger positional score (normalized 0-1)
@@ -231,14 +232,16 @@ class MinimaxAgent:
         
         return closed_regions
 
-    def _count_threatened_goats(self, all_tiger_moves) -> float:
+    def _count_threatened_goats(self, all_tiger_moves, turn) -> float:
         """
-        Evaluates the threat value of potential goat captures.
+        Evaluates the threat value of potential goat captures, taking into account whose turn it is.
         
-        This function uses a non-linear scale that:
-        1. Values 1 threatened goat at 1.0
-        2. Values 2 threatened goats at 1.9 (close to but less than a capture)
-        3. Values 3+ threatened goats at 2.0 (diminishing returns)
+        If it's Tiger's turn to play next:
+          - Return 1.0 for any number of threats (equivalent to a capture)
+        
+        If it's Goat's turn to play next:
+          - 1 threat: 0.3 (goat can likely escape)
+          - 2+ threats: 0.5 (harder to defend but still possible)
         
         Returns:
             A float representing the adjusted threat value.
@@ -247,21 +250,18 @@ class MinimaxAgent:
         capture_moves = [move for move in all_tiger_moves if move.get("capture")]
         total_captures = len(capture_moves)
         
-        # Apply the non-linear scale based on number of captures available
         if total_captures == 0:
             return 0
-        elif total_captures == 1:
+            
+        # Turn-dependent evaluation
+        if turn == "TIGER":
+            # If tiger can capture immediately, value this as highly as a capture
             return 1.0
-        elif total_captures == 2:
-            # Check if it's the same goat threatened twice
-            if capture_moves[0]["capture"]["x"] == capture_moves[1]["capture"]["x"] and \
-               capture_moves[0]["capture"]["y"] == capture_moves[1]["capture"]["y"]:
-                return 1.5  # Same goat threatened from two directions
+        else:  # GOAT's turn
+            if total_captures == 1:
+                return 0.3  # One threat, goat can likely escape
             else:
-                return 1.9  # Two different goats threatened
-        else:
-            # For 3+ threats, cap at 2.0
-            return 2.0
+                return 0.5  # Multiple threats are harder to defend
 
     def _is_valid_connection(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
         """Helper method to check if two positions are validly connected on the board."""
