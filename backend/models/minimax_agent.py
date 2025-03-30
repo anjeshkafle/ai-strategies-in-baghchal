@@ -25,11 +25,10 @@ class MinimaxAgent:
         # Capture-related weights
         self.base_capture_value = 3000           # Base value for each captured goat
         self.capture_speed_weight = 400          # Weight for depth-sensitive capture bonus
-        self.threatened_goat_weight = 500        # Weight for threatened goats
         
         # Positioning weights
         self.dispersion_weight = 100             # Weight for tiger dispersion
-        self.edge_weight = 150                   # Weight for goat edge preference
+        self.edge_weight = 300                   # Weight for goat edge preference
         
         # Debug mode flag
         self.debug_mode = True

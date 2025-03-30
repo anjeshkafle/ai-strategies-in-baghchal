@@ -27,20 +27,20 @@ BOARD_STRING_1 = [
     ]
 
 BOARD_STRING_2 = [
-    "T___T",
-    "_____",
-    "_____",
-    "_____",
-    "T___T"
+    "_GGGG",
+    "GG__G",
+    "G___G",
+    "G___G",
+    "TTTGT"
 ]
 
 BOARD_STRING_3 = [
     "T___T",
-    "_____",
-    "_____",
-    "_____",
+    "G____",
+    "G___G",
+    "____G",
     "T___T"
-]
+    ]
 
 BOARD_STRING_4 = [
     "T_GGT",
@@ -51,7 +51,7 @@ BOARD_STRING_4 = [
 ]
 
 # Select which board to use (directly set to the board string variable)
-BOARD_TO_USE = BOARD_STRING_3
+BOARD_TO_USE = BOARD_STRING_2
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
@@ -65,7 +65,7 @@ RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 4
+MINIMAX_MAX_DEPTH = 5
 
 # MCTS parameters
 MCTS_ITERATIONS = 20000
@@ -246,7 +246,7 @@ def run_minimax_test(game_state):
     print(f"\nInitializing Minimax agent with max depth: {max_depth}")
     
     # Create the minimax agent
-    agent = MinimaxAgent(max_depth=max_depth)
+    agent = MinimaxAgent(max_depth=max_depth, randomize_equal_moves=True)
     
     # Get the best move
     best_move = agent.get_move(game_state)
