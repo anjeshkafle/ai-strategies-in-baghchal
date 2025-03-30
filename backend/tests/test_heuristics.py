@@ -157,13 +157,23 @@ def test_mcts_win_rate_predictor():
         print(f"Phase: {game_state.phase}, Turn: {game_state.turn}")
         print(f"Goats placed: {game_state.goats_placed}, Goats captured: {game_state.goats_captured}")
         
+        # Display threatened nodes analysis
+        threatened_nodes = game_state.get_threatened_nodes()
+        print("\n=== THREATENED NODES ANALYSIS ===")
+        print(f"Total threatened nodes: {len(threatened_nodes)}")
+        print("Threatened positions (x, y) -> landing position (landing_x, landing_y):")
+        for x, y, landing_x, landing_y in threatened_nodes:
+            is_landing_empty = game_state.board[landing_y][landing_x] is None
+            landing_status = "empty" if is_landing_empty else "occupied"
+            print(f"  ({x}, {y}) -> ({landing_x}, {landing_y}) [Landing: {landing_status}]")
+        print("="*35)
+        
         # Calculate win rates with both methods
-        simple_win_rate = mcts_agent.basic_win_rate_predictor(game_state)
+        simple_win_rate = mcts_agent.predict_win_rate(game_state)
         advanced_win_rate = mcts_agent.predict_win_rate(game_state)
         
         print("\nWin Rate Predictions (from Tiger's perspective):")
-        print(f"Simple win rate: {simple_win_rate:.4f}")
-        print(f"Advanced win rate: {advanced_win_rate:.4f}")
+        print(f"Win rate: {simple_win_rate:.4f}")
         
         # Get detailed heuristic values
         all_tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
@@ -206,49 +216,19 @@ def main():
     # Define board states for testing
     # Board 1: Tigers clustered in corner
     board_1 = [
-        "_____",
-        "_T__T",
-        "_____",
-        "_____",
-        "_T__T"
-    ]
-    
-    # Board 2: Tigers distributed with some goats
-    board_2 = [
-        "____G",
-        "_TGG_",
-        "____G",
-        "_____",
-        "T__TT"
-    ]
-    
-    # Board 3: Tigers positioned for optimal spacing (3 nodes apart / 2 empty between)
-    # This should score well on the new optimal spacing heuristic
-    board_3 = [
-        "T_T__",
-        "_____",
-        "T_T__",
-        "_____",
-        "_____"
-    ]
-    
-    # Board 4: Tigers on high-value positions based on the weights matrix
-    # Should score well on positional score
-    board_4 = [
-        "_____",
-        "_T_T_",
-        "_____",
-        "_T_T_",
-        "_____"
-    ]
-    
-    # A board to demonstrate threatened goats
-    board_with_threats = [
-        "T___T",
-        "_G___",
+        "__G__",
         "_G_G_",
         "__G__",
-        "T___T"
+        "_____",
+        "TTT_T"
+    ]
+
+    board_2 = [
+        "_G___",
+        "GG___",
+        "_____",
+        "_____",
+        "TTT_T"
     ]
     
     # Board weights matrix for reference (same as in the agent)
@@ -268,7 +248,8 @@ def main():
     
     # Test all boards
     test_boards = {
-        "Board 1 (Tigers Clustered)": board_1,
+        "Board 1 (should be 1 closed space, but doesn't have)": board_1,
+        "Board 2 (1 closed space working)": board_2,
     }
     
     agent = MinimaxAgent(max_depth=3)
@@ -288,6 +269,17 @@ def main():
         # Print the board
         print_board(game_state)
         
+        # Display threatened nodes analysis
+        threatened_nodes = game_state.get_threatened_nodes()
+        print("\n=== THREATENED NODES ANALYSIS ===")
+        print(f"Total threatened nodes: {len(threatened_nodes)}")
+        print("Threatened positions (x, y) -> landing position (landing_x, landing_y):")
+        for x, y, landing_x, landing_y in threatened_nodes:
+            is_landing_empty = game_state.board[landing_y][landing_x] is None
+            landing_status = "empty" if is_landing_empty else "occupied"
+            print(f"  ({x}, {y}) -> ({landing_x}, {landing_y}) [Landing: {landing_status}]")
+        print("="*35)
+        
         # Get all tiger moves (needed for multiple heuristics)
         all_tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
         
@@ -295,6 +287,11 @@ def main():
         movable_tigers = agent._count_movable_tigers(all_tiger_moves)
         closed_regions = agent._count_closed_spaces(game_state, all_tiger_moves)
         threatened_goats = agent._count_threatened_goats(all_tiger_moves)
+        
+        # Print detailed information about each closed region
+        print("\nDetailed Closed Regions:")
+        for i, region in enumerate(closed_regions):
+            print(f"Region {i+1}: {region}")
         
         # Calculate tiger positional score (normalized 0-1 score)
         position_score = agent._calculate_tiger_positional_score(game_state)

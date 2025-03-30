@@ -72,7 +72,7 @@ MCTS_ITERATIONS = 20000
 MCTS_EXPLORATION_WEIGHT = 1.414
 MCTS_ROLLOUT_POLICY = "lightweight"
 MCTS_MAX_ROLLOUT_DEPTH = 6
-MCTS_GUIDED_STRICTNESS = 0.7 # in order to always prefer the best move, set to 1.0.
+MCTS_GUIDED_STRICTNESS = 0 # lower values mean more exploration
 MCTS_MAX_TIME_SECONDS = 50
 
 #-----------------------------------------------
