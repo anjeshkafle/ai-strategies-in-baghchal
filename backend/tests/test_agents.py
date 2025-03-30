@@ -27,19 +27,19 @@ BOARD_STRING_1 = [
     ]
 
 BOARD_STRING_2 = [
-    "_GGGG",
-    "GG__G",
-    "G___G",
-    "G___G",
-    "TTTGT"
-]
+    "TGG_T",
+    "____G",
+    "____G",
+    "_____",
+    "T_GGT"
+    ]
 
 BOARD_STRING_3 = [
     "T___T",
     "_____",
     "_____",
     "_____",
-    "TG__T"
+    "T___T"
     ]
 
 BOARD_STRING_4 = [
@@ -51,11 +51,11 @@ BOARD_STRING_4 = [
 ]
 
 # Select which board to use (directly set to the board string variable)
-BOARD_TO_USE = BOARD_STRING_3
+BOARD_TO_USE = BOARD_STRING_2
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "TIGER"            # "GOAT" or "TIGER"
+TURN = "GOAT"            # "GOAT" or "TIGER"
 GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
@@ -65,7 +65,7 @@ RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 7
+MINIMAX_MAX_DEPTH = 5
 
 # MCTS parameters
 MCTS_ITERATIONS = 20000

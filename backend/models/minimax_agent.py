@@ -46,6 +46,32 @@ class MinimaxAgent:
     
     def evaluate(self, state: GameState, depth: int = 0) -> float:
         """
+        Evaluates the current game state from Tiger's perspective using dynamic equilibrium points.
+        Uses several core heuristics with weights and balance points that adapt to game progression:
+        - Captures and threatened goats
+        - Movable tigers and closed spaces
+        - Tiger position, optimal spacing, and goat edge preference with dynamic equilibrium points
+        """
+        # Check for terminal states first
+        winner = state.get_winner()
+        if winner == "TIGER":
+            final_score = MinimaxAgent.INF - depth  # Prefer faster wins
+            return final_score
+        elif winner == "GOAT":
+            final_score = -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
+            return final_score
+        
+        # Compute the raw score based on board state and phase with dynamic equilibrium
+        raw_score = self._compute_raw_score(state)
+        
+        # Adjust the score based on depth and captures
+        final_score = self._adjust_score(raw_score, state, depth)
+        
+        return final_score
+    
+    def evaluate_old(self, state: GameState, depth: int = 0) -> float:
+        """
+        [OLD VERSION - KEPT FOR REFERENCE]
         Evaluates the current game state from Tiger's perspective.
         Uses several core heuristics:
         - mobility_weight * movable_tigers (200 during placement, 300 during movement)
@@ -66,15 +92,126 @@ class MinimaxAgent:
             return final_score
         
         # Compute the raw score based on board state and phase
-        raw_score = self._compute_raw_score(state)
+        raw_score = self._compute_raw_score_old(state)
         
         # Adjust the score based on depth and captures
-        final_score = self._adjust_score(raw_score, state, depth)
+        final_score = self._adjust_score_old(raw_score, state, depth)
         
         return final_score
     
     def _compute_raw_score(self, state: GameState) -> float:
         """
+        Computes the raw evaluation score with dynamic equilibrium points and weights that adapt to game progression.
+        This enhances the evaluation function by recognizing how the importance of different factors changes throughout
+        the game, similar to the MCTS win rate predictor's approach.
+        """
+        # Set mobility weight based on game phase
+        mobility_weight = self.mobility_weight_placement if state.phase == "PLACEMENT" else self.mobility_weight_movement
+        
+        # Track game progression
+        goats_placed = state.goats_placed
+        
+        # Get all tiger moves once for all heuristics
+        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
+        
+        # Initialize score
+        score = 0
+        
+        # Count movable tigers (tigers with at least one valid move)
+        movable_tigers = self._count_movable_tigers(all_tiger_moves)
+        tiger_score = mobility_weight * movable_tigers
+        score += tiger_score
+        
+        # Threatened goats (in danger of being captured)
+        threatened_value = self._count_threatened_goats(all_tiger_moves, state.turn)
+        threatened_score = self.base_capture_value * threatened_value
+        score += threatened_score
+        
+        # Calculate stage dependent weights based on goats_placed
+        early_game_ratio = max(0, 1 - (goats_placed / 15))  # Decreases from 1.0 to 0.0 as goats_placed goes from 0 to 15
+        late_game_ratio = min(1, goats_placed / 15)         # Increases from 0.0 to 1.0 as goats_placed goes from 0 to 15
+        
+        # Count closed spaces (positions where tigers are trapped)
+        closed_regions = self._count_closed_spaces(state, all_tiger_moves)
+        total_closed_spaces = sum(len(region) for region in closed_regions)
+        
+        # Make closed spaces weight dynamic - more important in late game
+        # Closed spaces become increasingly important as more goats are placed
+        closed_space_weight_factor = 1.0 + (1.5 * late_game_ratio)  # Ranges from 1.0 to 2.5
+        dynamic_closed_space_weight = self.closed_spaces_weight * closed_space_weight_factor
+        
+        closed_score = -dynamic_closed_space_weight * total_closed_spaces
+        score += closed_score
+        
+        # Calculate tiger positional score (normalized 0-1)
+        position_score = self._calculate_tiger_positional_score(state)
+        
+        # Calculate tiger optimal spacing score (normalized 0-1)
+        optimal_spacing_score = self._calculate_tiger_optimal_spacing(state)
+        
+        # Calculate goat edge preference score (normalized 0-1)
+        edge_score = self._calculate_goat_edge_preference(state)
+        
+        # Calculate dynamic equilibrium points for each heuristic based on game stage
+        
+        # Tiger position score equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
+        if goats_placed < 10:
+            position_equilibrium = 0.5
+        elif goats_placed < 15:
+            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+            position_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
+        else:
+            position_equilibrium = 0.33
+            
+        # Tiger optimal spacing equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
+        if goats_placed < 10:
+            spacing_equilibrium = 0.5
+        elif goats_placed < 15:
+            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+            spacing_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
+        else:
+            spacing_equilibrium = 0.33
+            
+        # Goat edge preference equilibrium: 1.0 before 5 goats placed, 0.8 until 12 goats placed, decreases to 0.1 by 20 goats placed
+        if goats_placed < 5:
+            edge_equilibrium = 1.0
+        elif goats_placed < 12:
+            edge_equilibrium = 0.8
+        elif goats_placed <= 20:
+            # Linear interpolation from 0.8 to 0.1 between 12 and 20 goats placed
+            edge_equilibrium = 0.8 - (0.7 * (goats_placed - 12) / 8)
+        else:
+            edge_equilibrium = 0.1
+        
+        # Calculate factor values based on equilibrium points
+        position_factor = position_score - position_equilibrium
+        spacing_factor = optimal_spacing_score - spacing_equilibrium
+        edge_factor = edge_equilibrium - edge_score  # Note the inverted formula because higher edge score favors goats
+        
+        # Position weight is more important in early game
+        position_weight_factor = 1.0 + (0.5 * early_game_ratio)  # Ranges from 1.0 to 1.5
+        # Edge weight is more important in early game
+        edge_weight_factor = 1.0 + (1.0 * early_game_ratio)      # Ranges from 1.0 to 2.0
+        # Spacing weight increases in mid-to-late game
+        spacing_weight_factor = 1.0 + (0.7 * late_game_ratio)    # Ranges from 1.0 to 1.7
+        
+        # Apply dynamic position weight
+        position_weight = self.dispersion_weight * position_weight_factor
+        score += position_weight * position_factor
+        
+        # Apply dynamic spacing weight
+        optimal_spacing_weight = int(self.dispersion_weight * 1.5 * spacing_weight_factor)
+        score += optimal_spacing_weight * spacing_factor
+        
+        # Apply dynamic edge weight 
+        dynamic_edge_weight = self.edge_weight * edge_weight_factor
+        score += dynamic_edge_weight * edge_factor  # Note: Using positive now since we flipped the factor calculation
+        
+        return score
+    
+    def _compute_raw_score_old(self, state: GameState) -> float:
+        """
+        [OLD VERSION - KEPT FOR REFERENCE]
         Computes the raw evaluation score based solely on the board state and phase.
         This does not include depth penalty or capture bonus, which will be applied separately.
         """
@@ -121,6 +258,40 @@ class MinimaxAgent:
     
     def _adjust_score(self, raw_score: float, state: GameState, depth: int) -> float:
         """
+        Adjusts the raw evaluation score by applying depth penalty and dynamic capture bonuses.
+        This version uses game-stage aware bonuses for captures.
+        """
+        # Start with the raw score
+        adjusted_score = raw_score
+        
+        # Calculate game stage for dynamic capture value
+        game_progress = min(1.0, state.goats_placed / 20)
+        
+        # Calculate dynamic capture value - captures are more valuable earlier in the game
+        # (they give a bigger advantage when fewer goats are on the board)
+        early_game_bonus = max(0, 1.2 - game_progress)  # Bonus ranges from 1.2 to 0.0
+        dynamic_capture_value = self.base_capture_value * (1 + early_game_bonus)
+        
+        # Add capture score with dynamic value
+        capture_score = dynamic_capture_value * state.goats_captured
+        
+        # Add a capture speed bonus that decreases as depth increases
+        if state.goats_captured > 0:
+            depth_bonus = max(0, self.max_depth - depth)
+            # Captures in early game get a bigger speed bonus
+            capture_speed_bonus = self.capture_speed_weight * state.goats_captured * depth_bonus * (1 + early_game_bonus * 0.5)
+            capture_score += capture_speed_bonus
+        
+        adjusted_score += capture_score
+        
+        # Apply depth penalty
+        adjusted_score -= depth
+        
+        return adjusted_score
+    
+    def _adjust_score_old(self, raw_score: float, state: GameState, depth: int) -> float:
+        """
+        [OLD VERSION - KEPT FOR REFERENCE]
         Adjusts the raw evaluation score by applying depth penalty and capture bonuses.
         """
         # Start with the raw score

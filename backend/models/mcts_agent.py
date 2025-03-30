@@ -924,10 +924,27 @@ class MCTSAgent:
         # Additional heuristics with remaining influence (weighted according to minimax proportions)
         heuristic_influence = 1.0 - capture_influence
         
-        # Use proportions similar to minimax agent:
-        position_weight = 1.0 / 5.5       # ~0.18 of total
-        spacing_weight = 1.5 / 5.5        # ~0.27 of total
-        edge_weight = 3.0 / 5.5           # ~0.55 of total
+        # Calculate early and late game ratios for dynamic weights
+        early_game_ratio = max(0, 1 - (goats_placed / 15))  # Decreases from 1.0 to 0.0 as goats_placed goes from 0 to 15
+        late_game_ratio = min(1, goats_placed / 15)         # Increases from 0.0 to 1.0 as goats_placed goes from 0 to 15
+        
+        # Dynamic weights similar to minimax agent:
+        # Position weight is more important in early game
+        position_weight_factor = 1.0 + (0.5 * early_game_ratio)  # Ranges from 1.0 to 1.5
+        # Edge weight is more important in early game
+        edge_weight_factor = 1.0 + (1.0 * early_game_ratio)      # Ranges from 1.0 to 2.0
+        # Spacing weight increases in mid-to-late game
+        spacing_weight_factor = 1.0 + (0.7 * late_game_ratio)    # Ranges from 1.0 to 1.7
+        
+        # Base weight proportions
+        base_position_weight = 1.0 / 5.5
+        base_spacing_weight = 1.5 / 5.5
+        base_edge_weight = 3.0 / 5.5
+        
+        # Apply dynamic factors to weights
+        position_weight = base_position_weight * position_weight_factor
+        spacing_weight = base_spacing_weight * spacing_weight_factor
+        edge_weight = base_edge_weight * edge_weight_factor
         
         # Apply weighted factors
         heuristic_sum = (
