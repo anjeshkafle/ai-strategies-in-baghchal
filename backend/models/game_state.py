@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Tuple
 from copy import deepcopy
-from game_logic import get_possible_moves, get_all_possible_moves
+from game_logic import get_possible_moves, get_all_possible_moves, get_threatened_nodes
 
 class GameState:
     """
@@ -165,4 +165,14 @@ class GameState:
         """Get the winner of the game if it has ended."""
         if self.game_status == "PLAYING":
             return None
-        return "TIGER" if self.game_status == "TIGERS_WIN" else "GOAT" 
+        return "TIGER" if self.game_status == "TIGERS_WIN" else "GOAT"
+
+    def get_threatened_squares(self) -> List[Tuple[int, int]]:
+        """
+        Get all board positions where if a goat is placed, it could be immediately captured by a tiger.
+        This is an efficient implementation that doesn't clone the state or perform unnecessary move generation.
+        
+        Returns:
+            A list of (x, y) coordinates representing threatened positions.
+        """
+        return get_threatened_nodes(self.board) 

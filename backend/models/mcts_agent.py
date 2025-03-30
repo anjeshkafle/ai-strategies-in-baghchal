@@ -510,39 +510,24 @@ class MCTSAgent:
             # Goat's turn - avoid immediate captures with progressive bias
             else:  # GOAT's turn
                 # Calculate how many empty cells remain (simple formula)
-                initial_empty = 21  # 5x5 board minus 4 initial tigers
-                empty_cells = initial_empty - current_state.goats_placed + current_state.goats_captured
+                empty_cells = 21 - current_state.goats_placed + current_state.goats_captured
                 
-                # Find safe moves (where this specific goat won't be immediately captured)
+                # Get the threatened squares using the efficient method
+                threatened_squares = current_state.get_threatened_squares()
+                
+                # Categorize moves as safe or unsafe
                 safe_moves = []
                 unsafe_moves = []
                 
                 for move in valid_moves:
-                    # Apply the move
-                    test_state = current_state.clone()
-                    test_state.apply_move(move)
-                    
-                    # Get the target position where the goat was placed/moved
+                    # Get the target position where the goat would be placed/moved
                     if move["type"] == "placement":
                         target_x, target_y = move["x"], move["y"]
                     else:  # movement
                         target_x, target_y = move["to"]["x"], move["to"]["y"]
                     
-                    # Check if this specific goat would be captured in the next move
-                    is_unsafe = False
-                    tiger_moves = test_state.get_valid_moves()
-                    
-                    # Look directly for capture moves that target our goat
-                    for tiger_move in tiger_moves:
-                        # If it's a capture move, check the capture coordinates
-                        if tiger_move.get("capture"):
-                            capture_coords = tiger_move["capture"]
-                            # Check if the captured coordinates match our target position
-                            if capture_coords["x"] == target_x and capture_coords["y"] == target_y:
-                                is_unsafe = True
-                                break
-                    
-                    if is_unsafe:
+                    # Check if this position is in the threatened squares list
+                    if (target_x, target_y) in threatened_squares:
                         unsafe_moves.append(move)
                     else:
                         safe_moves.append(move)
@@ -550,7 +535,7 @@ class MCTSAgent:
                 # Calculate progressive bias - as empty cells decrease, allow more exploration
                 # Early game: almost always choose safe moves
                 # Late game: consider unsafe moves more frequently
-                safe_bias = min(1.0, empty_cells / initial_empty + 0.2)
+                safe_bias = min(1.0, empty_cells / 21 + 0.2)
                 
                 # Properly mutually exclusive choice between safe and unsafe moves:
                 if safe_moves and unsafe_moves:
@@ -625,7 +610,9 @@ class MCTSAgent:
             # During placement phase, include goats_placed to ensure uniqueness
             return f"PLACEMENT_{state.goats_placed}_{state.turn}" 
 
-    def basic_win_rate_predictor(self, state: GameState) -> float:
+    
+    
+    def predict_win_rate(self, state: GameState) -> float:
         """
         Simplified win rate predictor that ONLY cares about captures.
         Returns values from Tiger's perspective:
@@ -651,7 +638,7 @@ class MCTSAgent:
         else:
             return 0.99
     
-    def predict_win_rate(self, state: GameState) -> float:
+    def predict_win_rate__(self, state: GameState) -> float:
         """
         Advanced win rate predictor that considers effective captures based on multiple heuristics.
         
