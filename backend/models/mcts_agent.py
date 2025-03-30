@@ -670,7 +670,7 @@ class MCTSAgent:
         Set use_advanced_predictor to True/False to switch between implementations.
         """
         # Toggle this flag to switch between predictors
-        use_advanced_predictor = False  # Set to True when you want to use advanced
+        use_advanced_predictor = True  # Set to True when you want to use advanced
         
         if use_advanced_predictor:
             return self.predict_win_rate_advanced(state)
@@ -703,43 +703,78 @@ class MCTSAgent:
         else:
             return 0.99
 
-    def _map_captures_to_win_rate(self, capture_deficit: float) -> float:
+    def _map_captures_to_win_rate(self, capture_deficit: float, actual_captures: float) -> float:
         """
-        Maps capture deficit to a non-linear win rate effect.
+        Maps capture deficit to a non-linear win rate effect that accounts for:
+        1. How much better/worse than expected we're doing (deficit)
+        2. How many captures remain until victory (5 - actual_captures)
         
-        For deficit:
-          0 → 0.0 (balanced position = 0.5)
-          1 → 0.25 (resulting in 0.75 win rate)
-          2 → 0.35 (resulting in 0.85 win rate)
-          3 → 0.43 (resulting in 0.93 win rate)
-          4 → 0.48 (resulting in 0.98 win rate)
-          
-        Uses a smooth function to interpolate between these points.
-        Returns the effect centered at 0 (will be added to 0.5 later).
+        Args:
+            capture_deficit: Effective captures - expected captures
+            actual_captures: Actual number of goats captured (without adjustments)
+            
+        Returns:
+            Win rate effect centered at 0 (to be added to 0.5)
         """
         # Handle negative deficits (goat advantage) by mirroring the function
         is_negative = capture_deficit < 0
         deficit_abs = abs(capture_deficit)
         
-        # Clamp to reasonable range for interpolation
-        deficit_abs = min(4.0, max(0.0, deficit_abs))
+        # Clamp actual captures to valid range [0, 4]
+        # (5 captures is terminal state, not handled here)
+        actual_captures = max(0, min(4, actual_captures))
         
-        # Define key points on our curve
-        if deficit_abs <= 1.0:
-            # Linear interpolation between 0 and 0.25
-            effect = deficit_abs * 0.25
-        elif deficit_abs <= 2.0:
-            # Linear interpolation between 0.25 and 0.35
-            effect = 0.25 + (deficit_abs - 1.0) * 0.10
-        elif deficit_abs <= 3.0:
-            # Linear interpolation between 0.35 and 0.43
-            effect = 0.35 + (deficit_abs - 2.0) * 0.08
-        else:  # deficit_abs <= 4.0
-            # Linear interpolation between 0.43 and 0.48
-            effect = 0.43 + (deficit_abs - 3.0) * 0.05
+        # Calculate remaining captures until victory
+        remaining_captures = 5 - actual_captures
+        
+        # Clamp deficit to reasonable range based on remaining captures
+        # No deficit should map higher than what would represent a win
+        deficit_abs = min(remaining_captures, deficit_abs)
+        
+        # For each actual capture count, define the effect mapping
+        if actual_captures == 0:  # 5 remaining captures
+            if deficit_abs <= 1.0:
+                effect = deficit_abs * 0.25  # 0→0.25 (first tier)
+            elif deficit_abs <= 2.0:
+                effect = 0.25 + (deficit_abs - 1.0) * 0.10  # 0.25→0.35 (second tier)
+            elif deficit_abs <= 3.0:
+                effect = 0.35 + (deficit_abs - 2.0) * 0.08  # 0.35→0.43 (third tier)
+            elif deficit_abs <= 4.0:
+                effect = 0.43 + (deficit_abs - 3.0) * 0.05  # 0.43→0.48 (fourth tier)
+            else:  # deficit_abs <= 5.0
+                effect = 0.48 + (deficit_abs - 4.0) * 0.01  # 0.48→0.49 (fifth tier)
+        
+        elif actual_captures == 1:  # 4 remaining captures
+            if deficit_abs <= 1.0:
+                effect = deficit_abs * 0.28  # 0→0.28 (first tier - steeper)
+            elif deficit_abs <= 2.0:
+                effect = 0.28 + (deficit_abs - 1.0) * 0.11  # 0.28→0.39 (second tier)
+            elif deficit_abs <= 3.0:
+                effect = 0.39 + (deficit_abs - 2.0) * 0.08  # 0.39→0.47 (third tier)
+            else:  # deficit_abs <= 4.0
+                effect = 0.47 + (deficit_abs - 3.0) * 0.02  # 0.47→0.49 (fourth tier)
+        
+        elif actual_captures == 2:  # 3 remaining captures
+            if deficit_abs <= 1.0:
+                effect = deficit_abs * 0.32  # 0→0.32 (first tier - even steeper)
+            elif deficit_abs <= 2.0:
+                effect = 0.32 + (deficit_abs - 1.0) * 0.13  # 0.32→0.45 (second tier)
+            else:  # deficit_abs <= 3.0
+                effect = 0.45 + (deficit_abs - 2.0) * 0.04  # 0.45→0.49 (third tier)
+        
+        elif actual_captures == 3:  # 2 remaining captures
+            if deficit_abs <= 1.0:
+                effect = deficit_abs * 0.38  # 0→0.38 (first tier - quite steep)
+            else:  # deficit_abs <= 2.0
+                effect = 0.38 + (deficit_abs - 1.0) * 0.11  # 0.38→0.49 (second tier)
+        
+        else:  # actual_captures == 4, just 1 remaining capture
+            effect = deficit_abs * 0.49  # 0→0.49 (maximum effect in one step)
         
         # Apply negative sign if original deficit was negative
-        return effect if not is_negative else -effect
+        result = effect if not is_negative else -effect
+        
+        return result
         
     def _calculate_dynamic_influence(self, effective_captures: float) -> float:
         """
@@ -765,19 +800,29 @@ class MCTSAgent:
 
     def predict_win_rate_advanced(self, state: GameState) -> float:
         """
-        Advanced win rate predictor based on effective captures and positional heuristics.
+        Advanced win rate predictor that combines multiple heuristics:
+        1. Captures (raw and with adjustments)
+        2. Tiger positional score
+        3. Tiger optimal spacing
+        4. Goat edge preference
         
-        This function uses the following approach:
-        1. Calculate effective captures based on actual captures, expected captures, and key heuristics
-        2. Apply non-linear mapping to get capture effect with dynamic influence
-        3. Apply small modifiers from additional positional heuristics with remaining influence
-        
-        Returns values from Tiger's perspective (0.0-1.0 range):
-        - Values closer to 0.0 favor goats
-        - Values closer to 1.0 favor tigers
-        - 0.5 represents a theoretical draw
+        Returns a value from 0.0 to 1.0 from Tiger's perspective:
+        - 0.0: Certain Goat win
+        - 0.5: Balanced game
+        - 1.0: Certain Tiger win
         """
-        # STEP 1: Calculate actual vs expected captures
+        # Short-circuit terminal states
+        if state.is_terminal():
+            winner = state.get_winner()
+            if winner == "TIGER":
+                return 0.99  # Near certain Tiger win
+            elif winner == "GOAT":
+                return 0.01  # Near certain Goat win
+            else:
+                return 0.5   # Draw
+        
+        # STEP 1: Calculate expected captures based on game progression
+        # Track game state
         goats_placed = state.goats_placed
         goats_captured = state.goats_captured
         
@@ -814,24 +859,60 @@ class MCTSAgent:
         # STEP 3: Calculate capture deficit (actual+potential - expected)
         capture_deficit = effective_captures - expected_captures
         
-        # STEP 4: Calculate additional positional heuristics
+        # STEP 4: Calculate additional positional heuristics with dynamic equilibrium points
+        
         # Tiger positional score (normalized 0-1, higher is better for tiger)
         position_score = self.minimax_agent._calculate_tiger_positional_score(state)
-        # Convert to -0.5 to 0.5 range (centered at 0)
-        position_factor = position_score - 0.5
+        
+        # Calculate dynamic equilibrium point for tiger position score
+        # 0.5 before 10 goats placed, gradually decreases to 0.33 by 15 goats placed, then stays at 0.33
+        if goats_placed < 10:
+            position_equilibrium = 0.5
+        elif goats_placed < 15:
+            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+            position_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
+        else:
+            position_equilibrium = 0.33
+            
+        # Convert using dynamic equilibrium point (centered at 0)
+        position_factor = position_score - position_equilibrium
         
         # Tiger optimal spacing score (normalized 0-1, higher is better for tiger)
         spacing_score = self.minimax_agent._calculate_tiger_optimal_spacing(state)
-        # Convert to -0.5 to 0.5 range (centered at 0)
-        spacing_factor = spacing_score - 0.5
+        
+        # Calculate dynamic equilibrium point for optimal spacing score
+        # 0.5 before 10 goats placed, gradually decreases to 0.33 by 15 goats placed, then stays at 0.33
+        if goats_placed < 10:
+            spacing_equilibrium = 0.5
+        elif goats_placed < 15:
+            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+            spacing_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
+        else:
+            spacing_equilibrium = 0.33
+            
+        # Convert using dynamic equilibrium point (centered at 0)
+        spacing_factor = spacing_score - spacing_equilibrium
         
         # Goat edge preference (normalized 0-1, higher is better for goat)
         edge_score = self.minimax_agent._calculate_goat_edge_preference(state)
-        # Convert to -0.5 to 0.5 range (centered at 0, inverted since higher edge score favors goats)
-        edge_factor = 0.5 - edge_score
+        
+        # Calculate dynamic equilibrium point for goat edge preference
+        # 1.0 before 5 goats placed, 0.8 until 12 goats placed, gradually decreases to 0.1 by 20 goats placed
+        if goats_placed < 5:
+            edge_equilibrium = 1.0
+        elif goats_placed < 12:
+            edge_equilibrium = 0.8
+        elif goats_placed <= 20:
+            # Linear interpolation from 0.8 to 0.1 between 12 and 20 goats placed
+            edge_equilibrium = 0.8 - (0.7 * (goats_placed - 12) / 8)
+        else:
+            edge_equilibrium = 0.1
+            
+        # Convert using dynamic equilibrium point (centered at 0, inverted since higher edge score favors goats)
+        edge_factor = edge_equilibrium - edge_score
         
         # STEP 5: Non-linear mapping of capture deficit to win rate effect
-        capture_effect = self._map_captures_to_win_rate(capture_deficit)
+        capture_effect = self._map_captures_to_win_rate(capture_deficit, goats_captured)
         
         # STEP 6: Calculate dynamic influence based on effective captures
         capture_influence = self._calculate_dynamic_influence(effective_captures)
@@ -840,10 +921,21 @@ class MCTSAgent:
         # Capture component with non-linear effect and dynamic influence
         capture_component = 0.5 + capture_effect * capture_influence
         
-        # Additional heuristics with remaining influence (split evenly)
+        # Additional heuristics with remaining influence (weighted according to minimax proportions)
         heuristic_influence = 1.0 - capture_influence
-        heuristic_weight = heuristic_influence / 3.0
-        heuristic_component = 0.5 + ((position_factor + spacing_factor + edge_factor) * heuristic_weight)
+        
+        # Use proportions similar to minimax agent:
+        position_weight = 1.0 / 5.5       # ~0.18 of total
+        spacing_weight = 1.5 / 5.5        # ~0.27 of total
+        edge_weight = 3.0 / 5.5           # ~0.55 of total
+        
+        # Apply weighted factors
+        heuristic_sum = (
+            (position_factor * position_weight) + 
+            (spacing_factor * spacing_weight) + 
+            (edge_factor * edge_weight)
+        )
+        heuristic_component = 0.5 + heuristic_sum * heuristic_influence
         
         # Combine components preserving 0.5 as neutral
         final_win_rate = 0.5 + ((capture_component - 0.5) + (heuristic_component - 0.5))

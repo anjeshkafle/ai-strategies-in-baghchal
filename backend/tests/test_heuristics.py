@@ -58,37 +58,8 @@ def test_mcts_win_rate_predictor():
     # Create boards with different captures and positions
     test_boards = [
         # Board 1: No captures, early placement
-        {
-            "board": [
-                "TG__T",
-                "_____",
-                "_____",
-                "_____",
-                "T___T"
-            ],
-            "phase": "PLACEMENT",
-            "turn": "TIGER",
-            "goats_placed": 5,
-            "goats_captured": 0,
-            "desc": "Early placement, no captures, 1 threat (balanced) - tiger turn"
-        },
          {
             "board": [
-                "TGG_T",
-                "_____",
-                "_____",
-                "_____",
-                "T___T"
-            ],
-            "phase": "PLACEMENT",
-            "turn": "GOAT",
-            "goats_placed": 5,
-            "goats_captured": 0,
-            "desc": "Early placement, no captures, 1 threat (balanced) - goat turn"
-        },
-        # Board 2: One capture, early placement
-        {
-            "board": [
                 "T___T",
                 "_____",
                 "_____",
@@ -96,85 +67,25 @@ def test_mcts_win_rate_predictor():
                 "T___T"
             ],
             "phase": "PLACEMENT",
-            "turn": "GOAT",
-            "goats_placed": 14,
-            "goats_captured": 1,
-            "desc": "Early placement, one capture (tiger advantage)"
-        },
-        # Board 3: Two captures, mid placement
-        {
-            "board": [
-                "T___T",
-                "_G___",
-                "_____",
-                "_____",
-                "T___T"
-            ],
-            "phase": "PLACEMENT",
-            "turn": "GOAT",
-            "goats_placed": 18,
-            "goats_captured": 1,
-            "desc": "Mid placement, two captures (strong tiger advantage)"
-        },
-        # Board 4: Three captures
-        {
-            "board": [
-                "T___T",
-                "_G___",
-                "_____",
-                "_____",
-                "T___T"
-            ],
-            "phase": "MOVEMENT",
             "turn": "GOAT",
             "goats_placed": 20,
-            "goats_captured": 3,
-            "desc": "Movement phase, three captures (severe tiger advantage)"
-        },
-        # Board 5: Four captures (one away from terminal)
-        {
-            "board": [
-                "T___T",
-                "_G___",
-                "_____",
-                "_____",
-                "T___T"
-            ],
-            "phase": "MOVEMENT",
-            "turn": "GOAT",
-            "goats_placed": 20,
-            "goats_captured": 4,
-            "desc": "Movement phase, four captures (near-terminal tiger advantage)"
-        },
-        # Board 6: Expected captures, no deficit
-        {
-            "board": [
-                "T___T",
-                "_G___",
-                "_____",
-                "_____",
-                "T___T"
-            ],
-            "phase": "MOVEMENT",
-            "turn": "GOAT",
-            "goats_placed": 18,
-            "goats_captured": 1,
-            "desc": "Expected captures (no deficit, balanced)"
+            "goats_captured": 2,
+            "desc": "Expect higher win rate for tigers because goat is placed in the center"
         },
         # Board 7: Negative deficit (goat advantage)
         {
             "board": [
-                "T_G_T",
-                "GGGGG",
-                "_GGG_",
-                "GGGGG",
-                "T_G_T"
+                "____T",
+                "_T___",
+                "_____",
+                "_____",
+                "_T__T"
             ],
-            "phase": "MOVEMENT",
-            "turn": "TIGER",
+            "phase": "PLACEMENT",
+            "turn": "GOAT",
             "goats_placed": 20,
-            "goats_captured": 0,
-            "desc": "No captures in movement phase (negative deficit, goat advantage)"
+            "goats_captured": 2,
+            "desc": "Expect lower win rate for tigers because goat is placed in the edge"
         }
     ]
     
@@ -250,9 +161,9 @@ def test_mcts_win_rate_predictor():
         capture_deficit = game_state.goats_captured - expected_captures
         
         # Calculate the internal components for advanced win rate
-        capture_effect = mcts_agent._map_captures_to_win_rate(capture_deficit)
+        capture_effect = mcts_agent._map_captures_to_win_rate(capture_deficit, game_state.goats_captured)
         
-        # Debug the effective captures calculation
+        # Calculate the components for effective captures
         all_tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")
         closed_regions = mcts_agent.minimax_agent._count_closed_spaces(game_state, all_tiger_moves)
         total_closed_spaces = sum(len(region) for region in closed_regions)
@@ -266,6 +177,9 @@ def test_mcts_win_rate_predictor():
         effective_captures += threatened_value
         real_capture_deficit = effective_captures - expected_captures
         
+        # Use the real capture deficit to calculate the effect
+        correct_capture_effect = mcts_agent._map_captures_to_win_rate(real_capture_deficit, game_state.goats_captured)
+        
         # Calculate dynamic influence based on different values
         capture_influence_actual = mcts_agent._calculate_dynamic_influence(game_state.goats_captured)
         capture_influence_effective = mcts_agent._calculate_dynamic_influence(effective_captures)
@@ -278,10 +192,91 @@ def test_mcts_win_rate_predictor():
         print(f"Effective captures: {effective_captures:.2f}")
         print(f"Raw deficit (actual - expected): {capture_deficit:.2f}")
         print(f"Actual deficit (effective - expected): {real_capture_deficit:.2f}")
-        print(f"Capture effect (non-linear mapping): {capture_effect:.4f}")
+        print(f"Capture effect (non-linear mapping): {correct_capture_effect:.4f}")
         print(f"Capture influence (actual captures): {capture_influence_actual:.2%}")
         print(f"Capture influence (effective captures): {capture_influence_effective:.2%}")
         print(f"Positional influence: {(1-capture_influence_actual):.2%}")
+        
+        # Calculate step-by-step progression from 0.5 to final value
+        capture_component = 0.5 + correct_capture_effect * capture_influence_effective
+        
+        # Calculate dynamic equilibrium values based on goats_placed
+        # Tiger position score equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
+        if game_state.goats_placed < 10:
+            position_equilibrium = 0.5
+        elif game_state.goats_placed < 15:
+            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+            position_equilibrium = 0.5 - (0.17 * (game_state.goats_placed - 10) / 5)
+        else:
+            position_equilibrium = 0.33
+            
+        # Tiger optimal spacing equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
+        if game_state.goats_placed < 10:
+            spacing_equilibrium = 0.5
+        elif game_state.goats_placed < 15:
+            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+            spacing_equilibrium = 0.5 - (0.17 * (game_state.goats_placed - 10) / 5)
+        else:
+            spacing_equilibrium = 0.33
+            
+        # Goat edge preference equilibrium: 1.0 before 5 goats placed, 0.8 until 12 goats placed, decreases to 0.1 by 20 goats placed
+        if game_state.goats_placed < 5:
+            edge_equilibrium = 1.0
+        elif game_state.goats_placed < 12:
+            edge_equilibrium = 0.8
+        elif game_state.goats_placed <= 20:
+            # Linear interpolation from 0.8 to 0.1 between 12 and 20 goats placed
+            edge_equilibrium = 0.8 - (0.7 * (game_state.goats_placed - 12) / 8)
+        else:
+            edge_equilibrium = 0.1
+        
+        # Calculate individual heuristic components with dynamic equilibrium points
+        position_factor = position_score - position_equilibrium
+        spacing_factor = optimal_spacing_score - spacing_equilibrium
+        edge_factor = edge_equilibrium - edge_score
+        
+        # Calculate heuristic weights
+        position_weight = 1.0 / 5.5     # ~0.18 of total
+        spacing_weight = 1.5 / 5.5      # ~0.27 of total
+        edge_weight = 3.0 / 5.5         # ~0.55 of total
+        
+        # Calculate weighted components
+        heuristic_influence = 1.0 - capture_influence_effective
+        
+        # Individual weighted contributions
+        position_contribution = position_factor * position_weight * heuristic_influence
+        spacing_contribution = spacing_factor * spacing_weight * heuristic_influence
+        edge_contribution = edge_factor * edge_weight * heuristic_influence
+        
+        # Apply weighted factors
+        heuristic_component = 0.5 + (
+            (position_factor * position_weight) + 
+            (spacing_factor * spacing_weight) + 
+            (edge_factor * edge_weight)
+        ) * heuristic_influence
+        
+        # Final win rate calculation
+        final_win_rate = 0.5 + ((capture_component - 0.5) + (heuristic_component - 0.5))
+        final_win_rate = max(0.01, min(0.99, final_win_rate))
+        
+        print("\nDetailed Value Progression (from 0.5 neutral):")
+        print(f"Starting neutral value: 0.5000")
+        print(f"Capture component: 0.5000 → {capture_component:.4f} (effect: {capture_component - 0.5:.4f})")
+        print(f"  - Non-linear capture mapping: {correct_capture_effect:.4f}")
+        print(f"  - Applied influence: {capture_influence_effective:.2%}")
+        
+        print(f"Heuristic component: 0.5000 → {heuristic_component:.4f} (effect: {heuristic_component - 0.5:.4f})")
+        print(f"  - Position factor ({position_score:.3f} - {position_equilibrium:.3f}): {position_factor:.3f}")
+        print(f"    * Weighted contribution: {position_contribution:.4f}")
+        print(f"  - Spacing factor ({optimal_spacing_score:.3f} - {spacing_equilibrium:.3f}): {spacing_factor:.3f}")
+        print(f"    * Weighted contribution: {spacing_contribution:.4f}")
+        print(f"  - Edge factor ({edge_equilibrium:.3f} - {edge_score:.3f}): {edge_factor:.3f}")
+        print(f"    * Weighted contribution: {edge_contribution:.4f}")
+        
+        print(f"Final win rate: 0.5000 → {final_win_rate:.4f}")
+        print(f"  - Capture contribution: {capture_component - 0.5:.4f}")
+        print(f"  - Heuristic contribution: {heuristic_component - 0.5:.4f}")
+        print(f"  - Combined shift: {final_win_rate - 0.5:.4f}")
         
         print("---------------------------------------------")
 

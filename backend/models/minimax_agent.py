@@ -859,9 +859,9 @@ class MinimaxAgent:
         # Total number of goats on the board
         total_goats = outer_layer_goats + middle_layer_goats + center_goats
         
-        # If no goats on the board, return 0
+        # If no goats on the board, return 1.0 (conceptually all 0 goats are optimally placed)
         if total_goats == 0:
-            return 0
+            return 1.0
             
         # Calculate the actual score based on placement quality
         # Perfect score (1.0) if all goats are on the outer layer
