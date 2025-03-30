@@ -170,10 +170,11 @@ def test_mcts_win_rate_predictor():
         
         # Calculate win rates with both methods
         simple_win_rate = mcts_agent.predict_win_rate(game_state)
-        advanced_win_rate = mcts_agent.predict_win_rate(game_state)
+        advanced_win_rate = mcts_agent.predict_win_rate_advanced(game_state)
         
         print("\nWin Rate Predictions (from Tiger's perspective):")
-        print(f"Win rate: {simple_win_rate:.4f}")
+        print(f"Simple win rate: {simple_win_rate:.4f}")
+        print(f"Advanced win rate: {advanced_win_rate:.4f}")
         
         # Get detailed heuristic values
         all_tiger_moves = get_all_possible_moves(game_state.board, "MOVEMENT", "TIGER")

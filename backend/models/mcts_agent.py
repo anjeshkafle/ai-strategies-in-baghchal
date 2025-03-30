@@ -664,9 +664,20 @@ class MCTSAgent:
             # During placement phase, include goats_placed to ensure uniqueness
             return f"PLACEMENT_{state.goats_placed}_{state.turn}" 
 
-    
-    
     def predict_win_rate(self, state: GameState) -> float:
+        """
+        Handler function that calls either basic or advanced win rate predictor.
+        Set use_advanced_predictor to True/False to switch between implementations.
+        """
+        # Toggle this flag to switch between predictors
+        use_advanced_predictor = True  # Set to True when you want to use advanced
+        
+        if use_advanced_predictor:
+            return self.predict_win_rate_advanced(state)
+        else:
+            return self.predict_win_rate_basic(state)
+        
+    def predict_win_rate_basic(self, state: GameState) -> float:
         """
         Simplified win rate predictor that ONLY cares about captures.
         Returns values from Tiger's perspective:
@@ -691,21 +702,22 @@ class MCTSAgent:
             return 0.95 
         else:
             return 0.99
-    
-    def predict_win_rate__(self, state: GameState) -> float:
+
+    def predict_win_rate_advanced(self, state: GameState) -> float:
         """
-        Advanced win rate predictor that considers effective captures based on multiple heuristics.
+        Advanced win rate predictor based on effective captures and positional heuristics.
         
-        This function uses two steps:
-        1. Calculate effective captures by considering actual captures and adjusting based on heuristics
-        2. Convert effective captures to a win rate using a capture-based model
+        This function uses the following approach:
+        1. Calculate effective captures based on actual captures, expected captures, and key heuristics
+        2. Use the effective captures to determine a base win rate
+        3. Apply small modifiers from additional positional heuristics
         
-        Returns values from Tiger's perspective:
-        - Values close to 0.0 favor goats
-        - Values close to 1.0 favor tigers
-        - 0.5 represents a theoretical draw at equilibrium
+        Returns values from Tiger's perspective (0.0-1.0 range):
+        - Values closer to 0.0 favor goats
+        - Values closer to 1.0 favor tigers
+        - 0.5 represents a theoretical draw
         """
-        # STEP 1: Calculate base expected captures based on goats placed
+        # STEP 1: Calculate actual vs expected captures
         goats_placed = state.goats_placed
         goats_captured = state.goats_captured
         
@@ -715,80 +727,59 @@ class MCTSAgent:
         else:
             expected_captures = (goats_placed - 15) * (2 / 5)
         
-        # STEP 2: Calculate "effective future captures" from positional heuristics
-        # Get all tiger moves (needed for multiple heuristics)
-        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-        
-        # Closed spaces heuristic (fewer is better for tigers)
-        closed_regions = self.minimax_agent._count_closed_spaces(state, all_tiger_moves)
-        total_closed_spaces = sum(len(region) for region in closed_regions)
-        
-        # Model closed spaces as negative captures (each closed space potentially cancels out a capture)
-        # Value increases as placement progresses (closed nodes become more certain)
-        placement_progress = min(1.0, goats_placed / 20)
-        closed_node_value = total_closed_spaces * (0.5 + (0.5 * placement_progress))
-        
-        # Movable tigers heuristic (more is better for tigers)
-        movable_tigers = self.minimax_agent._count_movable_tigers(all_tiger_moves)
-        max_tigers = 4
-        tiger_mobility_factor = movable_tigers / max_tigers
-        
-        # Threatened goats (in danger of being captured)
-        threatened_value = self.minimax_agent._count_threatened_goats(all_tiger_moves)
-        
-        # Calculate tiger positional score (normalized 0-1)
-        position_score = self.minimax_agent._calculate_tiger_positional_score(state)
-        
-        # Calculate tiger optimal spacing score (normalized 0-1)
-        optimal_spacing_score = self.minimax_agent._calculate_tiger_optimal_spacing(state)
-        
-        # Calculate goat edge preference (normalized 0-1)
-        edge_score = self.minimax_agent._calculate_goat_edge_preference(state)
-        
-        # STEP 3: Compute effective captures
+        # STEP 2: Calculate effective future captures using key heuristics
         # Start with actual captures
         effective_captures = goats_captured
         
-        # Subtract closed node effect (negative contribution to effective captures)
-        effective_captures -= closed_node_value
+        # Get all tiger moves (needed for heuristics calculation)
+        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
         
-        # Add threatened goats (partial captures, scaled down)
-        effective_captures += threatened_value * 0.2
+        # Closed spaces heuristic (more closed spaces favor goats)
+        closed_regions = self.minimax_agent._count_closed_spaces(state, all_tiger_moves)
+        total_closed_spaces = sum(len(region) for region in closed_regions)
         
-        # Add positional advantages converted to capture-equivalent value
-        # For tigers, this represents the positional advantage in terms of future capture potential
-        position_capture_value = 0.5 * position_score  # Up to 0.5 additional captures from optimal positioning
-        effective_captures += position_capture_value
+        # Scale closed spaces from 0.3 to 0.8 based on placement progress
+        placement_progress = min(1.0, goats_placed / 20)
+        closed_space_value = total_closed_spaces * (0.3 + (0.5 * placement_progress))
         
-        # Add optimal spacing, which directly impacts capture potential
-        spacing_capture_value = 0.8 * optimal_spacing_score  # Up to 0.8 additional captures from optimal spacing
-        effective_captures += spacing_capture_value
+        # Subtract closed space effect (negative contribution to effective captures)
+        effective_captures -= closed_space_value
         
-        # Subtract goat edge preference value (negative for tigers)
-        # Up to -0.3 captures equivalent from goats having optimal edge position
-        edge_capture_value = -0.3 * edge_score
-        effective_captures += edge_capture_value
+        # Threatened goats (using updated function that returns normalized value)
+        threatened_value = self.minimax_agent._count_threatened_goats(all_tiger_moves)
         
-        # Add tiger mobility factor (more mobile tigers = more capture potential)
-        # Scale based on placement phase - mobility matters more in movement phase
-        if state.phase == "PLACEMENT":
-            mobility_capture_value = 0.2 * tiger_mobility_factor
-        else:
-            mobility_capture_value = 0.7 * tiger_mobility_factor
-        effective_captures += mobility_capture_value
+        # Add threatened value to effective captures
+        effective_captures += threatened_value
         
-        # Apply early capture bonus/penalty
-        if goats_placed < 15 and goats_captured > 0:
-            # Apply penalty for early captures (this encourages delaying captures until optimal phase)
-            early_capture_penalty = (15 - goats_placed) / 30  # Up to 0.5 penalty at start of game
-            effective_captures -= early_capture_penalty
-        
-        # STEP 4: Calculate capture deficit (actual - expected)
+        # STEP 3: Calculate capture deficit (actual+potential - expected)
         capture_deficit = effective_captures - expected_captures
         
-        # STEP 5: Convert deficit to win rate
-        # Base win rate of 0.5 at equilibrium (no deficit)
-        win_rate = 0.5 + (0.15 * capture_deficit)
+        # STEP 4: Calculate additional positional heuristics
+        # Tiger positional score (normalized 0-1, higher is better for tiger)
+        position_score = self.minimax_agent._calculate_tiger_positional_score(state)
+        # Convert to -0.5 to 0.5 range (centered at 0)
+        position_factor = position_score - 0.5
+        
+        # Tiger optimal spacing score (normalized 0-1, higher is better for tiger)
+        spacing_score = self.minimax_agent._calculate_tiger_optimal_spacing(state)
+        # Convert to -0.5 to 0.5 range (centered at 0)
+        spacing_factor = spacing_score - 0.5
+        
+        # Goat edge preference (normalized 0-1, higher is better for goat)
+        edge_score = self.minimax_agent._calculate_goat_edge_preference(state)
+        # Convert to -0.5 to 0.5 range (centered at 0, inverted since higher edge score favors goats)
+        edge_factor = 0.5 - edge_score
+        
+        # STEP 5: Combine all factors with appropriate weights
+        # Effective captures (85% of influence)
+        capture_component = 0.5 + (0.15 * capture_deficit * 0.85)
+        
+        # Additional heuristics (15% of influence, split evenly)
+        heuristic_weight = 0.15 / 3
+        heuristic_component = 0.5 + ((position_factor + spacing_factor + edge_factor) * heuristic_weight)
+        
+        # Combine components
+        final_win_rate = 0.5 + ((capture_component - 0.5) + (heuristic_component - 0.5))
         
         # Ensure win rate stays within valid range
-        return max(0.01, min(0.99, win_rate))
+        return max(0.01, min(0.99, final_win_rate))
