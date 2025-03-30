@@ -374,11 +374,35 @@ class MCTSAgent:
         else:
             return 1.0 - tiger_win_rate
     
+    def _softmax(self, values, temperature):
+        """
+        Compute softmax probabilities with temperature scaling.
+        
+        Args:
+            values: List of numerical values
+            temperature: Temperature parameter (higher = more uniform distribution)
+            
+        Returns:
+            List of probabilities that sum to 1.0
+        """
+        # Apply temperature scaling
+        scaled = [v/temperature for v in values]
+        
+        # Subtract max for numerical stability
+        max_val = max(scaled)
+        exp_values = [math.exp(v - max_val) for v in scaled]
+        
+        # Return normalized probabilities
+        sum_exp = sum(exp_values)
+        return [v / sum_exp for v in exp_values]
+        
     def _guided_rollout(self, state: GameState) -> float:
         """
-        Optimized guided rollout that uses a blend of minimax and randomness.
-        The guided_strictness parameter controls how often we follow the best move vs random selection.
-        Uses heap selection instead of full sorting for better performance.
+        Optimized guided rollout using Softmax/Boltzmann selection.
+        The guided_strictness parameter controls the temperature for move selection:
+        - High strictness (close to 1.0) = low temperature = strongly prefer best moves
+        - Low strictness (close to 0.0) = high temperature = more exploration
+        
         Returns win rate from starting player's perspective.
         """
         starting_player = state.turn
@@ -401,14 +425,18 @@ class MCTSAgent:
             if not valid_moves:
                 break
             
-            # Decide whether to use guided selection or random selection
-            if random.random() < self.guided_strictness and len(valid_moves) > 1:
-                # Pre-allocate list for better performance
-                move_count = len(valid_moves)
-                move_scores = [(None, 0)] * move_count
+            # Always use softmax selection, with temperature controlled by strictness
+            if len(valid_moves) > 1:
+                # Convert strictness (0-1) to temperature (higher = more random)
+                # With strictness=1.0, temperature=0.1 (very focused)
+                # With strictness=0.0, temperature=10.0 (very random)
+                temperature = 0.1 + (1.0 - self.guided_strictness) * 9.9
                 
-                # Guided selection - evaluate all moves using cache when possible
-                for i, move in enumerate(valid_moves):
+                # Evaluate all moves using cache when possible
+                moves = []
+                scores = []
+                
+                for move in valid_moves:
                     next_state = current_state.clone()
                     next_state.apply_move(move)
                     
@@ -422,26 +450,22 @@ class MCTSAgent:
                         if len(self._eval_cache) < 10000:  # Arbitrary limit
                             self._eval_cache[state_hash] = score
                     
-                    move_scores[i] = (move, score)
+                    moves.append(move)
+                    scores.append(score)
                 
-                # Calculate the number of top moves to consider
-                top_count = max(1, int(move_count * 0.3))
+                # Adjust scores based on player perspective
+                if current_state.turn == "GOAT":
+                    # For Goat, lower scores are better, so negate them
+                    scores = [-s for s in scores]
                 
-                # Use heap operations to find only the top N moves
-                if current_state.turn == "TIGER":
-                    # For Tiger, higher scores are better
-                    top_moves_with_scores = heapq.nlargest(top_count, move_scores, key=lambda x: x[1])
-                    top_moves = [move for move, _ in top_moves_with_scores]
-                else:
-                    # For Goat, lower scores are better
-                    top_moves_with_scores = heapq.nsmallest(top_count, move_scores, key=lambda x: x[1])
-                    top_moves = [move for move, _ in top_moves_with_scores]
+                # Calculate selection probabilities using softmax
+                probabilities = self._softmax(scores, temperature)
                 
-                # Select randomly from top moves
-                selected_move = random.choice(top_moves)
+                # Sample a move according to these probabilities
+                selected_move = random.choices(moves, weights=probabilities, k=1)[0]
             else:
-                # Random selection
-                selected_move = random.choice(valid_moves)
+                # Only one move available
+                selected_move = valid_moves[0]
             
             current_state.apply_move(selected_move)
             depth += 1

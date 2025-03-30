@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Tuple
 from copy import deepcopy
-from game_logic import get_possible_moves, get_all_possible_moves, get_threatened_nodes
+from game_logic import get_all_possible_moves, get_threatened_nodes
 
 class GameState:
     """
@@ -38,18 +38,13 @@ class GameState:
             return move1["x"] == move2["x"] and move1["y"] == move2["y"]
         
         # For movement moves
-        if (move1["from"]["x"] != move2["from"]["x"] or 
-            move1["from"]["y"] != move2["from"]["y"] or
-            move1["to"]["x"] != move2["to"]["x"] or
-            move1["to"]["y"] != move2["to"]["y"]):
-            return False
-            
-        # Check capture if present in either move
-        cap1 = move1.get("capture")
-        cap2 = move2.get("capture")
-        if cap1 and cap2:
-            return cap1["x"] == cap2["x"] and cap1["y"] == cap2["y"]
-        return cap1 is None and cap2 is None
+        return (move1["from"]["x"] == move2["from"]["x"] and 
+                move1["from"]["y"] == move2["from"]["y"] and
+                move1["to"]["x"] == move2["to"]["x"] and
+                move1["to"]["y"] == move2["to"]["y"])
+        
+        # No need to check capture - if from and to positions match,
+        # any capture would be at the same position as well
 
     def clone(self) -> 'GameState':
         """Create a deep copy of the current game state."""
@@ -147,15 +142,14 @@ class GameState:
             self.game_status = "TIGERS_WIN"
             return
 
-        # Only check for no-moves win condition in movement phase
-        if self.phase == "MOVEMENT":
-            # Get valid moves for current player
-            valid_moves = self.get_valid_moves()
-            
-            if not valid_moves:
-                # If current player has no moves, they lose
-                self.game_status = "TIGERS_WIN" if self.turn == "GOAT" else "GOATS_WIN"
-                return
+        # Check for no-moves win condition (applies in both placement and movement phase)
+        # Get valid moves for current player
+        valid_moves = self.get_valid_moves()
+        
+        if not valid_moves:
+            # If current player has no moves, they lose
+            self.game_status = "TIGERS_WIN" if self.turn == "GOAT" else "GOATS_WIN"
+            return
 
     def is_terminal(self) -> bool:
         """Check if the game has ended."""
