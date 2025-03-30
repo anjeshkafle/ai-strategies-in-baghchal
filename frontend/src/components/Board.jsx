@@ -540,7 +540,7 @@ const Board = () => {
               })
             )}
 
-            {/* Clickable areas for empty squares */}
+            {/* Clickable areas for empty nodes */}
             {board.map((row, y) =>
               row.map((cell, x) => {
                 if (cell) return null;

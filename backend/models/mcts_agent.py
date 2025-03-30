@@ -512,8 +512,8 @@ class MCTSAgent:
                 # Calculate how many empty cells remain (simple formula)
                 empty_cells = 21 - current_state.goats_placed + current_state.goats_captured
                 
-                # Get the threatened squares using the efficient method
-                threatened_squares = current_state.get_threatened_squares()
+                # Get the threatened nodes using the efficient method
+                threatened_nodes = current_state.get_threatened_nodes()
                 
                 # Categorize moves as safe or unsafe
                 safe_moves = []
@@ -526,8 +526,8 @@ class MCTSAgent:
                     else:  # movement
                         target_x, target_y = move["to"]["x"], move["to"]["y"]
                     
-                    # Check if this position is in the threatened squares list
-                    if (target_x, target_y) in threatened_squares:
+                    # Check if this position is in the threatened nodes list
+                    if (target_x, target_y) in threatened_nodes:
                         unsafe_moves.append(move)
                     else:
                         safe_moves.append(move)
@@ -670,9 +670,9 @@ class MCTSAgent:
         total_closed_spaces = sum(len(region) for region in closed_regions)
         
         # Model closed spaces as negative captures (each closed space potentially cancels out a capture)
-        # Value increases as placement progresses (closed squares become more certain)
+        # Value increases as placement progresses (closed nodes become more certain)
         placement_progress = min(1.0, goats_placed / 20)
-        closed_square_value = total_closed_spaces * (0.5 + (0.5 * placement_progress))
+        closed_node_value = total_closed_spaces * (0.5 + (0.5 * placement_progress))
         
         # Movable tigers heuristic (more is better for tigers)
         movable_tigers = self.minimax_agent._count_movable_tigers(all_tiger_moves)
@@ -695,8 +695,8 @@ class MCTSAgent:
         # Start with actual captures
         effective_captures = goats_captured
         
-        # Subtract closed square effect (negative contribution to effective captures)
-        effective_captures -= closed_square_value
+        # Subtract closed node effect (negative contribution to effective captures)
+        effective_captures -= closed_node_value
         
         # Add threatened goats (partial captures, scaled down)
         effective_captures += threatened_value * 0.2

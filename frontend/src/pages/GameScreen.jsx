@@ -340,7 +340,7 @@ const GameScreen = () => {
                       const goatMove = moveHistory[i * 2];
                       const tigerMove = moveHistory[i * 2 + 1];
 
-                      // Helper to check if a move is a capture (when source and destination are 2 squares apart)
+                      // Helper to check if a move is a capture (when source and destination are 2 nodes apart)
                       const isCapture = (move) => {
                         if (!move || move.length !== 5) return false;
                         const sourceCol = move.charCodeAt(1) - 65;

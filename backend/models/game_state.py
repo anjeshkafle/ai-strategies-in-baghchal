@@ -167,7 +167,7 @@ class GameState:
             return None
         return "TIGER" if self.game_status == "TIGERS_WIN" else "GOAT"
 
-    def get_threatened_squares(self) -> List[Tuple[int, int]]:
+    def get_threatened_nodes(self) -> List[Tuple[int, int]]:
         """
         Get all board positions where if a goat is placed, it could be immediately captured by a tiger.
         This is an efficient implementation that doesn't clone the state or perform unnecessary move generation.

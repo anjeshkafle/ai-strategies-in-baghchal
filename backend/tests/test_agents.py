@@ -39,7 +39,7 @@ BOARD_STRING_3 = [
     "_____",
     "_____",
     "_____",
-    "TG__T"
+    "T___T"
 ]
 
 BOARD_STRING_4 = [
@@ -55,7 +55,7 @@ BOARD_TO_USE = BOARD_STRING_3
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "TIGER"            # "GOAT" or "TIGER"
+TURN = "GOAT"            # "GOAT" or "TIGER"
 GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
