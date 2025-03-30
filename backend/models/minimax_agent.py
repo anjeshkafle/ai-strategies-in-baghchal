@@ -35,7 +35,7 @@ class MinimaxAgent:
         
         # Capture-related weights
         self.base_capture_value = 3000           # Base value for each captured goat
-        self.capture_speed_weight = 400          # Weight for depth-sensitive capture bonus
+        self.capture_speed_weight = 500          # Weight for depth-sensitive capture bonus
         
         # Positioning weights
         self.dispersion_weight = 100             # Weight for tiger dispersion
@@ -274,14 +274,6 @@ class MinimaxAgent:
         
         # Add capture score with dynamic value
         capture_score = dynamic_capture_value * state.goats_captured
-        
-        # Add a capture speed bonus that decreases as depth increases
-        if state.goats_captured > 0:
-            depth_bonus = max(0, self.max_depth - depth)
-            # Captures in early game get a bigger speed bonus
-            capture_speed_bonus = self.capture_speed_weight * state.goats_captured * depth_bonus * (1 + early_game_bonus * 0.5)
-            capture_score += capture_speed_bonus
-        
         adjusted_score += capture_score
         
         # Apply depth penalty
@@ -299,13 +291,7 @@ class MinimaxAgent:
         
         # Add capture score 
         capture_score = self.base_capture_value * state.goats_captured
-        
-        # Add a capture speed bonus that decreases as depth increases
-        if state.goats_captured > 0:
-            depth_bonus = max(0, self.max_depth - depth)
-            capture_speed_bonus = self.capture_speed_weight * state.goats_captured * depth_bonus
-            capture_score += capture_speed_bonus
-        
+                
         adjusted_score += capture_score
         
         # Apply depth penalty
@@ -498,11 +484,7 @@ class MinimaxAgent:
             next_is_max = next_state.turn == "TIGER"
             value = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_is_max)
             
-            # Apply a mathematically consistent immediate capture bonus
-            if state.turn == "TIGER" and move.get("capture"):
-                immediate_capture_bonus = self.capture_speed_weight * next_state.goats_captured * self.max_depth
-                value += immediate_capture_bonus
-            
+               
             # Save evaluation for debugging
             if self.debug_mode:
                 move_evals.append((move, value))
