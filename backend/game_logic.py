@@ -139,7 +139,9 @@ def get_threatened_nodes(board):
         board: The current game board
         
     Returns:
-        A list of (x, y) coordinates representing threatened positions.
+        A list of tuples (x, y, landing_x, landing_y) where:
+        - (x, y) are coordinates of a threatened position
+        - (landing_x, landing_y) are coordinates where tiger would land after capturing
     """
     threatened_nodes = []
     
@@ -172,16 +174,19 @@ def get_threatened_nodes(board):
             if not (is_in_bounds(goat_x, goat_y) and is_in_bounds(landing_x, landing_y)):
                 continue
             
-            # Check if both positions are empty (do this early to potentially skip connectivity checks)
-            if board[goat_y][goat_x] is not None or board[landing_y][landing_x] is not None:
+            # Check if the potential goat position is empty
+            if board[goat_y][goat_x] is not None:
                 continue
                 
-            # Only check connectivity from tiger to goat (the extension in same direction is always valid)
+            # Check connectivity from tiger to goat
             if not is_valid_connection(tiger_x, tiger_y, goat_x, goat_y):
                 continue
+                
+            # No need to check connectivity from goat to landing - if tiger to goat is connected
+            # and landing is in bounds, we can infer the extension exists in the same direction
             
-            # Add to threatened nodes
-            threatened_nodes.append((goat_x, goat_y))
+            # Add to threatened nodes with landing coordinates
+            threatened_nodes.append((goat_x, goat_y, landing_x, landing_y))
     
     return threatened_nodes
 

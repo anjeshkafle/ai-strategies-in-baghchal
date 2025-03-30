@@ -513,23 +513,54 @@ class MCTSAgent:
                 empty_cells = 21 - current_state.goats_placed + current_state.goats_captured
                 
                 # Get the threatened nodes using the efficient method
-                threatened_nodes = current_state.get_threatened_nodes()
+                # Returns list of (x, y, landing_x, landing_y) tuples
+                threatened_data = current_state.get_threatened_nodes()
+                
+                # Create a lookup for threatened positions to their landing positions
+                # Format: {(x, y): (landing_x, landing_y)}
+                threatened_lookup = {(x, y): (landing_x, landing_y) for x, y, landing_x, landing_y in threatened_data}
                 
                 # Categorize moves as safe or unsafe
                 safe_moves = []
                 unsafe_moves = []
                 
                 for move in valid_moves:
-                    # Get the target position where the goat would be placed/moved
-                    if move["type"] == "placement":
+                    # PLACEMENT PHASE - simple check for immediate capture threat
+                    if current_state.phase == "PLACEMENT":
                         target_x, target_y = move["x"], move["y"]
-                    else:  # movement
-                        target_x, target_y = move["to"]["x"], move["to"]["y"]
+                        
+                        # Check if this position is threatened
+                        if (target_x, target_y) in threatened_lookup:
+                            # Get the landing position
+                            landing_x, landing_y = threatened_lookup[(target_x, target_y)]
+                            
+                            # Check if landing is empty (capture is possible)
+                            if current_state.board[landing_y][landing_x] is None:
+                                unsafe_moves.append(move)
+                            else:
+                                safe_moves.append(move)
+                        else:
+                            # Not threatened
+                            safe_moves.append(move)
                     
-                    # Check if this position is in the threatened nodes list
-                    if (target_x, target_y) in threatened_nodes:
-                        unsafe_moves.append(move)
+                    # MOVEMENT PHASE - check both destination safety and if moving enables a capture
                     else:
+                        from_x, from_y = move["from"]["x"], move["from"]["y"]
+                        to_x, to_y = move["to"]["x"], move["to"]["y"]
+                        
+                        # Check if destination is threatened
+                        if (to_x, to_y) in threatened_lookup:
+                            landing_x, landing_y = threatened_lookup[(to_x, to_y)]
+                            
+                            # Check if landing is empty OR if this goat is moving from the landing position
+                            is_landing_empty = current_state.board[landing_y][landing_x] is None
+                            goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
+                            
+                            if is_landing_empty or goat_from_landing:
+                                unsafe_moves.append(move)
+                                continue
+                        
+                        # If we made it here, the move is safe
                         safe_moves.append(move)
                 
                 # Calculate progressive bias - as empty cells decrease, allow more exploration
