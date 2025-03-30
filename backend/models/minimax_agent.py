@@ -161,7 +161,7 @@ class MinimaxAgent:
         Identifies all closed regions in the current board state.
         A region of connected empty positions is considered "closed" if:
         1. All neighboring positions around the region are occupied by goats
-        2. No tiger can access any position in this region through a capture move
+        2. None of the goats forming the "wall" around the region are threatened
         
         Returns:
             List of closed regions, where each region is a list of (x,y) coordinates
@@ -170,72 +170,64 @@ class MinimaxAgent:
         # Filter to only capture moves
         tiger_capture_moves = [move for move in all_tiger_moves if move.get("capture")]
         
-        # Set of destinations that tigers can capture to
-        capturable_positions = {(move["to"]["x"], move["to"]["y"]) for move in tiger_capture_moves}
-        
-        # Get all empty positions
-        empty_positions = []
-        for y in range(GameState.BOARD_SIZE):
-            for x in range(GameState.BOARD_SIZE):
-                if state.board[y][x] is None:
-                    empty_positions.append((x, y))
+        # Set of goats that can be captured (positions of threatened goats)
+        capturable_goats = {(move["capture"]["x"], move["capture"]["y"]) for move in tiger_capture_moves}
         
         # Track visited positions to avoid reprocessing
         visited = set()
         closed_regions = []
         
-        # For each empty position, find its connected region
-        for x, y in empty_positions:
-            if (x, y) in visited:
-                continue
-                
-            # Find the connected region of empty spaces
-            region = []
-            is_closed_region = True
-            
-            # Use BFS to find all connected empty spaces
-            queue = [(x, y)]
-            region_visited = {(x, y)}
-            
-            while queue:
-                curr_x, curr_y = queue.pop(0)
-                region.append((curr_x, curr_y))
-                
-                # Get neighboring positions
-                neighbors = []
-                for dx, dy in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
-                    new_x, new_y = curr_x + dx, curr_y + dy
-                    if (0 <= new_x < GameState.BOARD_SIZE and 
-                        0 <= new_y < GameState.BOARD_SIZE and 
-                        self._is_valid_connection(curr_x, curr_y, new_x, new_y)):
-                        neighbors.append((new_x, new_y))
-                
-                # Check neighbors: if empty, add to queue, if not goat, region not closed
-                for nx, ny in neighbors:
-                    piece = state.board[ny][nx]
+        # Directly iterate through the board instead of creating an empty_positions list
+        for y in range(GameState.BOARD_SIZE):
+            for x in range(GameState.BOARD_SIZE):
+                # Skip if already visited or not empty
+                if (x, y) in visited or state.board[y][x] is not None:
+                    continue
                     
-                    if piece is None:
-                        # Connected empty space
-                        if (nx, ny) not in region_visited:
-                            queue.append((nx, ny))
-                            region_visited.add((nx, ny))
-                    elif piece["type"] != "GOAT":
-                        # If any neighbor is not a goat, region is not closed
-                        is_closed_region = False
-            
-            # Mark all positions in this region as visited
-            visited.update(region_visited)
-            
-            # Check if any position in the region can be captured to
-            if is_closed_region:
-                for pos_x, pos_y in region:
-                    if (pos_x, pos_y) in capturable_positions:
-                        is_closed_region = False
-                        break
-            
-            # If the region is closed, add it to our list of closed regions
-            if is_closed_region:
-                closed_regions.append(region)
+                # Find the connected region of empty spaces
+                region = []
+                is_closed_region = True
+                
+                # Use BFS to find all connected empty spaces
+                queue = [(x, y)]
+                region_visited = {(x, y)}
+                
+                while queue:
+                    curr_x, curr_y = queue.pop(0)
+                    region.append((curr_x, curr_y))
+                    
+                    # Get neighboring positions
+                    neighbors = []
+                    for dx, dy in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
+                        new_x, new_y = curr_x + dx, curr_y + dy
+                        if (0 <= new_x < GameState.BOARD_SIZE and 
+                            0 <= new_y < GameState.BOARD_SIZE and 
+                            self._is_valid_connection(curr_x, curr_y, new_x, new_y)):
+                            neighbors.append((new_x, new_y))
+                    
+                    # Check neighbors: if empty, add to queue; if goat, check if capturable; if tiger, region not closed
+                    for nx, ny in neighbors:
+                        piece = state.board[ny][nx]
+                        
+                        if piece is None:
+                            # Connected empty space
+                            if (nx, ny) not in region_visited:
+                                queue.append((nx, ny))
+                                region_visited.add((nx, ny))
+                        elif piece["type"] == "GOAT":
+                            # If this goat can be captured, the region is not closed
+                            if (nx, ny) in capturable_goats:
+                                is_closed_region = False
+                        else:
+                            # If any neighbor is a tiger, region is not closed
+                            is_closed_region = False
+                
+                # Mark all positions in this region as visited
+                visited.update(region_visited)
+                
+                # If the region is closed, add it to our list of closed regions
+                if is_closed_region:
+                    closed_regions.append(region)
         
         return closed_regions
 
