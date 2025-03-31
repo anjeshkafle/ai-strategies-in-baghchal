@@ -278,7 +278,7 @@ class MinimaxAgent:
         
         # Check if we have information about future captures
         if captures_at_depth is not None and captures_at_depth:
-     
+           
             # Add speed bonus for each predicted capture based on depth
             capture_speed_score = 0
             for capture_depth, num_captures in captures_at_depth.items():
@@ -621,34 +621,26 @@ class MinimaxAgent:
         
         # Check transposition table for exact match
         if tt_key in self.transposition_table:
-            # Get entry with score and captures
-            tt_entry = self.transposition_table[tt_key]
-            
-            # If we have capture information from the table, update our capture dictionary
-            if tt_entry.get("captures"):
-                captures_at_depth.clear()
-                captures_at_depth.update(tt_entry["captures"])
-            
             # For debugging, track when we use the transposition table at depth 1
             if depth == self.max_depth - 1 and self.debug_mode:
                 # Create a string representation of the state for debugging
                 state_str = self._state_to_string(state)
-                self.inferred_moves[state_str] = (tt_entry["score"], symmetry_type)
+                self.inferred_moves[state_str] = (self.transposition_table[tt_key], symmetry_type)
             
-            return tt_entry["score"]
+            return self.transposition_table[tt_key]
         
         # Base cases
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
             eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
             # Store exact evaluation in transposition table
-            self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
+            self._store_in_transposition_table(tt_key, eval_score, depth)
             return eval_score
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
             eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
-            self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
+            self._store_in_transposition_table(tt_key, eval_score, depth)
             return eval_score
         
         # Order moves for better pruning
@@ -656,6 +648,7 @@ class MinimaxAgent:
         
         best_value = -MinimaxAgent.INF if is_maximizing else MinimaxAgent.INF
         best_captures = {}  # Track captures for the best move
+        equal_captures_list = []  # Track captures for all equal-scoring best moves
         
         for move in ordered_moves:
             new_state = state.clone()
@@ -683,35 +676,46 @@ class MinimaxAgent:
                 if child_score > best_value:
                     best_value = child_score
                     best_captures = child_captures.copy()  # Save captures for best move
+                    equal_captures_list = [child_captures.copy()]  # Reset list with only this move's captures
+                elif child_score == best_value:
+                    # For equal-scoring moves, save their captures too
+                    equal_captures_list.append(child_captures.copy())
                 alpha = max(alpha, best_value)
             else:
                 if child_score < best_value:
                     best_value = child_score
                     best_captures = child_captures.copy()  # Save captures for best move
+                    equal_captures_list = [child_captures.copy()]  # Reset list with only this move's captures
+                elif child_score == best_value:
+                    # For equal-scoring moves, save their captures too
+                    equal_captures_list.append(child_captures.copy())
                 beta = min(beta, best_value)
                 
             if beta <= alpha:
                 break  # Alpha-beta pruning
         
-        # Update the captures_at_depth with the best captures found
-        # This ensures that captures information propagates back up the tree
+        # Merge all capture information from equal-scoring best moves
+        # This ensures that all possible capture paths are tracked
+        merged_captures = {}
+        for captures in equal_captures_list:
+            for depth_key, count in captures.items():
+                merged_captures[depth_key] = max(merged_captures.get(depth_key, 0), count)
+        
+        # Update the captures_at_depth with the merged captures found
         captures_at_depth.clear()
-        captures_at_depth.update(best_captures)
+        captures_at_depth.update(merged_captures)
         
         # Store the exact score (not bounds) in the transposition table
-        self._store_in_transposition_table(tt_key, best_value, depth, captures_at_depth)
+        self._store_in_transposition_table(tt_key, best_value, depth)
         return best_value
     
-    def _store_in_transposition_table(self, tt_key, value, depth, captures=None):
+    def _store_in_transposition_table(self, tt_key, value, depth):
         """
-        Store a value and capture information in the transposition table with size management.
+        Store a value in the transposition table with size management.
         Prioritizes higher depth entries when the table needs pruning.
         """
-        # Create entry with value and captures
-        entry = {"score": value, "captures": captures.copy() if captures else {}}
-        
-        # Store the entry
-        self.transposition_table[tt_key] = entry
+        # Store the value
+        self.transposition_table[tt_key] = value
         
         # Track the entry by depth for efficient pruning
         if depth not in self.tt_entries_by_depth:
