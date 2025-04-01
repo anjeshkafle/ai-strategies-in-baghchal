@@ -68,7 +68,7 @@ class MinimaxAgent:
         raw_score = self._compute_raw_score(state)
         
         # Adjust the score based on depth and captures
-        final_score = self._adjust_score(raw_score, state, traversed_depth)
+        final_score = self._adjust_score(raw_score, state, move_sequence)
         
         return final_score
     
@@ -259,26 +259,20 @@ class MinimaxAgent:
         
         return score
     
-    def _adjust_score(self, raw_score: float, state: GameState, traversed_depth: int) -> float:
+    def _adjust_score(self, raw_score: float, state: GameState, move_sequence=None) -> float:
         """
         Adjusts the raw evaluation score by applying depth penalty and dynamic capture bonuses.
         This version uses game-stage aware bonuses for captures.
         """
         # Start with the raw score
         adjusted_score = raw_score
-        
-        # Calculate game stage for dynamic capture value
-        game_progress = min(1.0, state.goats_placed / 20)
-        
-        # Calculate dynamic capture value - captures are more valuable earlier in the game
-        # (they give a bigger advantage when fewer goats are on the board)
-        early_game_bonus = max(0, 1.2 - game_progress)  # Bonus ranges from 1.2 to 0.0
-        dynamic_capture_value = self.base_capture_value * (1 + early_game_bonus)
-        
+
+        # Depth traversed is the number of moves in the move sequence
+        traversed_depth = len(move_sequence) if move_sequence else 0
+
         # Add capture score with dynamic value
-        capture_score = dynamic_capture_value * state.goats_captured
+        capture_score = self.base_capture_value * state.goats_captured
         adjusted_score += capture_score
-        
         # Apply depth penalty
         adjusted_score -= traversed_depth
         
