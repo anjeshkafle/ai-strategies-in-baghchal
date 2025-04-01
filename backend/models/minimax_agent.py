@@ -68,37 +68,7 @@ class MinimaxAgent:
         final_score = self._adjust_score(raw_score, state, depth, captures_at_depth)
         
         return final_score
-    
-    def evaluate_old(self, state: GameState, depth: int = 0, captures_at_depth: Dict[int, int] = None) -> float:
-        """
-        [OLD VERSION - KEPT FOR REFERENCE]
-        Evaluates the current game state from Tiger's perspective.
-        Uses several core heuristics:
-        - mobility_weight * movable_tigers (200 during placement, 300 during movement)
-        - closed_spaces_weight * closed_spaces (1000)
-        - base_capture_value * dead_goats + capture_speed_bonus
-        - base_capture_value * threatened_goats (turn-dependent)
-        - dispersion_weight * tiger_position_score (normalized 0-1 score)
-        - optimal_spacing_weight * tiger_optimal_spacing (normalized 0-1 score)
-        - -edge_weight * goat_edge_preference (normalized 0-1 score)
-        """
-        # Check for terminal states first
-        winner = state.get_winner()
-        if winner == "TIGER":
-            final_score = MinimaxAgent.INF - depth  # Prefer faster wins
-            return final_score
-        elif winner == "GOAT":
-            final_score = -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
-            return final_score
-        
-        # Compute the raw score based on board state and phase
-        raw_score = self._compute_raw_score_old(state)
-        
-        # Adjust the score based on depth and captures
-        final_score = self._adjust_score_old(raw_score, state, depth, captures_at_depth)
-        
-        return final_score
-    
+     
     def _compute_raw_score(self, state: GameState) -> float:
         """
         Computes the raw evaluation score with dynamic equilibrium points and weights that adapt to game progression.
@@ -209,53 +179,7 @@ class MinimaxAgent:
         
         return score
     
-    def _compute_raw_score_old(self, state: GameState) -> float:
-        """
-        [OLD VERSION - KEPT FOR REFERENCE]
-        Computes the raw evaluation score based solely on the board state and phase.
-        This does not include depth penalty or capture bonus, which will be applied separately.
-        """
-        # Set mobility weight based on game phase
-        mobility_weight = self.mobility_weight_placement if state.phase == "PLACEMENT" else self.mobility_weight_movement
-        
-        # Get all tiger moves once for all heuristics
-        all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
-        
-        # Initialize score
-        score = 0
-        
-        # Count movable tigers (tigers with at least one valid move)
-        movable_tigers = self._count_movable_tigers(all_tiger_moves)
-        tiger_score = mobility_weight * movable_tigers
-        score += tiger_score
-        
-        # Threatened goats (in danger of being captured)
-        threatened_value = self._count_threatened_goats(all_tiger_moves, state.turn)
-        threatened_score = self.base_capture_value * threatened_value
-        score += threatened_score
-        
-        # Count closed spaces (positions where tigers are trapped)
-        closed_regions = self._count_closed_spaces(state, all_tiger_moves)
-        total_closed_spaces = sum(len(region) for region in closed_regions)
-        closed_score = -self.closed_spaces_weight * total_closed_spaces
-        score += closed_score
-        
-        # Calculate tiger positional score (normalized 0-1)
-        position_score = self._calculate_tiger_positional_score(state)
-        score += self.dispersion_weight * position_score
-        
-        # Calculate tiger optimal spacing score (normalized 0-1)
-        # This heuristic is slightly more important than positional score
-        optimal_spacing_score = self._calculate_tiger_optimal_spacing(state)
-        optimal_spacing_weight = int(self.dispersion_weight * 1.5)  # 50% more weight than positional score
-        score += optimal_spacing_weight * optimal_spacing_score
-        
-        # Calculate goat edge preference score (normalized 0-1)
-        edge_score = self._calculate_goat_edge_preference(state)
-        score -= self.edge_weight * edge_score  # Subtract from score (negative for tigers)
-        
-        return score
-    
+   
     def _adjust_score(self, raw_score: float, state: GameState, depth: int, captures_at_depth: Dict[int, int] = None) -> float:
         """
         Adjusts the raw evaluation score by applying depth penalty and dynamic capture bonuses.
@@ -303,23 +227,6 @@ class MinimaxAgent:
         
         return adjusted_score
     
-    def _adjust_score_old(self, raw_score: float, state: GameState, depth: int, captures_at_depth: Dict[int, int] = None) -> float:
-        """
-        [OLD VERSION - KEPT FOR REFERENCE]
-        Adjusts the raw evaluation score by applying depth penalty and capture bonuses.
-        """
-        # Start with the raw score
-        adjusted_score = raw_score
-        
-        # Add capture score 
-        capture_score = self.base_capture_value * state.goats_captured
-                
-        adjusted_score += capture_score
-        
-        # Apply depth penalty
-        adjusted_score -= depth
-        
-        return adjusted_score
     
     def _count_movable_tigers(self, all_tiger_moves) -> int:
         """
