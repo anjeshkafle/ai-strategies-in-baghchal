@@ -44,7 +44,7 @@ class MinimaxAgent:
         # Debug mode flag
         self.debug_mode = True
     
-    def evaluate(self, state: GameState, depth: int = 0, captures_at_depth: Dict[int, int] = None) -> float:
+    def evaluate(self, state: GameState, move_sequence_length: int = 0, captures_at_depth: Dict[int, int] = None) -> float:
         """
         Evaluates the current game state from Tiger's perspective using dynamic equilibrium points.
         Uses several core heuristics with weights and balance points that adapt to game progression:
@@ -55,17 +55,17 @@ class MinimaxAgent:
         # Check for terminal states first
         winner = state.get_winner()
         if winner == "TIGER":
-            final_score = MinimaxAgent.INF - depth  # Prefer faster wins
+            final_score = MinimaxAgent.INF - move_sequence_length  # Prefer faster wins
             return final_score
         elif winner == "GOAT":
-            final_score = -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
+            final_score = -MinimaxAgent.INF + move_sequence_length  # Prefer slower losses from tiger's perspective
             return final_score
         
         # Compute the raw score based on board state and phase with dynamic equilibrium
         raw_score = self._compute_raw_score(state)
         
-        # Adjust the score based on depth and captures
-        final_score = self._adjust_score(raw_score, state, depth, captures_at_depth)
+        # Adjust the score based on move sequence length and captures
+        final_score = self._adjust_score(raw_score, state, move_sequence_length, captures_at_depth)
         
         return final_score
      
@@ -180,9 +180,9 @@ class MinimaxAgent:
         return score
     
    
-    def _adjust_score(self, raw_score: float, state: GameState, depth: int, captures_at_depth: Dict[int, int] = None) -> float:
+    def _adjust_score(self, raw_score: float, state: GameState, move_sequence_length: int, captures_at_depth: Dict[int, int] = None) -> float:
         """
-        Adjusts the raw evaluation score by applying depth penalty and dynamic capture bonuses.
+        Adjusts the raw evaluation score by applying move sequence length penalty and dynamic capture bonuses.
         This version uses game-stage aware bonuses for captures and rewards faster captures.
         """
         # Start with the raw score
@@ -217,13 +217,13 @@ class MinimaxAgent:
                 # Apply the bonus for all captures at this depth
                 capture_speed_score += depth_bonus * num_captures
                 
-                if self.debug_mode and depth == 0:
+                if self.debug_mode and move_sequence_length == 0:
                     print(f"Capture at depth {capture_depth}: {num_captures} captures, bonus: {depth_bonus}")
             
             adjusted_score += capture_speed_score
         
-        # Apply depth penalty
-        adjusted_score -= depth
+        # Apply move sequence length penalty
+        adjusted_score -= move_sequence_length
         
         return adjusted_score
     
@@ -426,8 +426,11 @@ class MinimaxAgent:
             self.transposition_table = {}
             
             next_is_max = next_state.turn == "TIGER"
+            # Create move sequence with this first move and pass it to minimax
+            move_sequence = [move]
+            
             # Get both the score and updated captures dictionary
-            value, updated_captures = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_is_max, captures_at_depth)
+            value, updated_captures = self.minimax(next_state, move_sequence, alpha, beta, next_is_max, captures_at_depth)
             
             # Restore the transposition table
             self.transposition_table = original_tt
@@ -508,7 +511,7 @@ class MinimaxAgent:
             next_state = state.clone()
             next_state.apply_move(move)
             
-            # Get a quick evaluation score
+            # Get a quick evaluation score - pass 0 as move_sequence_length
             score = self.evaluate(next_state, 0)
             
             # For tigers, higher scores are better; for goats, lower scores are better
@@ -529,11 +532,15 @@ class MinimaxAgent:
         # Return just the ordered moves
         return [move for move, _ in move_scores]
 
-    def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool, captures_at_depth: Dict[int, int] = None):
+    def minimax(self, state: GameState, move_sequence: List[Dict], alpha: float, beta: float, is_maximizing: bool, captures_at_depth: Dict[int, int] = None):
         """
         Minimax algorithm with alpha-beta pruning, symmetry-aware transposition table, and capture tracking.
+        Uses move_sequence to track the sequence of moves leading to the current state.
         Returns a tuple of (value, captures_dict) to properly isolate capture tracking between branches.
         """
+        # Calculate depth based on move sequence length
+        depth = self.max_depth - len(move_sequence)
+        
         # Initialize captures_at_depth if None
         if captures_at_depth is None:
             captures_at_depth = {}
@@ -560,15 +567,15 @@ class MinimaxAgent:
         
         # Base cases
         if depth == 0 or state.is_terminal():
-            # Always evaluate from Tiger's perspective
-            eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
+            # Always evaluate from Tiger's perspective, pass move_sequence length
+            eval_score = self.evaluate(state, len(move_sequence), captures_at_depth)
             # Store exact evaluation in transposition table
             self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
             return eval_score, captures_at_depth.copy()
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
+            eval_score = self.evaluate(state, len(move_sequence), captures_at_depth)
             self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
             return eval_score, captures_at_depth.copy()
         
@@ -596,9 +603,15 @@ class MinimaxAgent:
                 # Store the capture at the current depth
                 child_captures[current_depth] = child_captures.get(current_depth, 0) + 1
             
+            # Modify move sequence in place and restore after recursion
+            move_sequence.append(move)
+            
             # Next turn alternates maximizing/minimizing
             next_is_max = new_state.turn == "TIGER"
-            child_score, updated_captures = self.minimax(new_state, depth - 1, alpha, beta, next_is_max, child_captures)
+            child_score, updated_captures = self.minimax(new_state, move_sequence, alpha, beta, next_is_max, child_captures)
+            
+            # Restore move sequence
+            move_sequence.pop()
             
             if is_maximizing:
                 if child_score > best_value:
