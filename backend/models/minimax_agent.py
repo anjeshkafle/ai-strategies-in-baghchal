@@ -35,7 +35,7 @@ class MinimaxAgent:
         
         # Capture-related weights
         self.base_capture_value = 3000           # Base value for each captured goat
-        self.capture_speed_weight = 10000          # Weight for depth-sensitive capture bonus
+        self.capture_speed_weight = 100000          # Weight for depth-sensitive capture bonus
         
         # Positioning weights
         self.dispersion_weight = 100             # Weight for tiger dispersion
@@ -514,12 +514,24 @@ class MinimaxAgent:
             if next_state.goats_captured > goats_captured_before:
                 captures_at_depth[0] = 1
             
+            # Temporarily disable transposition table for top-level moves
+            original_tt = self.transposition_table
+            self.transposition_table = {}
+            
             next_is_max = next_state.turn == "TIGER"
-            value = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_is_max, captures_at_depth)
+            # Get both the score and updated captures dictionary
+            value, updated_captures = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_is_max, captures_at_depth)
+            
+            # Restore the transposition table
+            self.transposition_table = original_tt
+            
+            # Ensure immediate captures (depth 0) are included in the updated captures
+            if 0 in captures_at_depth:
+                updated_captures[0] = captures_at_depth[0]
             
             # Save evaluation for debugging
             if self.debug_mode:
-                move_evals.append((move, value, captures_at_depth.copy()))
+                move_evals.append((move, value, updated_captures))
             
             if state.turn == "TIGER":
                 if value > best_value:
@@ -611,10 +623,16 @@ class MinimaxAgent:
         return [move for move, _ in move_scores]
 
     def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool, captures_at_depth: Dict[int, int] = None):
-        """Minimax algorithm with alpha-beta pruning, symmetry-aware transposition table, and capture tracking."""
+        """
+        Minimax algorithm with alpha-beta pruning, symmetry-aware transposition table, and capture tracking.
+        Returns a tuple of (value, captures_dict) to properly isolate capture tracking between branches.
+        """
         # Initialize captures_at_depth if None
         if captures_at_depth is None:
             captures_at_depth = {}
+        else:
+            # Create a copy to avoid modifying the original
+            captures_at_depth = captures_at_depth.copy()
         
         # Get canonical representation for transposition table lookup
         canonical_key, symmetry_type = self._get_canonical_state(state)
@@ -623,26 +641,15 @@ class MinimaxAgent:
         # Check transposition table for exact match
         if tt_key in self.transposition_table:
             # For debugging, track when we use the transposition table at depth 1
+            value, stored_captures = self.transposition_table[tt_key]
+            
             if depth == self.max_depth - 1 and self.debug_mode:
                 # Create a string representation of the state for debugging
                 state_str = self._state_to_string(state)
-                value, stored_captures = self.transposition_table[tt_key]
-                
-                # Update the captures_at_depth with the captures from the transposition table
-                if stored_captures:
-                    captures_at_depth.update(stored_captures)
-                
                 self.inferred_moves[state_str] = (value, symmetry_type)
             
-                return value
-            else:
-                value, stored_captures = self.transposition_table[tt_key]
-                
-                # Update the captures_at_depth with the captures from the transposition table
-                if stored_captures:
-                    captures_at_depth.update(stored_captures)
-                
-                return value
+            # Return both the value and a copy of stored captures
+            return value, stored_captures.copy()
         
         # Base cases
         if depth == 0 or state.is_terminal():
@@ -650,20 +657,19 @@ class MinimaxAgent:
             eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
             # Store exact evaluation in transposition table
             self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
-            return eval_score
+            return eval_score, captures_at_depth.copy()
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
             eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
             self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
-            return eval_score
+            return eval_score, captures_at_depth.copy()
         
         # Order moves for better pruning
         ordered_moves = self._order_moves(state, valid_moves)
         
         best_value = -MinimaxAgent.INF if is_maximizing else MinimaxAgent.INF
         best_captures = {}  # Track captures for the best move
-        equal_captures_list = []  # Track captures for all equal-scoring best moves
         
         for move in ordered_moves:
             new_state = state.clone()
@@ -685,44 +691,34 @@ class MinimaxAgent:
             
             # Next turn alternates maximizing/minimizing
             next_is_max = new_state.turn == "TIGER"
-            child_score = self.minimax(new_state, depth - 1, alpha, beta, next_is_max, child_captures)
+            child_score, updated_captures = self.minimax(new_state, depth - 1, alpha, beta, next_is_max, child_captures)
             
             if is_maximizing:
                 if child_score > best_value:
                     best_value = child_score
-                    best_captures = child_captures.copy()  # Save captures for best move
-                    equal_captures_list = [child_captures.copy()]  # Reset list with only this move's captures
+                    best_captures = updated_captures.copy()  # Save captures for best move
                 elif child_score == best_value:
-                    # For equal-scoring moves, save their captures too
-                    equal_captures_list.append(child_captures.copy())
+                    # For equal-scoring moves, don't merge capture info - each move 
+                    # should only report the captures reachable through its own path
+                    pass
                 alpha = max(alpha, best_value)
             else:
                 if child_score < best_value:
                     best_value = child_score
-                    best_captures = child_captures.copy()  # Save captures for best move
-                    equal_captures_list = [child_captures.copy()]  # Reset list with only this move's captures
+                    best_captures = updated_captures.copy()  # Save captures for best move
                 elif child_score == best_value:
-                    # For equal-scoring moves, save their captures too
-                    equal_captures_list.append(child_captures.copy())
+                    # For equal-scoring moves, don't merge capture info
+                    pass
                 beta = min(beta, best_value)
                 
             if beta <= alpha:
                 break  # Alpha-beta pruning
         
-        # Merge all capture information from equal-scoring best moves
-        # This ensures that all possible capture paths are tracked
-        merged_captures = {}
-        for captures in equal_captures_list:
-            for depth_key, count in captures.items():
-                merged_captures[depth_key] = max(merged_captures.get(depth_key, 0), count)
-        
-        # Update the captures_at_depth with the merged captures found
-        captures_at_depth.clear()
-        captures_at_depth.update(merged_captures)
-        
         # Store the exact score (not bounds) in the transposition table
-        self._store_in_transposition_table(tt_key, best_value, depth, merged_captures)
-        return best_value
+        self._store_in_transposition_table(tt_key, best_value, depth, best_captures)
+        
+        # Return both the value and captures dictionary
+        return best_value, best_captures
     
     def _store_in_transposition_table(self, tt_key, value, depth, captures_at_depth=None):
         """
