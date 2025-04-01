@@ -35,7 +35,7 @@ class MinimaxAgent:
         
         # Capture-related weights
         self.base_capture_value = 3000           # Base value for each captured goat
-        self.capture_speed_weight = 500          # Weight for depth-sensitive capture bonus
+        self.capture_speed_weight = 100000          # Weight for depth-sensitive capture bonus
         
         # Positioning weights
         self.dispersion_weight = 100             # Weight for tiger dispersion
@@ -267,11 +267,38 @@ class MinimaxAgent:
         # Start with the raw score
         adjusted_score = raw_score
 
+        # Track capture depths
+        capture_depths = []
+        if move_sequence:
+            for i, move in enumerate(move_sequence):
+                if move.get("capture"):
+                    capture_depths.append(i + 1)  # Depth starts from 1 (root is 0)
+
+        # Calculate captures before search
+        captures_before_search = state.goats_captured - len(capture_depths)
+
+        # Calculate capture score with depth-proportional bonuses
+        capture_score = captures_before_search * (self.base_capture_value + self.max_depth * self.capture_speed_weight)
+        
+        # Add depth-proportional bonus for each capture in the sequence
+        for depth in capture_depths:
+            capture_score += self.base_capture_value + (self.max_depth - depth) * self.capture_speed_weight
+
+        # Debug log for visualization
+        if self.debug_mode and move_sequence and capture_depths == [3,5]:
+            print("\nMove sequence:", move_sequence)
+            print("\nBoard state:")
+            print("Captures during search:", len(capture_depths))
+            print("Capture depths:", capture_depths)
+            print("Captures before search:", captures_before_search)
+            print("Capture score:", capture_score)
+            for row in state.board:
+                print("".join("_" if cell is None else cell["type"][0] for cell in row))
+
         # Depth traversed is the number of moves in the move sequence
         traversed_depth = len(move_sequence) if move_sequence else 0
 
-        # Add capture score with dynamic value
-        capture_score = self.base_capture_value * state.goats_captured
+        # Add capture score
         adjusted_score += capture_score
         # Apply depth penalty
         adjusted_score -= traversed_depth

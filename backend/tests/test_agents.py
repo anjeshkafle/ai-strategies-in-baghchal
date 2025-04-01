@@ -38,8 +38,8 @@ BOARD_STRING_3 = [
     "T___T",
     "_____",
     "_____",
-    "_____",
-    "TG__T"
+    "__G__",
+    "T___T"
     ]
 
 BOARD_STRING_4 = [
@@ -65,7 +65,7 @@ RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 3
+MINIMAX_MAX_DEPTH = 6
 
 # MCTS parameters
 MCTS_ITERATIONS = 0
