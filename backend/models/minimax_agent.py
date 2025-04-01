@@ -44,7 +44,7 @@ class MinimaxAgent:
         # Debug mode flag
         self.debug_mode = True
     
-    def evaluate(self, state: GameState, depth: int = 0) -> float:
+    def evaluate(self, state: GameState, move_sequence=None) -> float:
         """
         Evaluates the current game state from Tiger's perspective using dynamic equilibrium points.
         Uses several core heuristics with weights and balance points that adapt to game progression:
@@ -52,20 +52,43 @@ class MinimaxAgent:
         - Movable tigers and closed spaces
         - Tiger position, optimal spacing, and goat edge preference with dynamic equilibrium points
         """
+        # Calculate traversed depth from move sequence
+        traversed_depth = 0 if move_sequence is None else len(move_sequence)
+        
+        # Log the board and move sequence if debug mode is on and move_sequence is provided
+        if self.debug_mode and move_sequence:
+            print(f"\nEvaluating board after moves: {move_sequence}")
+            print(f"Traversed depth: {traversed_depth}")
+            # Print readable board representation
+            print("Board:")
+            for y in range(GameState.BOARD_SIZE):
+                row = ""
+                for x in range(GameState.BOARD_SIZE):
+                    cell = state.board[y][x]
+                    if cell is None:
+                        row += "· "
+                    elif cell["type"] == "TIGER":
+                        row += "T "
+                    else:
+                        row += "G "
+                print(row)
+            print(f"Phase: {state.phase}, Turn: {state.turn}")
+            print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}")
+            
         # Check for terminal states first
         winner = state.get_winner()
         if winner == "TIGER":
-            final_score = MinimaxAgent.INF - depth  # Prefer faster wins
+            final_score = MinimaxAgent.INF - traversed_depth  # Prefer faster wins
             return final_score
         elif winner == "GOAT":
-            final_score = -MinimaxAgent.INF + depth  # Prefer slower losses from tiger's perspective
+            final_score = -MinimaxAgent.INF + traversed_depth  # Prefer slower losses from tiger's perspective
             return final_score
         
         # Compute the raw score based on board state and phase with dynamic equilibrium
         raw_score = self._compute_raw_score(state)
         
         # Adjust the score based on depth and captures
-        final_score = self._adjust_score(raw_score, state, depth)
+        final_score = self._adjust_score(raw_score, state, traversed_depth)
         
         return final_score
     
@@ -256,7 +279,7 @@ class MinimaxAgent:
         
         return score
     
-    def _adjust_score(self, raw_score: float, state: GameState, depth: int) -> float:
+    def _adjust_score(self, raw_score: float, state: GameState, traversed_depth: int) -> float:
         """
         Adjusts the raw evaluation score by applying depth penalty and dynamic capture bonuses.
         This version uses game-stage aware bonuses for captures.
@@ -277,11 +300,11 @@ class MinimaxAgent:
         adjusted_score += capture_score
         
         # Apply depth penalty
-        adjusted_score -= depth
+        adjusted_score -= traversed_depth
         
         return adjusted_score
     
-    def _adjust_score_old(self, raw_score: float, state: GameState, depth: int) -> float:
+    def _adjust_score_old(self, raw_score: float, state: GameState, traversed_depth: int) -> float:
         """
         [OLD VERSION - KEPT FOR REFERENCE]
         Adjusts the raw evaluation score by applying depth penalty and capture bonuses.
@@ -291,11 +314,11 @@ class MinimaxAgent:
         
         # Add capture score 
         capture_score = self.base_capture_value * state.goats_captured
-                
-        adjusted_score += capture_score
         
+        adjusted_score += capture_score
+            
         # Apply depth penalty
-        adjusted_score -= depth
+        adjusted_score -= traversed_depth
         
         return adjusted_score
     
@@ -481,8 +504,11 @@ class MinimaxAgent:
             next_state = state.clone()
             next_state.apply_move(move)
             
+            # Initialize move sequence with current move
+            move_sequence = [move]
+            
             next_is_max = next_state.turn == "TIGER"
-            value = self.minimax(next_state, self.max_depth - 1, alpha, beta, next_is_max)
+            value = self.minimax(next_state, alpha, beta, next_is_max, move_sequence)
             
                
             # Save evaluation for debugging
@@ -576,16 +602,24 @@ class MinimaxAgent:
         # Return just the ordered moves
         return [move for move, _ in move_scores]
 
-    def minimax(self, state: GameState, depth: int, alpha: float, beta: float, is_maximizing: bool):
+    def minimax(self, state: GameState, alpha: float, beta: float, is_maximizing: bool, move_sequence=None):
         """Minimax algorithm with alpha-beta pruning and symmetry-aware transposition table."""
+        # Initialize move_sequence if None
+        if move_sequence is None:
+            move_sequence = []
+        
+        # Calculate depths from move sequence
+        traversed_depth = len(move_sequence)
+        remaining_depth = self.max_depth - traversed_depth
+            
         # Get canonical representation for transposition table lookup
         canonical_key, symmetry_type = self._get_canonical_state(state)
-        tt_key = (canonical_key, depth, is_maximizing)
+        tt_key = (canonical_key, remaining_depth, is_maximizing)
         
         # Check transposition table for exact match
         if tt_key in self.transposition_table:
             # For debugging, track when we use the transposition table at depth 1
-            if depth == self.max_depth - 1 and self.debug_mode:
+            if remaining_depth == 1 and self.debug_mode:
                 # Create a string representation of the state for debugging
                 state_str = self._state_to_string(state)
                 self.inferred_moves[state_str] = (self.transposition_table[tt_key], symmetry_type)
@@ -593,17 +627,17 @@ class MinimaxAgent:
             return self.transposition_table[tt_key]
         
         # Base cases
-        if depth == 0 or state.is_terminal():
+        if remaining_depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
-            eval_score = self.evaluate(state, self.max_depth - depth)
+            eval_score = self.evaluate(state, move_sequence)
             # Store exact evaluation in transposition table
-            self._store_in_transposition_table(tt_key, eval_score, depth)
+            self._store_in_transposition_table(tt_key, eval_score, remaining_depth)
             return eval_score
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            eval_score = self.evaluate(state, self.max_depth - depth)
-            self._store_in_transposition_table(tt_key, eval_score, depth)
+            eval_score = self.evaluate(state, move_sequence)
+            self._store_in_transposition_table(tt_key, eval_score, remaining_depth)
             return eval_score
         
         # Order moves for better pruning
@@ -615,9 +649,15 @@ class MinimaxAgent:
             new_state = state.clone()
             new_state.apply_move(move)
             
+            # Add current move to sequence for child evaluation
+            move_sequence.append(move)
+            
             # Next turn alternates maximizing/minimizing
             next_is_max = new_state.turn == "TIGER"
-            child_score = self.minimax(new_state, depth - 1, alpha, beta, next_is_max)
+            child_score = self.minimax(new_state, alpha, beta, next_is_max, move_sequence)
+            
+            # Remove the move after returning from recursive call
+            move_sequence.pop()
             
             if is_maximizing:
                 best_value = max(best_value, child_score)
@@ -630,7 +670,7 @@ class MinimaxAgent:
                 break  # Alpha-beta pruning
         
         # Store the exact score (not bounds) in the transposition table
-        self._store_in_transposition_table(tt_key, best_value, depth)
+        self._store_in_transposition_table(tt_key, best_value, remaining_depth)
         return best_value
     
     def _store_in_transposition_table(self, tt_key, value, depth):

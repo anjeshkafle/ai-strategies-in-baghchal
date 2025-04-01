@@ -35,11 +35,11 @@ BOARD_STRING_2 = [
     ]
 
 BOARD_STRING_3 = [
-    "TG__T",
+    "T___T",
     "_____",
     "_____",
     "_____",
-    "TG__T"
+    "T___T"
     ]
 
 BOARD_STRING_4 = [
@@ -55,7 +55,7 @@ BOARD_TO_USE = BOARD_STRING_3
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "TIGER"            # "GOAT" or "TIGER"
+TURN = "GOAT"            # "GOAT" or "TIGER"
 GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
@@ -273,7 +273,7 @@ def run_minimax_test(game_state):
                 print("(No capture moves were available)")
                 
         # Print the best move sequence
-        print_best_move_sequence(game_state, max_depth)
+        #print_best_move_sequence(game_state, max_depth)
     else:
         print("No move was returned by the agent.")
 
