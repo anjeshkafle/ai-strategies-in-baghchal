@@ -51,11 +51,11 @@ BOARD_STRING_4 = [
 ]
 
 # Select which board to use (directly set to the board string variable)
-BOARD_TO_USE = BOARD_STRING_3
+BOARD_TO_USE = BOARD_STRING_2
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "TIGER"            # "GOAT" or "TIGER"
+TURN = "GOAT"            # "GOAT" or "TIGER"
 GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
@@ -65,7 +65,7 @@ RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 7
+MINIMAX_MAX_DEPTH = 6
 
 # MCTS parameters
 MCTS_ITERATIONS = 0
@@ -248,8 +248,11 @@ def run_minimax_test(game_state):
     # Create the minimax agent
     agent = MinimaxAgent(max_depth=max_depth, randomize_equal_moves=True)
     
-    # Get the best move
+    # Measure time taken to get the best move
+    start_time = time.time()
     best_move = agent.get_move(game_state)
+    elapsed_time = time.time() - start_time
+    print(f"Time taken to calculate the best move: {elapsed_time:.2f} seconds")
     
     # Print the best move
     print("\nBest move according to Minimax agent:")

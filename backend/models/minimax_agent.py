@@ -369,6 +369,26 @@ class MinimaxAgent:
         """Check if a position is on the second layer of the board."""
         return x == 1 or y == 1 or x == 3 or y == 3
     
+    def _format_move(self, move: Optional[Dict]) -> str:
+        """
+        Format a move dictionary in a human-readable way.
+        For internal debug output only.
+        """
+        if move is None:
+            return "No valid moves available"
+        
+        if move["type"] == "placement":
+            return f"Place goat at ({move['x']}, {move['y']})"
+        else:  # movement
+            from_x, from_y = move["from"]["x"], move["from"]["y"]
+            to_x, to_y = move["to"]["x"], move["to"]["y"]
+            
+            if move.get("capture"):
+                cap_x, cap_y = move["capture"]["x"], move["capture"]["y"]
+                return f"Move from ({from_x}, {from_y}) to ({to_x}, {to_y}), capturing goat at ({cap_x}, {cap_y})"
+            else:
+                return f"Move from ({from_x}, {from_y}) to ({to_x}, {to_y})"
+
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using minimax with alpha-beta pruning."""
         valid_moves = state.get_valid_moves()
@@ -388,12 +408,11 @@ class MinimaxAgent:
             next_state = state.clone()
             next_state.apply_move(move)
             
-            next_is_max = next_state.turn == "TIGER"
             # Create move sequence with this first move and pass it to minimax
             move_sequence = [move]
             
             # Get the score
-            value = self.minimax(next_state, move_sequence, alpha, beta, next_is_max)
+            value = self.minimax(next_state, move_sequence, alpha, beta, next_state.turn == "TIGER")
             
             # Save evaluation for debugging
             if self.debug_mode:
@@ -417,10 +436,12 @@ class MinimaxAgent:
         # Debug: Print move evaluations and best moves
         if self.debug_mode:
             print("Move evaluations:")
-            for move, score in move_evals:
-                print(f"  {move}: {score}")
+            # Sort move evaluations by score (highest first)
+            sorted_evals = sorted(move_evals, key=lambda x: x[1], reverse=True)
+            for move, score in sorted_evals:
+                print(f"  {self._format_move(move)}: {score}")
             
-            print(f"\nBest moves: {best_moves}")
+            print(f"\nBest moves: {[self._format_move(m) for m in best_moves]}")
             print(f"Best value: {best_value}")
             print(f"Randomizing: {self.randomize_equal_moves}")
         
@@ -438,6 +459,79 @@ class MinimaxAgent:
         return best_move
 
     def _order_moves(self, state: GameState, moves: List[Dict]) -> List[Dict]:
+        """
+        Order moves using a direct approach without state cloning or evaluation.
+        1. For tigers, put captures first, then other moves
+        2. For goats, put moves that could lead to capture last (using threatened nodes)
+        """
+        if state.turn == "TIGER":
+            # Tiger's move ordering: captures first, then other moves
+            capture_moves = []
+            other_moves = []
+            
+            for move in moves:
+                if move.get("capture"):
+                    capture_moves.append(move)
+                else:
+                    other_moves.append(move)
+            
+            return capture_moves + other_moves
+        
+        else:  # GOAT turn
+            # Get threatened nodes to identify unsafe positions
+            threatened_data = state.get_threatened_nodes()
+            
+            # Create a lookup dictionary for faster checking
+            # Key is (x, y) of threatened position, value is (landing_x, landing_y)
+            threatened_lookup = {(x, y): (landing_x, landing_y) 
+                               for x, y, landing_x, landing_y in threatened_data}
+            
+            safe_moves = []
+            unsafe_moves = []
+            
+            for move in moves:
+                # PLACEMENT PHASE - check if placing a goat in a threatened position
+                if state.phase == "PLACEMENT":
+                    target_x, target_y = move["x"], move["y"]
+                    
+                    # Check if this position is threatened
+                    if (target_x, target_y) in threatened_lookup:
+                        # Get the landing position
+                        landing_x, landing_y = threatened_lookup[(target_x, target_y)]
+                        
+                        # Check if landing is empty (capture is possible)
+                        if state.board[landing_y][landing_x] is None:
+                            unsafe_moves.append(move)
+                        else:
+                            safe_moves.append(move)
+                    else:
+                        # Not threatened
+                        safe_moves.append(move)
+                
+                # MOVEMENT PHASE - check if destination is threatened or moving enables a capture
+                else:
+                    from_x, from_y = move["from"]["x"], move["from"]["y"]
+                    to_x, to_y = move["to"]["x"], move["to"]["y"]
+                    
+                    # Check if destination is threatened
+                    if (to_x, to_y) in threatened_lookup:
+                        landing_x, landing_y = threatened_lookup[(to_x, to_y)]
+                        
+                        # Check if landing is empty OR if this goat is moving from the landing position
+                        is_landing_empty = state.board[landing_y][landing_x] is None
+                        goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
+                        
+                        if is_landing_empty or goat_from_landing:
+                            unsafe_moves.append(move)
+                            continue
+                    
+                    # If we made it here, the move is safe
+                    safe_moves.append(move)
+            
+            # Return safe moves first, then unsafe moves
+            return safe_moves + unsafe_moves
+
+    def _order_moves_minimax(self, state: GameState, moves: List[Dict]) -> List[Dict]:
         """
         Order moves based on a shallow evaluation.
         For tigers, prioritize captures and threatening moves.
