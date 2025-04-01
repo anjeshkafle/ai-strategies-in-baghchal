@@ -44,7 +44,7 @@ class MinimaxAgent:
         # Debug mode flag
         self.debug_mode = True
     
-    def evaluate(self, state: GameState, move_sequence_length: int = 0, captures_at_depth: Dict[int, int] = None) -> float:
+    def evaluate(self, state: GameState, move_sequence: List[Dict] = None, captures_at_depth: Dict[int, int] = None) -> float:
         """
         Evaluates the current game state from Tiger's perspective using dynamic equilibrium points.
         Uses several core heuristics with weights and balance points that adapt to game progression:
@@ -52,6 +52,17 @@ class MinimaxAgent:
         - Movable tigers and closed spaces
         - Tiger position, optimal spacing, and goat edge preference with dynamic equilibrium points
         """
+        # Initialize move_sequence if None
+        if move_sequence is None:
+            move_sequence = []
+            
+        # Get move sequence length
+        move_sequence_length = len(move_sequence)
+        
+        # Log board state and move sequence for debugging
+        if self.debug_mode and move_sequence_length > 0:
+            self._log_board_and_moves(state, move_sequence)
+            
         # Check for terminal states first
         winner = state.get_winner()
         if winner == "TIGER":
@@ -64,8 +75,8 @@ class MinimaxAgent:
         # Compute the raw score based on board state and phase with dynamic equilibrium
         raw_score = self._compute_raw_score(state)
         
-        # Adjust the score based on move sequence length and captures
-        final_score = self._adjust_score(raw_score, state, move_sequence_length, captures_at_depth)
+        # Adjust the score based on move sequence and captures
+        final_score = self._adjust_score(raw_score, state, move_sequence, captures_at_depth)
         
         return final_score
      
@@ -180,11 +191,14 @@ class MinimaxAgent:
         return score
     
    
-    def _adjust_score(self, raw_score: float, state: GameState, move_sequence_length: int, captures_at_depth: Dict[int, int] = None) -> float:
+    def _adjust_score(self, raw_score: float, state: GameState, move_sequence: List[Dict], captures_at_depth: Dict[int, int] = None) -> float:
         """
         Adjusts the raw evaluation score by applying move sequence length penalty and dynamic capture bonuses.
         This version uses game-stage aware bonuses for captures and rewards faster captures.
         """
+        # Get move sequence length
+        move_sequence_length = len(move_sequence)
+        
         # Start with the raw score
         adjusted_score = raw_score
         
@@ -511,8 +525,8 @@ class MinimaxAgent:
             next_state = state.clone()
             next_state.apply_move(move)
             
-            # Get a quick evaluation score - pass 0 as move_sequence_length
-            score = self.evaluate(next_state, 0)
+            # Get a quick evaluation score - pass empty move sequence
+            score = self.evaluate(next_state, [])
             
             # For tigers, higher scores are better; for goats, lower scores are better
             if state.turn == "GOAT":
@@ -567,15 +581,15 @@ class MinimaxAgent:
         
         # Base cases
         if depth == 0 or state.is_terminal():
-            # Always evaluate from Tiger's perspective, pass move_sequence length
-            eval_score = self.evaluate(state, len(move_sequence), captures_at_depth)
+            # Always evaluate from Tiger's perspective, pass move_sequence instead of just length
+            eval_score = self.evaluate(state, move_sequence, captures_at_depth)
             # Store exact evaluation in transposition table
             self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
             return eval_score, captures_at_depth.copy()
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            eval_score = self.evaluate(state, len(move_sequence), captures_at_depth)
+            eval_score = self.evaluate(state, move_sequence, captures_at_depth)
             self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
             return eval_score, captures_at_depth.copy()
         
@@ -1031,4 +1045,58 @@ class MinimaxAgent:
         # Reduced score for goats on middle layer (0.67) or center (0.33)
         placement_quality = (outer_layer_goats + (middle_layer_goats * 0.67) + (center_goats * 0.33)) / total_goats
         
-        return placement_quality 
+        return placement_quality
+
+    def _log_board_and_moves(self, state: GameState, move_sequence: List[Dict]) -> None:
+        """
+        Log the current board state and the move sequence that led to it.
+        This helps verify that the right move sequence leads to the position being evaluated.
+        """
+        # Create a visual representation of the board
+        board_visual = "\nBoard state after move sequence:\n"
+        for y in range(GameState.BOARD_SIZE):
+            row = ""
+            for x in range(GameState.BOARD_SIZE):
+                cell = state.board[y][x]
+                if cell is None:
+                    row += ". "
+                elif cell["type"] == "TIGER":
+                    row += "T "
+                else:  # GOAT
+                    row += "G "
+            board_visual += row + "\n"
+            
+        # Format the move sequence
+        moves_str = "Move sequence:\n"
+        for i, move in enumerate(move_sequence):
+            # Safe move type access with a default
+            move_type = move.get("type", "UNKNOWN")
+            
+            # Handle different move structures safely
+            if "from" in move and "to" in move:
+                # Movement move
+                from_x = move["from"].get("x", "?")
+                from_y = move["from"].get("y", "?")
+                to_x = move["to"].get("x", "?")
+                to_y = move["to"].get("y", "?")
+                
+                move_str = f"{i+1}. {move_type} from ({from_x},{from_y}) to ({to_x},{to_y})"
+                
+                if move.get("capture"):
+                    capture_x = move["capture"].get("x", "?")
+                    capture_y = move["capture"].get("y", "?")
+                    move_str += f" capturing at ({capture_x},{capture_y})"
+            elif "to" in move:
+                # Placement move
+                to_x = move["to"].get("x", "?")
+                to_y = move["to"].get("y", "?")
+                move_str = f"{i+1}. {move_type} at ({to_x},{to_y})"
+            else:
+                # Fallback for any unrecognized move format
+                move_str = f"{i+1}. {move_type} {str(move)}"
+            
+            moves_str += move_str + "\n"
+        
+        # Log the information
+        print(board_visual)
+        print(moves_str) 
