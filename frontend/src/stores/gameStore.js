@@ -67,6 +67,7 @@ const initialState = {
   canUndo: false,
   isAIThinking: false,
   lastMove: null, // { from?: {x,y}, to: {x,y} }
+  currentAbortController: null,
 };
 
 // Helper function to convert grid coordinates to notation
@@ -79,8 +80,20 @@ const gridToNotation = (x, y) => {
 export const useGameStore = create((set, get) => ({
   ...initialState,
 
+  // Add function to cancel current request
+  cancelCurrentRequest: () => {
+    const state = get();
+    if (state.currentAbortController) {
+      state.currentAbortController.abort();
+      set({ currentAbortController: null, isAIThinking: false });
+    }
+  },
+
   // Reset game
   resetGame: () => {
+    // First cancel any ongoing request
+    get().cancelCurrentRequest();
+
     set({
       board: createInitialBoard(),
       phase: "PLACEMENT",
@@ -107,6 +120,7 @@ export const useGameStore = create((set, get) => ({
         initial: 600,
         increment: 5,
       },
+      currentAbortController: null,
     });
   },
 
@@ -461,6 +475,9 @@ export const useGameStore = create((set, get) => ({
   },
 
   undoMoves: () => {
+    // First cancel any ongoing request
+    get().cancelCurrentRequest();
+
     const state = get();
     if (state.moveHistory.length === 0) return;
 
@@ -521,8 +538,10 @@ export const useGameStore = create((set, get) => ({
     const currentPlayer = state.players[state.turn.toLowerCase()];
     if (currentPlayer.type !== "AI" || !currentPlayer.model) return;
 
-    // If already thinking, don't start another move
-    if (state.isAIThinking) return;
+    // If already thinking, cancel the current request first
+    if (state.isAIThinking) {
+      get().cancelCurrentRequest();
+    }
 
     console.log(
       "Starting AI move for",
@@ -532,7 +551,9 @@ export const useGameStore = create((set, get) => ({
     );
 
     try {
-      set({ isAIThinking: true });
+      // Create new abort controller
+      const abortController = new AbortController();
+      set({ isAIThinking: true, currentAbortController: abortController });
 
       // Add a small delay to prevent rapid-fire moves and allow animations to complete
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -554,50 +575,47 @@ export const useGameStore = create((set, get) => ({
         {
           goatsPlaced: state.goatsPlaced,
           goatsCaptured: state.goatsCaptured,
-        }
+        },
+        abortController
       );
+
+      // Check if request was aborted
+      if (!move) return;
 
       console.log("Received move:", move);
 
-      if (move) {
-        // Verify we're still in the same turn
-        const currentState = get();
-        if (currentState.turn !== state.turn) {
-          console.log("Turn changed while getting move, aborting");
-          return;
+      // Verify we're still in the same turn and the request wasn't cancelled
+      const currentState = get();
+      if (currentState.currentAbortController !== abortController) {
+        console.log("Request was cancelled or turn changed, aborting");
+        return;
+      }
+
+      let success = false;
+      if (move.type === "placement") {
+        success = await get().makeMove(move.x, move.y);
+        console.log("Placement move result:", success);
+      } else {
+        console.log("Selecting piece at", move.from.x, move.from.y);
+        get().selectPiece(move.from.x, move.from.y);
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const afterSelectState = get();
+        if (afterSelectState.selectedPiece) {
+          console.log("Making move to", move.to.x, move.to.y);
+          success = await get().makeMove(move.to.x, move.to.y);
+          console.log("Movement move result:", success);
         }
+      }
 
-        let success = false;
-        if (move.type === "placement") {
-          // For placement moves, just call makeMove directly
-          success = await get().makeMove(move.x, move.y);
-          console.log("Placement move result:", success);
-        } else {
-          // For movement moves, we need to select the piece first
-          console.log("Selecting piece at", move.from.x, move.from.y);
-          get().selectPiece(move.from.x, move.from.y);
-
-          // Wait for selection to be processed
-          await new Promise((resolve) => setTimeout(resolve, 100));
-
-          // Verify the piece was selected and make the move
-          const afterSelectState = get();
-          if (afterSelectState.selectedPiece) {
-            console.log("Making move to", move.to.x, move.to.y);
-            success = await get().makeMove(move.to.x, move.to.y);
-            console.log("Movement move result:", success);
-          }
-        }
-
-        if (!success) {
-          console.log("Move was not successful, may need to retry");
-        }
+      if (!success) {
+        console.log("Move was not successful, may need to retry");
       }
     } catch (error) {
       console.error("Error in handleAIMove:", error);
     } finally {
-      set({ isAIThinking: false });
-      // Add a small delay after completing the move
+      set({ isAIThinking: false, currentAbortController: null });
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
   },

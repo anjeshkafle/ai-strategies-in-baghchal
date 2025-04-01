@@ -36,9 +36,9 @@ BOARD_STRING_2 = [
 
 BOARD_STRING_3 = [
     "T___T",
+    "_____",
+    "_____",
     "__G__",
-    "_____",
-    "_____",
     "T___T"
     ]
 
@@ -68,7 +68,7 @@ RUN_MCTS = False
 MINIMAX_MAX_DEPTH = 5
 
 # MCTS parameters
-MCTS_ITERATIONS = 20000
+MCTS_ITERATIONS = 0
 MCTS_EXPLORATION_WEIGHT = 1.414
 MCTS_ROLLOUT_POLICY = "lightweight"
 MCTS_MAX_ROLLOUT_DEPTH = 6

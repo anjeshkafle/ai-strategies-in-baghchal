@@ -35,7 +35,7 @@ class MinimaxAgent:
         
         # Capture-related weights
         self.base_capture_value = 3000           # Base value for each captured goat
-        self.capture_speed_weight = 400          # Weight for depth-sensitive capture bonus
+        self.capture_speed_weight = 10000          # Weight for depth-sensitive capture bonus
         
         # Positioning weights
         self.dispersion_weight = 100             # Weight for tiger dispersion
@@ -541,6 +541,7 @@ class MinimaxAgent:
             print("Move evaluations:")
             for move, score, captures in move_evals:
                 captures_info = ", ".join(f"d{d}: {c}" for d, c in sorted(captures.items()))
+                captures_info = captures_info if captures_info else "none"
                 print(f"  {move}: {score} (captures: {captures_info})")
             
             # Print inferred moves from transposition table
@@ -625,22 +626,36 @@ class MinimaxAgent:
             if depth == self.max_depth - 1 and self.debug_mode:
                 # Create a string representation of the state for debugging
                 state_str = self._state_to_string(state)
-                self.inferred_moves[state_str] = (self.transposition_table[tt_key], symmetry_type)
+                value, stored_captures = self.transposition_table[tt_key]
+                
+                # Update the captures_at_depth with the captures from the transposition table
+                if stored_captures:
+                    captures_at_depth.update(stored_captures)
+                
+                self.inferred_moves[state_str] = (value, symmetry_type)
             
-            return self.transposition_table[tt_key]
+                return value
+            else:
+                value, stored_captures = self.transposition_table[tt_key]
+                
+                # Update the captures_at_depth with the captures from the transposition table
+                if stored_captures:
+                    captures_at_depth.update(stored_captures)
+                
+                return value
         
         # Base cases
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
             eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
             # Store exact evaluation in transposition table
-            self._store_in_transposition_table(tt_key, eval_score, depth)
+            self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
             return eval_score
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
             eval_score = self.evaluate(state, self.max_depth - depth, captures_at_depth)
-            self._store_in_transposition_table(tt_key, eval_score, depth)
+            self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
             return eval_score
         
         # Order moves for better pruning
@@ -706,16 +721,19 @@ class MinimaxAgent:
         captures_at_depth.update(merged_captures)
         
         # Store the exact score (not bounds) in the transposition table
-        self._store_in_transposition_table(tt_key, best_value, depth)
+        self._store_in_transposition_table(tt_key, best_value, depth, merged_captures)
         return best_value
     
-    def _store_in_transposition_table(self, tt_key, value, depth):
+    def _store_in_transposition_table(self, tt_key, value, depth, captures_at_depth=None):
         """
         Store a value in the transposition table with size management.
         Prioritizes higher depth entries when the table needs pruning.
         """
-        # Store the value
-        self.transposition_table[tt_key] = value
+        # Store the value with captures information
+        if captures_at_depth is None:
+            captures_at_depth = {}
+            
+        self.transposition_table[tt_key] = (value, captures_at_depth.copy())
         
         # Track the entry by depth for efficient pruning
         if depth not in self.tt_entries_by_depth:

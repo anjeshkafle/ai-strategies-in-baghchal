@@ -5,7 +5,8 @@ const fetchBestMove = async (
   agent,
   model,
   goatsPlaced = 0,
-  goatsCaptured = 0
+  goatsCaptured = 0,
+  abortController = null
 ) => {
   try {
     console.log("Fetching best move:", {
@@ -30,6 +31,7 @@ const fetchBestMove = async (
         goats_placed: goatsPlaced,
         goats_captured: goatsCaptured,
       }),
+      signal: abortController?.signal,
     });
 
     if (!response.ok) {
@@ -40,6 +42,10 @@ const fetchBestMove = async (
     console.log("Received move from backend:", data);
     return data;
   } catch (error) {
+    if (error.name === "AbortError") {
+      console.log("Request was aborted");
+      return null;
+    }
     console.error("Error fetching best move:", error);
     throw error;
   }
@@ -51,7 +57,8 @@ export const getBestMove = async (
   phase,
   agent,
   model,
-  gameState = {}
+  gameState = {},
+  abortController = null
 ) => {
   try {
     return await fetchBestMove(
@@ -60,7 +67,8 @@ export const getBestMove = async (
       agent,
       model,
       gameState.goatsPlaced || 0,
-      gameState.goatsCaptured || 0
+      gameState.goatsCaptured || 0,
+      abortController
     );
   } catch (error) {
     console.error("Error in getBestMove:", error);
