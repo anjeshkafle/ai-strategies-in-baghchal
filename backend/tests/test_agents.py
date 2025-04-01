@@ -27,11 +27,11 @@ BOARD_STRING_1 = [
     ]
 
 BOARD_STRING_2 = [
-    "TGG_T",
-    "____G",
-    "____G",
+    "T___T",
     "_____",
-    "T_GGT"
+    "_____",
+    "_____",
+    "T___T"
     ]
 
 BOARD_STRING_3 = [

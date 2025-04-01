@@ -10,22 +10,12 @@ class MinimaxAgent:
     
     INF = 1000000
     
-    def __init__(self, max_depth: int = 5, max_time: Optional[float] = None, randomize_equal_moves: bool = False,
-                 max_table_size: int = 500000):
+    def __init__(self, max_depth: int = 5, max_time: Optional[float] = None, randomize_equal_moves: bool = False):
         self.max_depth = max_depth
         self.max_time = max_time  # Not used but kept for compatibility
         self.best_move = None
         self.best_score = None
         self.randomize_equal_moves = randomize_equal_moves  # Flag to control move randomization
-        self.transposition_table = {}  # For storing evaluated positions
-        self.inferred_moves = {}  # For tracking moves inferred from transposition table
-        
-        # Transposition table management parameters
-        self.max_table_size = max_table_size  # Maximum number of entries
-        self.tt_entries_by_depth = {}  # Track entries by depth for efficient pruning
-        self.tt_size_check_frequency = 1000  # Check size every N insertions
-        self.tt_insertion_count = 0  # Counter for insertions
-        self.tt_replacement_percentage = 0.2  # Remove 20% of entries when table is full
         
         # Define all evaluation weights in one place for easy tuning
         # Mobility and space control
@@ -380,13 +370,7 @@ class MinimaxAgent:
         return x == 1 or y == 1 or x == 3 or y == 3
     
     def get_move(self, state: GameState) -> Dict:
-        """Get the best move for the current state using minimax with alpha-beta pruning and transposition table."""
-        # Reset transposition table and inferred moves for each new search
-        self.transposition_table = {}
-        self.inferred_moves = {}
-        self.tt_entries_by_depth = {}
-        self.tt_insertion_count = 0
-        
+        """Get the best move for the current state using minimax with alpha-beta pruning."""
         valid_moves = state.get_valid_moves()
         
         # Order moves based on a shallow evaluation
@@ -404,19 +388,12 @@ class MinimaxAgent:
             next_state = state.clone()
             next_state.apply_move(move)
             
-            # Temporarily disable transposition table for top-level moves
-            original_tt = self.transposition_table
-            self.transposition_table = {}
-            
             next_is_max = next_state.turn == "TIGER"
             # Create move sequence with this first move and pass it to minimax
             move_sequence = [move]
             
             # Get the score
             value = self.minimax(next_state, move_sequence, alpha, beta, next_is_max)
-            
-            # Restore the transposition table
-            self.transposition_table = original_tt
             
             # Save evaluation for debugging
             if self.debug_mode:
@@ -443,23 +420,8 @@ class MinimaxAgent:
             for move, score in move_evals:
                 print(f"  {move}: {score}")
             
-            # Print inferred moves from transposition table
-            if self.inferred_moves:
-                print("\nMoves inferred from transposition table at depth 1:")
-                for move_str, (value, symmetry) in self.inferred_moves.items():
-                    print(f"  {move_str}: {value} (via {symmetry} symmetry)")
-            
             print(f"\nBest moves: {best_moves}")
             print(f"Best value: {best_value}")
-            print(f"Transposition table hits: {len(self.inferred_moves)}")
-            print(f"Transposition table size: {len(self.transposition_table)}")
-            
-            # Print additional TT info
-            tt_memory = sys.getsizeof(self.transposition_table)
-            entries_by_depth = {d: len(entries) for d, entries in self.tt_entries_by_depth.items()}
-            print(f"Transposition table memory usage: {tt_memory/1024:.2f} KB")
-            print(f"Entries by depth: {entries_by_depth}")
-            
             print(f"Randomizing: {self.randomize_equal_moves}")
         
         # Store the best score for later retrieval
@@ -509,9 +471,79 @@ class MinimaxAgent:
         # Return just the ordered moves
         return [move for move, _ in move_scores]
 
+    def _transform_coordinates(self, x: int, y: int, symmetry_type: str) -> Tuple[int, int]:
+        """Transform coordinates according to the given symmetry type."""
+        if symmetry_type == "identity":
+            return x, y
+        elif symmetry_type == "rotation_90":
+            return y, 4-x
+        elif symmetry_type == "rotation_180":
+            return 4-x, 4-y
+        elif symmetry_type == "rotation_270":
+            return 4-y, x
+        elif symmetry_type == "flip_horizontal":
+            return x, 4-y
+        elif symmetry_type == "flip_vertical":
+            return 4-x, y
+        elif symmetry_type == "flip_diagonal":
+            return y, x
+        elif symmetry_type == "flip_antidiagonal":
+            return 4-y, 4-x
+        else:
+            raise ValueError(f"Unknown symmetry type: {symmetry_type}")
+
+    def _transform_move(self, move: Dict, symmetry_type: str) -> Dict:
+        """Transform a move according to the given symmetry type."""
+        if symmetry_type == "identity":
+            return move
+        
+        new_move = move.copy()
+        
+        # Transform 'from' coordinates if they exist
+        if "from" in move:
+            from_x, from_y = self._transform_coordinates(
+                move["from"]["x"], 
+                move["from"]["y"], 
+                symmetry_type
+            )
+            new_move["from"] = {"x": from_x, "y": from_y}
+        
+        # Transform 'to' coordinates if they exist
+        if "to" in move:
+            to_x, to_y = self._transform_coordinates(
+                move["to"]["x"], 
+                move["to"]["y"], 
+                symmetry_type
+            )
+            new_move["to"] = {"x": to_x, "y": to_y}
+        
+        # Transform 'position' coordinates if they exist (for placement moves)
+        if "position" in move:
+            pos_x, pos_y = self._transform_coordinates(
+                move["position"]["x"], 
+                move["position"]["y"], 
+                symmetry_type
+            )
+            new_move["position"] = {"x": pos_x, "y": pos_y}
+        
+        # Transform 'capture' coordinates if they exist
+        if "capture" in move:
+            cap_x, cap_y = self._transform_coordinates(
+                move["capture"]["x"], 
+                move["capture"]["y"], 
+                symmetry_type
+            )
+            new_move["capture"] = {"x": cap_x, "y": cap_y}
+        
+        return new_move
+
+    def _transform_move_sequence(self, move_sequence: List[Dict], symmetry_type: str) -> List[Dict]:
+        """Transform a sequence of moves according to the given symmetry type."""
+        return [self._transform_move(move, symmetry_type) for move in move_sequence]
+
     def minimax(self, state: GameState, move_sequence: List[Dict], alpha: float, beta: float, is_maximizing: bool) -> float:
         """
-        Minimax algorithm with alpha-beta pruning and symmetry-aware transposition table.
+        Minimax algorithm with alpha-beta pruning.
         Uses move_sequence to track the sequence of moves leading to the current state.
         
         Returns:
@@ -520,35 +552,14 @@ class MinimaxAgent:
         # Calculate depth based on move sequence length
         depth = self.max_depth - len(move_sequence)
         
-        # Get canonical representation for transposition table lookup
-        canonical_key, symmetry_type = self._get_canonical_state(state)
-        tt_key = (canonical_key, depth, is_maximizing)
-        
-        # Check transposition table for exact match
-        if tt_key in self.transposition_table:
-            # For debugging, track when we use the transposition table at depth 1
-            value = self.transposition_table[tt_key]
-            
-            if depth == self.max_depth - 1 and self.debug_mode:
-                # Create a string representation of the state for debugging
-                state_str = self._state_to_string(state)
-                self.inferred_moves[state_str] = (value, symmetry_type)
-            
-            return value
-        
         # Base cases
         if depth == 0 or state.is_terminal():
             # Always evaluate from Tiger's perspective
-            eval_score = self.evaluate(state, move_sequence)
-            # Store exact evaluation in transposition table
-            self._store_in_transposition_table(tt_key, eval_score, depth)
-            return eval_score
+            return self.evaluate(state, move_sequence)
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            eval_score = self.evaluate(state, move_sequence)
-            self._store_in_transposition_table(tt_key, eval_score, depth)
-            return eval_score
+            return self.evaluate(state, move_sequence)
         
         # Order moves for better pruning
         ordered_moves = self._order_moves(state, valid_moves)
@@ -581,222 +592,7 @@ class MinimaxAgent:
             if beta <= alpha:
                 break  # Alpha-beta pruning
         
-        # Store the exact score in the transposition table
-        self._store_in_transposition_table(tt_key, best_value, depth)
-        
         return best_value
-    
-    def _store_in_transposition_table(self, tt_key, value, depth):
-        """
-        Store a value in the transposition table with size management.
-        Prioritizes higher depth entries when the table needs pruning.
-        """
-        # Store the value
-        self.transposition_table[tt_key] = value
-        
-        # Track the entry by depth for efficient pruning
-        if depth not in self.tt_entries_by_depth:
-            self.tt_entries_by_depth[depth] = set()
-        self.tt_entries_by_depth[depth].add(tt_key)
-        
-        # Increment insertion counter
-        self.tt_insertion_count += 1
-        
-        # Check if we need to manage table size
-        if self.tt_insertion_count % self.tt_size_check_frequency == 0:
-            self._manage_transposition_table_size()
-    
-    def _manage_transposition_table_size(self):
-        """
-        Manage the transposition table size by removing entries when it gets too large.
-        Prioritizes keeping higher depth entries.
-        """
-        current_size = len(self.transposition_table)
-        
-        # If we're below the threshold, do nothing
-        if current_size <= self.max_table_size:
-            return
-            
-        # Calculate how many entries to remove (20% of max size)
-        entries_to_remove = int(self.max_table_size * self.tt_replacement_percentage)
-        
-        # Get all depths, sorted from lowest to highest
-        all_depths = sorted(self.tt_entries_by_depth.keys())
-        
-        # Remove entries starting from the lowest depths
-        removed = 0
-        for depth in all_depths:
-            entries = self.tt_entries_by_depth[depth]
-            entries_at_depth = len(entries)
-            
-            # If we can remove all entries at this depth
-            if removed + entries_at_depth <= entries_to_remove:
-                # Remove all entries at this depth
-                for key in entries:
-                    if key in self.transposition_table:
-                        del self.transposition_table[key]
-                # Clear the set at this depth
-                self.tt_entries_by_depth[depth] = set()
-                removed += entries_at_depth
-            else:
-                # Remove only as many as needed
-                to_remove = entries_to_remove - removed
-                keys_to_remove = list(entries)[:to_remove]
-                
-                for key in keys_to_remove:
-                    if key in self.transposition_table:
-                        del self.transposition_table[key]
-                    entries.remove(key)
-                
-                removed += to_remove
-                
-            # If we've removed enough entries, stop
-            if removed >= entries_to_remove:
-                break
-        
-        if self.debug_mode:
-            print(f"Pruned {removed} entries from transposition table. New size: {len(self.transposition_table)}")
-
-    def _state_to_string(self, state: GameState) -> str:
-        """Convert a game state to a string representation for debugging."""
-        board_str = ""
-        for row in state.board:
-            for cell in row:
-                if cell is None:
-                    board_str += "_"
-                elif cell["type"] == "TIGER":
-                    board_str += "T"
-                else:
-                    board_str += "G"
-        return f"{board_str}_{state.phase}_{state.turn}_{state.goats_placed}_{state.goats_captured}"
-    
-    def _board_to_string(self, board) -> str:
-        """Convert just the board to a string representation."""
-        board_str = ""
-        for row in board:
-            for cell in row:
-                if cell is None:
-                    board_str += "_"
-                elif cell["type"] == "TIGER":
-                    board_str += "T"
-                else:
-                    board_str += "G"
-        return board_str
-    
-    def _get_canonical_state(self, state: GameState) -> Tuple[str, str]:
-        """
-        Get the canonical representation of the game state by trying all 8 symmetry transformations
-        and returning the lexicographically smallest string representation.
-        
-        Returns:
-            Tuple of (canonical_representation, symmetry_type)
-        """
-        board = state.board
-        
-        # Create a string representation of the original board
-        original_str = self._board_to_string(board)
-        
-        # Initialize with original board
-        canonical = original_str
-        symmetry_type = "identity"
-        
-        # 90° rotation
-        rotated90 = self._rotate_90(board)
-        rotated90_str = self._board_to_string(rotated90)
-        if rotated90_str < canonical:
-            canonical = rotated90_str
-            symmetry_type = "rotation_90"
-        
-        # 180° rotation
-        rotated180 = self._rotate_90(rotated90)
-        rotated180_str = self._board_to_string(rotated180)
-        if rotated180_str < canonical:
-            canonical = rotated180_str
-            symmetry_type = "rotation_180"
-        
-        # 270° rotation
-        rotated270 = self._rotate_90(rotated180)
-        rotated270_str = self._board_to_string(rotated270)
-        if rotated270_str < canonical:
-            canonical = rotated270_str
-            symmetry_type = "rotation_270"
-        
-        # Horizontal flip
-        flipped_h = self._flip_horizontal(board)
-        flipped_h_str = self._board_to_string(flipped_h)
-        if flipped_h_str < canonical:
-            canonical = flipped_h_str
-            symmetry_type = "flip_horizontal"
-        
-        # Vertical flip
-        flipped_v = self._flip_vertical(board)
-        flipped_v_str = self._board_to_string(flipped_v)
-        if flipped_v_str < canonical:
-            canonical = flipped_v_str
-            symmetry_type = "flip_vertical"
-        
-        # Diagonal flip (top-left to bottom-right)
-        flipped_d = self._flip_diagonal(board)
-        flipped_d_str = self._board_to_string(flipped_d)
-        if flipped_d_str < canonical:
-            canonical = flipped_d_str
-            symmetry_type = "flip_diagonal"
-        
-        # Anti-diagonal flip (top-right to bottom-left)
-        flipped_ad = self._flip_antidiagonal(board)
-        flipped_ad_str = self._board_to_string(flipped_ad)
-        if flipped_ad_str < canonical:
-            canonical = flipped_ad_str
-            symmetry_type = "flip_antidiagonal"
-        
-        # Add game state info to the canonical representation
-        phase_info = f"_{state.phase}_{state.goats_placed}_{state.goats_captured}_{state.turn}"
-        return canonical + phase_info, symmetry_type
-    
-    def _rotate_90(self, board):
-        """Rotate the board 90 degrees clockwise."""
-        n = len(board)
-        result = [[None for _ in range(n)] for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                result[j][n-1-i] = board[i][j]
-        return result
-    
-    def _flip_horizontal(self, board):
-        """Flip the board horizontally (around the x-axis)."""
-        n = len(board)
-        result = [[None for _ in range(n)] for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                result[n-1-i][j] = board[i][j]
-        return result
-    
-    def _flip_vertical(self, board):
-        """Flip the board vertically (around the y-axis)."""
-        n = len(board)
-        result = [[None for _ in range(n)] for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                result[i][n-1-j] = board[i][j]
-        return result
-    
-    def _flip_diagonal(self, board):
-        """Flip the board across the main diagonal (top-left to bottom-right)."""
-        n = len(board)
-        result = [[None for _ in range(n)] for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                result[j][i] = board[i][j]
-        return result
-    
-    def _flip_antidiagonal(self, board):
-        """Flip the board across the anti-diagonal (top-right to bottom-left)."""
-        n = len(board)
-        result = [[None for _ in range(n)] for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                result[n-1-j][n-1-i] = board[i][j]
-        return result
     
     def _calculate_tiger_positional_score(self, state: GameState) -> float:
         """
@@ -975,3 +771,49 @@ class MinimaxAgent:
         placement_quality = (outer_layer_goats + (middle_layer_goats * 0.67) + (center_goats * 0.33)) / total_goats
         
         return placement_quality
+
+    def _test_transformations(self, board):
+        """Test that all board transformations work correctly."""
+        print("\nOriginal board:")
+        self._print_board(board)
+        
+        print("\n90° rotation:")
+        rotated90 = self._rotate_90(board)
+        self._print_board(rotated90)
+        
+        print("\n180° rotation:")
+        rotated180 = self._rotate_90(rotated90)
+        self._print_board(rotated180)
+        
+        print("\n270° rotation:")
+        rotated270 = self._rotate_90(rotated180)
+        self._print_board(rotated270)
+        
+        print("\nHorizontal flip:")
+        flipped_h = self._flip_horizontal(board)
+        self._print_board(flipped_h)
+        
+        print("\nVertical flip:")
+        flipped_v = self._flip_vertical(board)
+        self._print_board(flipped_v)
+        
+        print("\nDiagonal flip:")
+        flipped_d = self._flip_diagonal(board)
+        self._print_board(flipped_d)
+        
+        print("\nAnti-diagonal flip:")
+        flipped_ad = self._flip_antidiagonal(board)
+        self._print_board(flipped_ad)
+
+    def _print_board(self, board):
+        """Helper to print a board in a readable format."""
+        for row in board:
+            line = ""
+            for cell in row:
+                if cell is None:
+                    line += "_ "
+                elif cell["type"] == "TIGER":
+                    line += "T "
+                else:
+                    line += "G "
+            print(line)
