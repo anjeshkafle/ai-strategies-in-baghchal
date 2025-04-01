@@ -54,26 +54,6 @@ class MinimaxAgent:
         """
         # Calculate traversed depth from move sequence
         traversed_depth = 0 if move_sequence is None else len(move_sequence)
-        
-        # Log the board and move sequence if debug mode is on and move_sequence is provided
-        if self.debug_mode and move_sequence:
-            print(f"\nEvaluating board after moves: {move_sequence}")
-            print(f"Traversed depth: {traversed_depth}")
-            # Print readable board representation
-            print("Board:")
-            for y in range(GameState.BOARD_SIZE):
-                row = ""
-                for x in range(GameState.BOARD_SIZE):
-                    cell = state.board[y][x]
-                    if cell is None:
-                        row += "· "
-                    elif cell["type"] == "TIGER":
-                        row += "T "
-                    else:
-                        row += "G "
-                print(row)
-            print(f"Phase: {state.phase}, Turn: {state.turn}")
-            print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}")
             
         # Check for terminal states first
         winner = state.get_winner()
@@ -535,12 +515,6 @@ class MinimaxAgent:
             print("Move evaluations:")
             for move, score in move_evals:
                 print(f"  {move}: {score}")
-            
-            # Print inferred moves from transposition table
-            if self.inferred_moves:
-                print("\nMoves inferred from transposition table at depth 1:")
-                for move_str, (value, symmetry) in self.inferred_moves.items():
-                    print(f"  {move_str}: {value} (via {symmetry} symmetry)")
             
             print(f"\nBest moves: {best_moves}")
             print(f"Best value: {best_value}")
