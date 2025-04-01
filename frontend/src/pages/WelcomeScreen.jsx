@@ -158,150 +158,9 @@ const WelcomeScreen = () => {
     navigate("/game");
   };
 
-  // Render agent settings based on model
-  const renderAgentSettings = (player, model) => {
-    if (!model || !settings.showAdvancedSettings) return null;
-
-    const playerSettings =
-      settings.players[player].settings ||
-      (model === "minimax"
-        ? DEFAULT_AGENT_SETTINGS.minimax
-        : DEFAULT_AGENT_SETTINGS.mcts);
-
-    if (model === "minimax") {
-      return (
-        <div className="mt-2 ml-4 space-y-2">
-          <div>
-            <label className="text-gray-300 block text-sm mb-1">
-              Search Depth (1-9)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="9"
-              value={playerSettings.max_depth}
-              onChange={(e) =>
-                updateAgentSettings(
-                  player,
-                  "max_depth",
-                  Math.min(9, Math.max(1, parseInt(e.target.value) || 1))
-                )
-              }
-              className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id={`randomize-${player}`}
-              checked={playerSettings.randomize_equal_moves}
-              onChange={(e) =>
-                updateAgentSettings(
-                  player,
-                  "randomize_equal_moves",
-                  e.target.checked
-                )
-              }
-              className="bg-gray-700"
-            />
-            <label
-              htmlFor={`randomize-${player}`}
-              className="text-gray-300 text-sm"
-            >
-              Randomize equal moves
-            </label>
-          </div>
-        </div>
-      );
-    }
-
-    if (model === "mcts") {
-      return (
-        <div className="mt-2 ml-4 space-y-2">
-          <div>
-            <label className="text-gray-300 block text-sm mb-1">
-              Iterations (100-100000)
-            </label>
-            <input
-              type="number"
-              min="100"
-              max="100000"
-              step="100"
-              value={playerSettings.iterations}
-              onChange={(e) =>
-                updateAgentSettings(
-                  player,
-                  "iterations",
-                  Math.min(
-                    100000,
-                    Math.max(100, parseInt(e.target.value) || 100)
-                  )
-                )
-              }
-              className="w-24 bg-gray-700 text-white rounded px-2 py-1 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-gray-300 block text-sm mb-1">
-              Max Time (seconds)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="300"
-              value={playerSettings.max_time_seconds}
-              onChange={(e) =>
-                updateAgentSettings(
-                  player,
-                  "max_time_seconds",
-                  Math.min(300, Math.max(1, parseInt(e.target.value) || 1))
-                )
-              }
-              className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-gray-300 block text-sm mb-1">
-              Rollout Policy
-            </label>
-            <CustomSelect
-              value={playerSettings.rollout_policy}
-              onChange={(e) =>
-                updateAgentSettings(player, "rollout_policy", e.target.value)
-              }
-              options={ROLLOUT_POLICIES}
-              className="w-full max-w-[180px] text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-gray-300 block text-sm mb-1">
-              Max Rollout Depth
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="20"
-              value={playerSettings.max_rollout_depth}
-              onChange={(e) =>
-                updateAgentSettings(
-                  player,
-                  "max_rollout_depth",
-                  Math.min(20, Math.max(1, parseInt(e.target.value) || 1))
-                )
-              }
-              className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
   return (
     <div className="fixed inset-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800">
-      <div className="max-w-4xl w-full mx-4 space-y-8 py-8 overflow-y-auto">
+      <div className="max-w-6xl w-full mx-auto px-4 space-y-8 py-8 overflow-y-auto">
         {/* Game Title with Sprites */}
         <div className="text-center relative flex items-center justify-center mb-6">
           <div className="absolute left-1/2 -translate-x-[200px] md:-translate-x-[200px] -translate-x-[150px]">
@@ -326,7 +185,7 @@ const WelcomeScreen = () => {
         </div>
 
         {/* Game Modes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Player Selection */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
             <h2 className="text-xl font-bold text-white mb-4">Players</h2>
@@ -375,7 +234,166 @@ const WelcomeScreen = () => {
               </div>
               {/* Goat Agent Settings */}
               {settings.players.goat.type === "AI" &&
-                renderAgentSettings("goat", settings.players.goat.model)}
+                settings.showAdvancedSettings && (
+                  <div className="mt-2 ml-4">
+                    {settings.players.goat.model === "minimax" ? (
+                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Search Depth (1-9)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="9"
+                            value={
+                              settings.players.goat.settings?.max_depth ||
+                              DEFAULT_AGENT_SETTINGS.minimax.max_depth
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "goat",
+                                "max_depth",
+                                Math.min(
+                                  9,
+                                  Math.max(1, parseInt(e.target.value) || 1)
+                                )
+                              )
+                            }
+                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="randomize-goat"
+                            checked={
+                              settings.players.goat.settings
+                                ?.randomize_equal_moves ||
+                              DEFAULT_AGENT_SETTINGS.minimax
+                                .randomize_equal_moves
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "goat",
+                                "randomize_equal_moves",
+                                e.target.checked
+                              )
+                            }
+                            className="bg-gray-700"
+                          />
+                          <label
+                            htmlFor="randomize-goat"
+                            className="text-gray-300 text-sm ml-2"
+                          >
+                            Randomize equal moves
+                          </label>
+                        </div>
+                      </div>
+                    ) : settings.players.goat.model === "mcts" ? (
+                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Iterations (100-100000)
+                          </label>
+                          <input
+                            type="number"
+                            min="100"
+                            max="100000"
+                            step="100"
+                            value={
+                              settings.players.goat.settings?.iterations ||
+                              DEFAULT_AGENT_SETTINGS.mcts.iterations
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "goat",
+                                "iterations",
+                                Math.min(
+                                  100000,
+                                  Math.max(100, parseInt(e.target.value) || 100)
+                                )
+                              )
+                            }
+                            className="w-24 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Max Time (seconds)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="300"
+                            value={
+                              settings.players.goat.settings
+                                ?.max_time_seconds ||
+                              DEFAULT_AGENT_SETTINGS.mcts.max_time_seconds
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "goat",
+                                "max_time_seconds",
+                                Math.min(
+                                  300,
+                                  Math.max(1, parseInt(e.target.value) || 1)
+                                )
+                              )
+                            }
+                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Rollout Policy
+                          </label>
+                          <CustomSelect
+                            value={
+                              settings.players.goat.settings?.rollout_policy ||
+                              DEFAULT_AGENT_SETTINGS.mcts.rollout_policy
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "goat",
+                                "rollout_policy",
+                                e.target.value
+                              )
+                            }
+                            options={ROLLOUT_POLICIES}
+                            className="w-full max-w-[180px] text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Max Rollout Depth
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="20"
+                            value={
+                              settings.players.goat.settings
+                                ?.max_rollout_depth ||
+                              DEFAULT_AGENT_SETTINGS.mcts.max_rollout_depth
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "goat",
+                                "max_rollout_depth",
+                                Math.min(
+                                  20,
+                                  Math.max(1, parseInt(e.target.value) || 1)
+                                )
+                              )
+                            }
+                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
               {/* Tiger Player Selection */}
               <div className="flex items-center justify-between">
@@ -421,7 +439,166 @@ const WelcomeScreen = () => {
               </div>
               {/* Tiger Agent Settings */}
               {settings.players.tiger.type === "AI" &&
-                renderAgentSettings("tiger", settings.players.tiger.model)}
+                settings.showAdvancedSettings && (
+                  <div className="mt-2 ml-4">
+                    {settings.players.tiger.model === "minimax" ? (
+                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Search Depth (1-9)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="9"
+                            value={
+                              settings.players.tiger.settings?.max_depth ||
+                              DEFAULT_AGENT_SETTINGS.minimax.max_depth
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "tiger",
+                                "max_depth",
+                                Math.min(
+                                  9,
+                                  Math.max(1, parseInt(e.target.value) || 1)
+                                )
+                              )
+                            }
+                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="randomize-tiger"
+                            checked={
+                              settings.players.tiger.settings
+                                ?.randomize_equal_moves ||
+                              DEFAULT_AGENT_SETTINGS.minimax
+                                .randomize_equal_moves
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "tiger",
+                                "randomize_equal_moves",
+                                e.target.checked
+                              )
+                            }
+                            className="bg-gray-700"
+                          />
+                          <label
+                            htmlFor="randomize-tiger"
+                            className="text-gray-300 text-sm ml-2"
+                          >
+                            Randomize equal moves
+                          </label>
+                        </div>
+                      </div>
+                    ) : settings.players.tiger.model === "mcts" ? (
+                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Iterations (100-100000)
+                          </label>
+                          <input
+                            type="number"
+                            min="100"
+                            max="100000"
+                            step="100"
+                            value={
+                              settings.players.tiger.settings?.iterations ||
+                              DEFAULT_AGENT_SETTINGS.mcts.iterations
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "tiger",
+                                "iterations",
+                                Math.min(
+                                  100000,
+                                  Math.max(100, parseInt(e.target.value) || 100)
+                                )
+                              )
+                            }
+                            className="w-24 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Max Time (seconds)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="300"
+                            value={
+                              settings.players.tiger.settings
+                                ?.max_time_seconds ||
+                              DEFAULT_AGENT_SETTINGS.mcts.max_time_seconds
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "tiger",
+                                "max_time_seconds",
+                                Math.min(
+                                  300,
+                                  Math.max(1, parseInt(e.target.value) || 1)
+                                )
+                              )
+                            }
+                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Rollout Policy
+                          </label>
+                          <CustomSelect
+                            value={
+                              settings.players.tiger.settings?.rollout_policy ||
+                              DEFAULT_AGENT_SETTINGS.mcts.rollout_policy
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "tiger",
+                                "rollout_policy",
+                                e.target.value
+                              )
+                            }
+                            options={ROLLOUT_POLICIES}
+                            className="w-full max-w-[180px] text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Max Rollout Depth
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="20"
+                            value={
+                              settings.players.tiger.settings
+                                ?.max_rollout_depth ||
+                              DEFAULT_AGENT_SETTINGS.mcts.max_rollout_depth
+                            }
+                            onChange={(e) =>
+                              updateAgentSettings(
+                                "tiger",
+                                "max_rollout_depth",
+                                Math.min(
+                                  20,
+                                  Math.max(1, parseInt(e.target.value) || 1)
+                                )
+                              )
+                            }
+                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
               {/* Toggle Advanced Settings */}
               {(settings.players.goat.type === "AI" ||
