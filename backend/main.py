@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 from models.random_agent import RandomAgent
 from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
@@ -28,6 +28,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class AgentSettings(BaseModel):
+    # Shared settings
+    randomize_equal_moves: Optional[bool] = None
+    
+    # Minimax specific settings
+    max_depth: Optional[int] = Field(None, ge=1, le=9, description="Maximum search depth for Minimax (1-9)")
+    
+    # MCTS specific settings
+    iterations: Optional[int] = Field(None, ge=100, le=100000, description="Number of iterations for MCTS")
+    rollout_policy: Optional[str] = Field(None, description="Rollout policy ('random', 'guided', or 'lightweight')")
+    max_rollout_depth: Optional[int] = Field(None, ge=1, le=20, description="Maximum rollout depth for MCTS")
+    max_time_seconds: Optional[int] = Field(None, ge=1, le=300, description="Maximum time in seconds for MCTS")
+    exploration_weight: Optional[float] = Field(None, ge=0.1, le=3.0, description="Exploration weight for MCTS")
+    guided_strictness: Optional[float] = Field(None, ge=0.0, le=1.0, description="Guided rollout strictness (0.0-1.0)")
+
 class MoveRequest(BaseModel):
     board: List[List[Optional[Dict]]]
     phase: str
@@ -35,20 +50,50 @@ class MoveRequest(BaseModel):
     model: str
     goats_placed: int = 0  # Add default value
     goats_captured: int = 0  # Add default value
+    settings: Optional[AgentSettings] = None  # Optional agent settings
 
-# Initialize agents
+# Default agent settings
+default_settings = {
+    "minimax": {
+        "max_depth": 6,
+        "randomize_equal_moves": True
+    },
+    "mcts": {
+        "iterations": 20000,
+        "exploration_weight": 1.414,
+        "rollout_policy": "lightweight",
+        "guided_strictness": 0.7,
+        "max_rollout_depth": 6,
+        "max_time_seconds": 50
+    }
+}
+
+# Initialize agents with default settings
 agents = {
     "random": RandomAgent(),
-    "minimax": MinimaxAgent(max_depth=6, randomize_equal_moves=True),
+    "minimax": MinimaxAgent(max_depth=default_settings["minimax"]["max_depth"], 
+                           randomize_equal_moves=default_settings["minimax"]["randomize_equal_moves"]),
     "mcts": MCTSAgent(
-        iterations=20000, 
-        exploration_weight=1.414, 
-        rollout_policy="lightweight",
-        guided_strictness=0.7,
-        max_rollout_depth=6,
-        max_time_seconds=50
+        iterations=default_settings["mcts"]["iterations"], 
+        exploration_weight=default_settings["mcts"]["exploration_weight"], 
+        rollout_policy=default_settings["mcts"]["rollout_policy"],
+        guided_strictness=default_settings["mcts"]["guided_strictness"],
+        max_rollout_depth=default_settings["mcts"]["max_rollout_depth"],
+        max_time_seconds=default_settings["mcts"]["max_time_seconds"]
     )
 }
+
+@app.get("/agent-settings/{model}")
+async def get_agent_settings(model: str):
+    """Get default settings for a specific agent model"""
+    if model not in default_settings:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {model}")
+    return default_settings[model]
+
+@app.get("/agent-settings")
+async def get_all_agent_settings():
+    """Get default settings for all agent models"""
+    return default_settings
 
 @app.post("/get-best-move")
 async def get_best_move(request: MoveRequest):
@@ -84,11 +129,50 @@ async def get_best_move(request: MoveRequest):
         state.goats_placed = request.goats_placed
         state.goats_captured = request.goats_captured
         
-        # Get move using the agent
+        # Get move using the agent, possibly with custom settings
         try:
             logger.info(f"Starting {request.model} agent calculation...")
             move_start_time = time.time()
-            move = agents[request.model].get_move(state)
+            
+            # Check if custom settings are provided
+            if request.settings:
+                # Create a new instance of the agent with custom settings
+                if request.model == "minimax":
+                    # Only update provided settings
+                    custom_max_depth = request.settings.max_depth if request.settings.max_depth is not None else default_settings["minimax"]["max_depth"]
+                    custom_randomize = request.settings.randomize_equal_moves if request.settings.randomize_equal_moves is not None else default_settings["minimax"]["randomize_equal_moves"]
+                    
+                    logger.info(f"Using custom minimax settings: max_depth={custom_max_depth}, randomize={custom_randomize}")
+                    custom_agent = MinimaxAgent(max_depth=custom_max_depth, randomize_equal_moves=custom_randomize)
+                    move = custom_agent.get_move(state)
+                
+                elif request.model == "mcts":
+                    # Extract custom settings or use defaults
+                    custom_iterations = request.settings.iterations if request.settings.iterations is not None else default_settings["mcts"]["iterations"]
+                    custom_exploration = request.settings.exploration_weight if request.settings.exploration_weight is not None else default_settings["mcts"]["exploration_weight"]
+                    custom_rollout = request.settings.rollout_policy if request.settings.rollout_policy is not None else default_settings["mcts"]["rollout_policy"]
+                    custom_max_depth = request.settings.max_rollout_depth if request.settings.max_rollout_depth is not None else default_settings["mcts"]["max_rollout_depth"]
+                    custom_max_time = request.settings.max_time_seconds if request.settings.max_time_seconds is not None else default_settings["mcts"]["max_time_seconds"]
+                    custom_strictness = request.settings.guided_strictness if request.settings.guided_strictness is not None else default_settings["mcts"]["guided_strictness"]
+                    
+                    logger.info(f"Using custom MCTS settings: iterations={custom_iterations}, rollout={custom_rollout}, max_depth={custom_max_depth}, max_time={custom_max_time}")
+                    custom_agent = MCTSAgent(
+                        iterations=custom_iterations,
+                        exploration_weight=custom_exploration,
+                        rollout_policy=custom_rollout,
+                        max_rollout_depth=custom_max_depth,
+                        guided_strictness=custom_strictness,
+                        max_time_seconds=custom_max_time
+                    )
+                    move = custom_agent.get_move(state)
+                
+                else:  # For random or any other agent without custom settings
+                    move = agents[request.model].get_move(state)
+            
+            else:
+                # Use default agents
+                move = agents[request.model].get_move(state)
+            
             move_elapsed = time.time() - move_start_time
             
             elapsed = time.time() - start_time
