@@ -4,8 +4,7 @@ const fetchBestMove = async (
   phase,
   agent,
   model,
-  goatsPlaced = 0,
-  goatsCaptured = 0,
+  gameState = {},
   abortController = null
 ) => {
   try {
@@ -14,8 +13,9 @@ const fetchBestMove = async (
       phase,
       agent,
       model,
-      goats_placed: goatsPlaced,
-      goats_captured: goatsCaptured,
+      goats_placed: gameState.goatsPlaced || 0,
+      goats_captured: gameState.goatsCaptured || 0,
+      settings: gameState.settings || null,
     });
 
     const response = await fetch("http://localhost:8000/get-best-move", {
@@ -28,8 +28,9 @@ const fetchBestMove = async (
         phase,
         agent,
         model,
-        goats_placed: goatsPlaced,
-        goats_captured: goatsCaptured,
+        goats_placed: gameState.goatsPlaced || 0,
+        goats_captured: gameState.goatsCaptured || 0,
+        settings: gameState.settings || null,
       }),
       signal: abortController?.signal,
     });
@@ -66,8 +67,7 @@ export const getBestMove = async (
       phase,
       agent,
       model,
-      gameState.goatsPlaced || 0,
-      gameState.goatsCaptured || 0,
+      gameState,
       abortController
     );
   } catch (error) {

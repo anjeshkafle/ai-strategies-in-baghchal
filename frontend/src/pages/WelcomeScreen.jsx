@@ -17,14 +17,37 @@ const TIME_PRESETS = [
   { name: "Custom", initial: 600, increment: 0 },
 ];
 
+// Default agent settings
+const DEFAULT_AGENT_SETTINGS = {
+  minimax: {
+    max_depth: 6,
+    randomize_equal_moves: true,
+  },
+  mcts: {
+    iterations: 20000,
+    exploration_weight: 1.414,
+    rollout_policy: "lightweight",
+    guided_strictness: 0.7,
+    max_rollout_depth: 6,
+    max_time_seconds: 50,
+  },
+};
+
+// Options for rollout policies
+const ROLLOUT_POLICIES = [
+  { value: "random", label: "Random" },
+  { value: "guided", label: "Guided" },
+  { value: "lightweight", label: "Lightweight" },
+];
+
 const WelcomeScreen = () => {
   const navigate = useNavigate();
   const setGameSettings = useGameStore((state) => state.setGameSettings);
 
   const [settings, setSettings] = useState({
     players: {
-      goat: { type: "HUMAN", model: null },
-      tiger: { type: "HUMAN", model: null },
+      goat: { type: "HUMAN", model: null, settings: null },
+      tiger: { type: "HUMAN", model: null, settings: null },
     },
     selectedPreset: TIME_PRESETS[4], // 10|5 default
     isCustom: false,
@@ -33,7 +56,72 @@ const WelcomeScreen = () => {
       increment: 0,
       useIncrement: false,
     },
+    showAdvancedSettings: false,
   });
+
+  // Helper function to update agent settings
+  const updateAgentSettings = (player, key, value) => {
+    setSettings((prevSettings) => {
+      // Clone the current settings for the player
+      const playerSettings = {
+        ...(prevSettings.players[player].settings ||
+          (prevSettings.players[player].model === "minimax"
+            ? { ...DEFAULT_AGENT_SETTINGS.minimax }
+            : { ...DEFAULT_AGENT_SETTINGS.mcts })),
+      };
+
+      // Update the specific setting
+      playerSettings[key] = value;
+
+      return {
+        ...prevSettings,
+        players: {
+          ...prevSettings.players,
+          [player]: {
+            ...prevSettings.players[player],
+            settings: playerSettings,
+          },
+        },
+      };
+    });
+  };
+
+  // Function to initialize settings when model changes
+  const initializeSettings = (player, model) => {
+    if (model) {
+      const defaultSettings =
+        model === "minimax"
+          ? { ...DEFAULT_AGENT_SETTINGS.minimax }
+          : model === "mcts"
+          ? { ...DEFAULT_AGENT_SETTINGS.mcts }
+          : null;
+
+      setSettings((prevSettings) => ({
+        ...prevSettings,
+        players: {
+          ...prevSettings.players,
+          [player]: {
+            ...prevSettings.players[player],
+            model,
+            settings: defaultSettings,
+          },
+        },
+      }));
+    } else {
+      // When switching back to human player
+      setSettings((prevSettings) => ({
+        ...prevSettings,
+        players: {
+          ...prevSettings.players,
+          [player]: {
+            ...prevSettings.players[player],
+            model: null,
+            settings: null,
+          },
+        },
+      }));
+    }
+  };
 
   const handleStartGame = () => {
     const timeControl = settings.isCustom
@@ -68,6 +156,147 @@ const WelcomeScreen = () => {
       perspective,
     });
     navigate("/game");
+  };
+
+  // Render agent settings based on model
+  const renderAgentSettings = (player, model) => {
+    if (!model || !settings.showAdvancedSettings) return null;
+
+    const playerSettings =
+      settings.players[player].settings ||
+      (model === "minimax"
+        ? DEFAULT_AGENT_SETTINGS.minimax
+        : DEFAULT_AGENT_SETTINGS.mcts);
+
+    if (model === "minimax") {
+      return (
+        <div className="mt-2 ml-4 space-y-2">
+          <div>
+            <label className="text-gray-300 block text-sm mb-1">
+              Search Depth (1-9)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="9"
+              value={playerSettings.max_depth}
+              onChange={(e) =>
+                updateAgentSettings(
+                  player,
+                  "max_depth",
+                  Math.min(9, Math.max(1, parseInt(e.target.value) || 1))
+                )
+              }
+              className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={`randomize-${player}`}
+              checked={playerSettings.randomize_equal_moves}
+              onChange={(e) =>
+                updateAgentSettings(
+                  player,
+                  "randomize_equal_moves",
+                  e.target.checked
+                )
+              }
+              className="bg-gray-700"
+            />
+            <label
+              htmlFor={`randomize-${player}`}
+              className="text-gray-300 text-sm"
+            >
+              Randomize equal moves
+            </label>
+          </div>
+        </div>
+      );
+    }
+
+    if (model === "mcts") {
+      return (
+        <div className="mt-2 ml-4 space-y-2">
+          <div>
+            <label className="text-gray-300 block text-sm mb-1">
+              Iterations (100-100000)
+            </label>
+            <input
+              type="number"
+              min="100"
+              max="100000"
+              step="100"
+              value={playerSettings.iterations}
+              onChange={(e) =>
+                updateAgentSettings(
+                  player,
+                  "iterations",
+                  Math.min(
+                    100000,
+                    Math.max(100, parseInt(e.target.value) || 100)
+                  )
+                )
+              }
+              className="w-24 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-gray-300 block text-sm mb-1">
+              Max Time (seconds)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="300"
+              value={playerSettings.max_time_seconds}
+              onChange={(e) =>
+                updateAgentSettings(
+                  player,
+                  "max_time_seconds",
+                  Math.min(300, Math.max(1, parseInt(e.target.value) || 1))
+                )
+              }
+              className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-gray-300 block text-sm mb-1">
+              Rollout Policy
+            </label>
+            <CustomSelect
+              value={playerSettings.rollout_policy}
+              onChange={(e) =>
+                updateAgentSettings(player, "rollout_policy", e.target.value)
+              }
+              options={ROLLOUT_POLICIES}
+              className="w-full max-w-[180px] text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-gray-300 block text-sm mb-1">
+              Max Rollout Depth
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={playerSettings.max_rollout_depth}
+              onChange={(e) =>
+                updateAgentSettings(
+                  player,
+                  "max_rollout_depth",
+                  Math.min(20, Math.max(1, parseInt(e.target.value) || 1))
+                )
+              }
+              className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -133,16 +362,7 @@ const WelcomeScreen = () => {
                     <CustomSelect
                       value={settings.players.goat.model}
                       onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          players: {
-                            ...settings.players,
-                            goat: {
-                              ...settings.players.goat,
-                              model: e.target.value,
-                            },
-                          },
-                        })
+                        initializeSettings("goat", e.target.value)
                       }
                       options={[
                         { value: "minimax", label: "Minimax Base" },
@@ -153,6 +373,9 @@ const WelcomeScreen = () => {
                   )}
                 </div>
               </div>
+              {/* Goat Agent Settings */}
+              {settings.players.goat.type === "AI" &&
+                renderAgentSettings("goat", settings.players.goat.model)}
 
               {/* Tiger Player Selection */}
               <div className="flex items-center justify-between">
@@ -185,16 +408,7 @@ const WelcomeScreen = () => {
                     <CustomSelect
                       value={settings.players.tiger.model}
                       onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          players: {
-                            ...settings.players,
-                            tiger: {
-                              ...settings.players.tiger,
-                              model: e.target.value,
-                            },
-                          },
-                        })
+                        initializeSettings("tiger", e.target.value)
                       }
                       options={[
                         { value: "minimax", label: "Minimax Base" },
@@ -205,6 +419,44 @@ const WelcomeScreen = () => {
                   )}
                 </div>
               </div>
+              {/* Tiger Agent Settings */}
+              {settings.players.tiger.type === "AI" &&
+                renderAgentSettings("tiger", settings.players.tiger.model)}
+
+              {/* Toggle Advanced Settings */}
+              {(settings.players.goat.type === "AI" ||
+                settings.players.tiger.type === "AI") && (
+                <div className="mt-3 flex items-center">
+                  <button
+                    onClick={() =>
+                      setSettings({
+                        ...settings,
+                        showAdvancedSettings: !settings.showAdvancedSettings,
+                      })
+                    }
+                    className="text-sm text-blue-400 hover:text-blue-300 flex items-center"
+                  >
+                    {settings.showAdvancedSettings ? "Hide" : "Show"} Advanced
+                    Settings
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-4 w-4 ml-1 transition-transform ${
+                        settings.showAdvancedSettings ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -249,19 +501,18 @@ const WelcomeScreen = () => {
                         ...settings,
                         customTime: {
                           ...settings.customTime,
-                          initial: Math.max(1, parseInt(e.target.value)) * 60,
+                          initial: parseInt(e.target.value) * 60,
                         },
                       })
                     }
-                    min="1"
                   />
                 </div>
 
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    id="useIncrement"
-                    className="rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
+                    id="use-increment"
+                    className="bg-gray-700"
                     checked={settings.customTime.useIncrement}
                     onChange={(e) =>
                       setSettings({
@@ -269,13 +520,12 @@ const WelcomeScreen = () => {
                         customTime: {
                           ...settings.customTime,
                           useIncrement: e.target.checked,
-                          increment: e.target.checked ? 5 : 0,
                         },
                       })
                     }
                   />
-                  <label htmlFor="useIncrement" className="text-gray-300">
-                    Add increment
+                  <label htmlFor="use-increment" className="text-gray-300">
+                    Use Increment
                   </label>
                 </div>
 
@@ -293,11 +543,10 @@ const WelcomeScreen = () => {
                           ...settings,
                           customTime: {
                             ...settings.customTime,
-                            increment: Math.max(0, parseInt(e.target.value)),
+                            increment: parseInt(e.target.value),
                           },
                         })
                       }
-                      min="0"
                     />
                   </div>
                 )}
@@ -306,14 +555,11 @@ const WelcomeScreen = () => {
           </div>
         </div>
 
-        {/* Start Button */}
-        <div className="flex justify-center">
+        {/* Action Buttons */}
+        <div className="flex justify-center gap-4 mt-6">
           <button
-            className="w-full max-w-md px-8 py-4 bg-gradient-to-r from-yellow-500 to-yellow-600 
-                       text-white text-xl font-bold rounded-lg shadow-lg
-                       hover:from-yellow-600 hover:to-yellow-700 
-                       transform transition-all duration-200 hover:scale-105"
             onClick={handleStartGame}
+            className="px-6 py-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold transition-colors"
           >
             Start Game
           </button>

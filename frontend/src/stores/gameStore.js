@@ -53,8 +53,8 @@ const initialState = {
   moveHistory: [],
   perspective: "GOAT",
   players: {
-    goat: { type: "HUMAN", model: null }, // type: "HUMAN", "AI", model: "random", "minimax"
-    tiger: { type: "HUMAN", model: null },
+    goat: { type: "HUMAN", model: null, settings: null }, // type: "HUMAN", "AI", model: "random", "minimax", settings: agent settings
+    tiger: { type: "HUMAN", model: null, settings: null },
   },
   timeControl: {
     initial: 600, // 10 minutes in seconds
@@ -113,8 +113,8 @@ export const useGameStore = create((set, get) => ({
       lastMove: null,
       perspective: "GOAT",
       players: {
-        goat: { type: "HUMAN", model: null },
-        tiger: { type: "HUMAN", model: null },
+        goat: { type: "HUMAN", model: null, settings: null },
+        tiger: { type: "HUMAN", model: null, settings: null },
       },
       timeControl: {
         initial: 600,
@@ -453,13 +453,13 @@ export const useGameStore = create((set, get) => ({
     // Determine perspective based on human player
     let perspective = "GOAT"; // default
     if (
-      settings.players.goat !== "HUMAN" &&
-      settings.players.tiger === "HUMAN"
+      settings.players.goat.type !== "HUMAN" &&
+      settings.players.tiger.type === "HUMAN"
     ) {
       perspective = "TIGER";
     } else if (
-      settings.players.goat === "HUMAN" &&
-      settings.players.tiger !== "HUMAN"
+      settings.players.goat.type === "HUMAN" &&
+      settings.players.tiger.type !== "HUMAN"
     ) {
       perspective = "GOAT";
     }
@@ -565,6 +565,7 @@ export const useGameStore = create((set, get) => ({
         model: currentPlayer.model,
         goatsPlaced: state.goatsPlaced,
         goatsCaptured: state.goatsCaptured,
+        settings: currentPlayer.settings || null,
       });
 
       const move = await getBestMove(
@@ -575,6 +576,7 @@ export const useGameStore = create((set, get) => ({
         {
           goatsPlaced: state.goatsPlaced,
           goatsCaptured: state.goatsCaptured,
+          settings: currentPlayer.settings || null,
         },
         abortController
       );
