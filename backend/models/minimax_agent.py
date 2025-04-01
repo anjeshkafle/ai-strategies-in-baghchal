@@ -463,26 +463,55 @@ class MinimaxAgent:
         Order moves using a direct approach without state cloning or evaluation.
         
         For tigers:
-        1. Put captures first, then other moves
+        1. Capture moves
+        2. Moves adjacent to goats (threatening moves)
+        3. Other moves
         
         For goats:
         1. Blocking moves (preventing immediate captures)
-        2. Escape moves (getting away from immediate threats)
+        2. Escape moves (getting away from immediate threats to safe positions)
         3. Safe moves (no interaction with threats)
         4. Unsafe moves (moves that could lead to capture)
         """
         if state.turn == "TIGER":
-            # Tiger's move ordering: captures first, then other moves
+            # Tiger's move ordering: captures first, then moves adjacent to goats, then other moves
             capture_moves = []
+            threatening_moves = []  # Moves adjacent to goats
             other_moves = []
             
+            # First, collect all unique destination positions from non-capture moves
+            destination_positions = set()
+            for move in moves:
+                if not move.get("capture"):
+                    to_x, to_y = move["to"]["x"], move["to"]["y"]
+                    destination_positions.add((to_x, to_y))
+            
+            # For each destination position, check if it's adjacent to any goat
+            positions_adjacent_to_goats = set()
+            for to_x, to_y in destination_positions:
+                # Check all adjacent positions for goats
+                for dx, dy in [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]:
+                    goat_x, goat_y = to_x + dx, to_y + dy
+                    if (0 <= goat_x < GameState.BOARD_SIZE and 
+                        0 <= goat_y < GameState.BOARD_SIZE and 
+                        state.board[goat_y][goat_x] is not None and 
+                        state.board[goat_y][goat_x]["type"] == "GOAT" and
+                        self._is_valid_connection(goat_x, goat_y, to_x, to_y)):
+                        positions_adjacent_to_goats.add((to_x, to_y))
+                        break  # Found one adjacent goat, no need to check other directions
+            
+            # Categorize moves based on the collected positions
             for move in moves:
                 if move.get("capture"):
                     capture_moves.append(move)
                 else:
-                    other_moves.append(move)
+                    to_x, to_y = move["to"]["x"], move["to"]["y"]
+                    if (to_x, to_y) in positions_adjacent_to_goats:
+                        threatening_moves.append(move)
+                    else:
+                        other_moves.append(move)
             
-            return capture_moves + other_moves
+            return capture_moves + threatening_moves + other_moves
         
         else:  # GOAT turn
             # Get threatened nodes to identify unsafe positions
@@ -507,7 +536,7 @@ class MinimaxAgent:
             
             # Initialize move categories with different priorities
             blocking_moves = []  # Category 1: Moves that block immediate captures
-            escape_moves = []    # Category 2: Moves that escape from immediate threats
+            escape_moves = []    # Category 2: Moves that escape from immediate threats to safe positions
             safe_moves = []      # Category 3: Moves that don't interact with threats
             unsafe_moves = []    # Category 4: Moves that enable capture
             
@@ -563,7 +592,7 @@ class MinimaxAgent:
                             blocking_moves.append(move)
                             continue
                     
-                    # Category 2: Check if this is an escape move
+                    # Category 2: Check if this is an escape move to a safe position
                     # (Moving from a hot square that has a tiger threat with empty landing)
                     if (from_x, from_y) in hot_squares:
                         has_real_threat = False
@@ -571,8 +600,23 @@ class MinimaxAgent:
                             if state.board[landing_y][landing_x] is None:
                                 has_real_threat = True
                                 break
+                        
                         if has_real_threat:
-                            escape_moves.append(move)
+                            # Only consider it an escape if the destination is NOT also threatened
+                            if (to_x, to_y) not in hot_squares:
+                                escape_moves.append(move)
+                            else:
+                                # If destination is also threatened, check if it's actually capturable
+                                is_to_unsafe = False
+                                for landing_x, landing_y in hot_squares[(to_x, to_y)]:
+                                    if state.board[landing_y][landing_x] is None:
+                                        is_to_unsafe = True
+                                        break
+                                
+                                if is_to_unsafe:
+                                    unsafe_moves.append(move)  # Moving to another threatened position
+                                else:
+                                    escape_moves.append(move)  # Destination is threatened but not capturable
                             continue
                     
                     # Category 4: Check if destination is a hot square

@@ -25,7 +25,7 @@ BOARD_STRING_1 = [
 ]
 
 BOARD_STRING_2 = [
-    "TG__T",
+    "T___T",
     "_____",
     "_____",
     "_____",
@@ -41,10 +41,10 @@ BOARD_STRING_3 = [
 ]
 
 # Select which board to use (directly set to the board string variable)
-BOARD_TO_USE = BOARD_STRING_3
+BOARD_TO_USE = BOARD_STRING_2
 
 # Configure game state settings
-GAME_PHASE = "MOVEMENT"  # "PLACEMENT" or "MOVEMENT"
+GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
 TURN = "GOAT"           # "GOAT" or "TIGER"
 GOATS_PLACED = 15
 GOATS_CAPTURED = 0
@@ -113,25 +113,18 @@ def print_board(state: GameState) -> None:
         print("-" * 11)
 
 def test_move_ordering():
-    """
-    Test and analyze move ordering for both tigers and goats.
-    Creates a game state from the configured board and logs detailed information
-    about how moves are ordered by the MinimaxAgent.
-    """
-    print("\n" + "="*50)
-    print("TESTING MOVE ORDERING")
-    print("="*50)
-    
-    # Create game state from board
+    """Test move ordering by displaying the results of MinimaxAgent's _order_moves method."""
+    # Create a game state from the board
     game_state = string_board_to_game_state(
-        BOARD_TO_USE,
+        BOARD_TO_USE,  # Using board 1 which has goats
         phase=GAME_PHASE,
         turn=TURN,
         goats_placed=GOATS_PLACED,
         goats_captured=GOATS_CAPTURED
     )
     
-    # Print initial board state
+    # Print the initial board state
+    print("\nInitial Board State:")
     print_board(game_state)
     print(f"\nTurn: {game_state.turn}")
     print(f"Phase: {game_state.phase}")
@@ -142,144 +135,20 @@ def test_move_ordering():
     valid_moves = game_state.get_valid_moves()
     print(f"\nTotal valid moves: {len(valid_moves)}")
     
-    # Create MinimaxAgent
-    agent = MinimaxAgent(max_depth=5)
-    
-    # Get threatened nodes for analysis
-    threatened_data = game_state.get_threatened_nodes()
-    print("\nThreatened nodes:")
-    for x, y, landing_x, landing_y in threatened_data:
-        print(f"  Position ({x}, {y}) can be captured to ({landing_x}, {landing_y})")
-    
-    # Order moves
+    # Create a MinimaxAgent and get ordered moves
+    agent = MinimaxAgent(max_depth=3)
     ordered_moves = agent._order_moves(game_state, valid_moves)
     
-    # Analyze and print move categories
-    if game_state.turn == "TIGER":
-        # For tigers, analyze captures vs non-captures
-        capture_moves = [m for m in ordered_moves if m.get("capture")]
-        other_moves = [m for m in ordered_moves if not m.get("capture")]
-        
-        print("\nMove Ordering Analysis (Tiger):")
-        print(f"Capture moves ({len(capture_moves)}):")
-        for move in capture_moves:
-            print(f"  {format_move(move)}")
-        
-        print(f"\nOther moves ({len(other_moves)}):")
-        for move in other_moves:
-            print(f"  {format_move(move)}")
+    # Display the ordered moves
+    print("\nOrdered moves from MinimaxAgent:")
+    for i, move in enumerate(ordered_moves, 1):
+        print(f"{i}. {format_move(move)}")
     
-    else:  # GOAT turn
-        # For goats, analyze moves by category
-        hot_squares = {}  # key: (x, y), value: list of (landing_x, landing_y)
-        landing_squares = {}  # key: (landing_x, landing_y), value: list of (x, y)
-        
-        for x, y, landing_x, landing_y in threatened_data:
-            if (x, y) not in hot_squares:
-                hot_squares[(x, y)] = []
-            hot_squares[(x, y)].append((landing_x, landing_y))
-            
-            if (landing_x, landing_y) not in landing_squares:
-                landing_squares[(landing_x, landing_y)] = []
-            landing_squares[(landing_x, landing_y)].append((x, y))
-        
-        # Categorize moves
-        safe_moves = []
-        escape_moves = []
-        blocking_moves = []
-        unsafe_moves = []
-        
-        for move in ordered_moves:
-            if game_state.phase == "PLACEMENT":
-                target_x, target_y = move["x"], move["y"]
-                
-                # Check if placing on a hot square
-                if (target_x, target_y) in hot_squares:
-                    is_unsafe = False
-                    for landing_x, landing_y in hot_squares[(target_x, target_y)]:
-                        if game_state.board[landing_y][landing_x] is None:
-                            unsafe_moves.append(move)
-                            is_unsafe = True
-                            break
-                    if is_unsafe:
-                        continue
-                
-                # Check if blocking a capture
-                if (target_x, target_y) in landing_squares:
-                    has_real_block = False
-                    for hot_x, hot_y in landing_squares[(target_x, target_y)]:
-                        if game_state.board[hot_y][hot_x] is not None and game_state.board[hot_y][hot_x]["type"] == "GOAT":
-                            has_real_block = True
-                            break
-                    if has_real_block:
-                        blocking_moves.append(move)
-                        continue
-                
-                safe_moves.append(move)
-                
-            else:  # MOVEMENT phase
-                from_x, from_y = move["from"]["x"], move["from"]["y"]
-                to_x, to_y = move["to"]["x"], move["to"]["y"]
-                
-                # Check if escaping from a hot square
-                if (from_x, from_y) in hot_squares:
-                    has_real_threat = False
-                    for landing_x, landing_y in hot_squares[(from_x, from_y)]:
-                        if game_state.board[landing_y][landing_x] is None:
-                            has_real_threat = True
-                            break
-                    if has_real_threat:
-                        escape_moves.append(move)
-                        continue
-                
-                # Check if moving to a hot square
-                if (to_x, to_y) in hot_squares:
-                    is_unsafe = False
-                    for landing_x, landing_y in hot_squares[(to_x, to_y)]:
-                        is_landing_empty = game_state.board[landing_y][landing_x] is None
-                        goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
-                        if is_landing_empty or goat_from_landing:
-                            unsafe_moves.append(move)
-                            is_unsafe = True
-                            break
-                    if is_unsafe:
-                        continue
-                
-                # Check if blocking a capture
-                if (to_x, to_y) in landing_squares:
-                    has_real_block = False
-                    for hot_x, hot_y in landing_squares[(to_x, to_y)]:
-                        if game_state.board[hot_y][hot_x] is not None and game_state.board[hot_y][hot_x]["type"] == "GOAT":
-                            if (hot_x, hot_y) != (from_x, from_y):
-                                has_real_block = True
-                                break
-                    if has_real_block:
-                        blocking_moves.append(move)
-                        continue
-                
-                safe_moves.append(move)
-        
-        print("\nMove Ordering Analysis (Goat):")
-        print(f"Safe moves ({len(safe_moves)}):")
-        for move in safe_moves:
-            print(f"  {format_move(move)}")
-        
-        print(f"\nEscape moves ({len(escape_moves)}):")
-        for move in escape_moves:
-            print(f"  {format_move(move)}")
-        
-        print(f"\nBlocking moves ({len(blocking_moves)}):")
-        for move in blocking_moves:
-            print(f"  {format_move(move)}")
-        
-        print(f"\nUnsafe moves ({len(unsafe_moves)}):")
-        for move in unsafe_moves:
-            print(f"  {format_move(move)}")
-    
-    # Print final ordered moves
-    print("\nFinal ordered moves:")
-    for i, move in enumerate(ordered_moves):
-        print(f"  {i+1}. {format_move(move)}")
+    # Display threatened nodes for context
+    print("\nThreatened nodes (potential capture positions):")
+    threatened_data = game_state.get_threatened_nodes()
+    for x, y, landing_x, landing_y in threatened_data:
+        print(f"  Goat at ({x}, {y}) can be captured by landing at ({landing_x}, {landing_y})")
 
 if __name__ == "__main__":
     test_move_ordering() 
