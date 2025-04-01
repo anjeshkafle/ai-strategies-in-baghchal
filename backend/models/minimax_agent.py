@@ -193,8 +193,8 @@ class MinimaxAgent:
    
     def _adjust_score(self, raw_score: float, state: GameState, move_sequence: List[Dict], captures_at_depth: Dict[int, int] = None) -> float:
         """
-        Adjusts the raw evaluation score by applying move sequence length penalty and dynamic capture bonuses.
-        This version uses game-stage aware bonuses for captures and rewards faster captures.
+        Adjusts the raw evaluation score by applying move sequence length penalty and capture bonuses.
+        Now uses move_sequence to determine captures, ignoring captures_at_depth.
         """
         # Get move sequence length
         move_sequence_length = len(move_sequence)
@@ -206,35 +206,24 @@ class MinimaxAgent:
         game_progress = min(1.0, state.goats_placed / 20)
         
         # Calculate dynamic capture value - captures are more valuable earlier in the game
-        # (they give a bigger advantage when fewer goats are on the board)
         early_game_bonus = max(0, 1.2 - game_progress)  # Bonus ranges from 1.2 to 0.0
         dynamic_capture_value = self.base_capture_value * (1 + early_game_bonus)
         
-        # First, add regular capture score for goats that have already been captured
+        # Add regular capture score for goats that have already been captured
         base_capture_score = dynamic_capture_value * state.goats_captured
         adjusted_score += base_capture_score
         
-        # Check if we have information about future captures
-        if captures_at_depth is not None and captures_at_depth:
-           
-            # Add speed bonus for each predicted capture based on depth
-            capture_speed_score = 0
-            for capture_depth, num_captures in captures_at_depth.items():
-                # Apply depth-based diminishing reward (deeper captures get less reward)
-                # Remaining steps = max_depth - capture_depth
-                remaining_steps = self.max_depth - capture_depth
+        # Add bonuses for captures in the move sequence
+        for i, move in enumerate(move_sequence):
+            if move.get("capture"):
+                # Calculate bonus based on how early in the sequence the capture occurs
+                remaining_depth = self.max_depth - i
+                capture_bonus = self.capture_speed_weight * remaining_depth
+                adjusted_score += capture_bonus
                 
-                # Calculate the bonus for this capture
-                # The bonus starts at max_capture_speed_bonus and decreases as capture_depth increases
-                depth_bonus = self.capture_speed_weight * remaining_steps
-                
-                # Apply the bonus for all captures at this depth
-                capture_speed_score += depth_bonus * num_captures
-                
-                if self.debug_mode and move_sequence_length == 0:
-                    print(f"Capture at depth {capture_depth}: {num_captures} captures, bonus: {depth_bonus}")
-            
-            adjusted_score += capture_speed_score
+                # Log capture bonus if debugging is enabled
+                if self.debug_mode:
+                    print(f"Capture at move {i+1}: bonus = {capture_bonus}")
         
         # Apply move sequence length penalty
         adjusted_score -= move_sequence_length
