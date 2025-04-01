@@ -38,8 +38,8 @@ BOARD_STRING_3 = [
     "T___T",
     "_____",
     "_____",
-    "__G__",
-    "T___T"
+    "_____",
+    "T__GT"
     ]
 
 BOARD_STRING_4 = [
@@ -51,7 +51,7 @@ BOARD_STRING_4 = [
 ]
 
 # Select which board to use (directly set to the board string variable)
-BOARD_TO_USE = BOARD_STRING_2
+BOARD_TO_USE = BOARD_STRING_3
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
@@ -65,7 +65,7 @@ RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 6
+MINIMAX_MAX_DEPTH = 5
 
 # MCTS parameters
 MCTS_ITERATIONS = 0
