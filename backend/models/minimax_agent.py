@@ -460,19 +460,19 @@ class MinimaxAgent:
 
     def _order_moves(self, state: GameState, moves: List[Dict]) -> List[Dict]:
         """
-        Order moves using a direct approach without state cloning or evaluation.
+        Order moves using a scoring system instead of strict categories.
         
         For tigers:
-        1. Capture moves
+        1. Capture moves (highest priority)
         2. Moves adjacent to goats (threatening moves)
         3. Other moves
         
         For goats:
-        1. Safe blocking moves (preventing immediate captures without being threatened)
-        2. Escape moves (getting away from immediate threats to safe positions)
-        3. Safe moves (no interaction with threats)
-        4. Unsafe blocking moves (blocking but on threatened squares)
-        5. Unsafe moves (moves that could lead to capture)
+        - Moves get points for each beneficial aspect:
+          - Blocking a capture (+3 points, +1 if on threatened square)
+          - Escaping from threat (+2 points)
+          - Being safe (not threatened) (+1 point)
+        Moves with higher scores are prioritized.
         """
         if state.turn == "TIGER":
             # Tiger's move ordering: captures first, then moves adjacent to goats, then other moves
@@ -535,20 +535,17 @@ class MinimaxAgent:
                     landing_squares[(landing_x, landing_y)] = []
                 landing_squares[(landing_x, landing_y)].append((x, y))
             
-            # Initialize move categories with different priorities
-            safe_blocking_moves = []  # Category 1: Blocking moves that don't place goats on threatened squares
-            unsafe_blocking_moves = [] # Category 4: Blocking moves that place goats on threatened squares
-            escape_moves = []         # Category 2: Moves that escape from immediate threats to safe positions
-            safe_moves = []           # Category 3: Moves that don't interact with threats
-            unsafe_moves = []         # Category 5: Moves that enable capture
+            # Score and order moves
+            move_scores = []  # List of (move, score) tuples
             
             for move in moves:
+                score = 0  # Start with zero score
+                
                 if state.phase == "PLACEMENT":
                     target_x, target_y = move["x"], move["y"]
                     
                     # Check if this placement blocks a capture
                     if (target_x, target_y) in landing_squares:
-                        # This move blocks at least one potential capture
                         # Check if any of the hot squares actually have goats on them
                         has_real_block = False
                         for hot_x, hot_y in landing_squares[(target_x, target_y)]:
@@ -557,39 +554,34 @@ class MinimaxAgent:
                                 break
                         
                         if has_real_block:
+                            # Base blocking score: +3
+                            blocking_score = 3
+                            
                             # Check if the blocking position is itself threatened
                             is_blocking_position_threatened = False
-                            if (target_x, target_y) in hot_squares:
-                                for landing_x, landing_y in hot_squares[(target_x, target_y)]:
-                                    if state.board[landing_y][landing_x] is None:
-                                        is_blocking_position_threatened = True
-                                        break
+                            for landing_x, landing_y in hot_squares.get((target_x, target_y), []):
+                                if state.board[landing_y][landing_x] is None:
+                                    is_blocking_position_threatened = True
+                                    break
                             
+                            # If blocking on a threatened square, reduce the blocking score
                             if is_blocking_position_threatened:
-                                unsafe_blocking_moves.append(move)
-                            else:
-                                safe_blocking_moves.append(move)
-                            continue
+                                blocking_score = 1
+                            
+                            score += blocking_score
                     
-                    # Category 5: Check if placing on a hot square that would be captured
-                    if (target_x, target_y) in hot_squares:
-                        # For each potential landing square
-                        is_unsafe = False
-                        for landing_x, landing_y in hot_squares[(target_x, target_y)]:
-                            # Check if landing is empty (capture is possible)
-                            if state.board[landing_y][landing_x] is None:
-                                unsafe_moves.append(move)
-                                is_unsafe = True
-                                break
-                        
-                        if is_unsafe:
-                            continue
+                    # Check if placing on a threatened position
+                    is_unsafe = False
+                    for landing_x, landing_y in hot_squares.get((target_x, target_y), []):
+                        if state.board[landing_y][landing_x] is None:
+                            is_unsafe = True
+                            break
                     
-                    # Category 3: If we got here, it's a safe move
-                    safe_moves.append(move)
+                    # Add safety score (+1 if safe)
+                    if not is_unsafe:
+                        score += 1
                     
-                else:
-                    # MOVEMENT PHASE
+                else:  # MOVEMENT PHASE
                     from_x, from_y = move["from"]["x"], move["from"]["y"]
                     to_x, to_y = move["to"]["x"], move["to"]["y"]
                     
@@ -603,70 +595,54 @@ class MinimaxAgent:
                                     break
                         
                         if has_real_block:
+                            # Base blocking score: +3
+                            blocking_score = 3
+                            
                             # Check if the blocking position is itself threatened
                             is_blocking_position_threatened = False
-                            if (to_x, to_y) in hot_squares:
-                                for landing_x, landing_y in hot_squares[(to_x, to_y)]:
-                                    if state.board[landing_y][landing_x] is None or (landing_x, landing_y) == (from_x, from_y):
-                                        is_blocking_position_threatened = True
-                                        break
+                            for landing_x, landing_y in hot_squares.get((to_x, to_y), []):
+                                if state.board[landing_y][landing_x] is None or (landing_x, landing_y) == (from_x, from_y):
+                                    is_blocking_position_threatened = True
+                                    break
                             
+                            # If blocking on a threatened square, reduce the blocking score
                             if is_blocking_position_threatened:
-                                unsafe_blocking_moves.append(move)
-                            else:
-                                safe_blocking_moves.append(move)
-                            continue
+                                blocking_score = 1
+                            
+                            score += blocking_score
                     
-                    # Category 2: Check if this is an escape move to a safe position
-                    # (Moving from a hot square that has a tiger threat with empty landing)
-                    if (from_x, from_y) in hot_squares:
-                        has_real_threat = False
-                        for landing_x, landing_y in hot_squares[(from_x, from_y)]:
-                            if state.board[landing_y][landing_x] is None:
-                                has_real_threat = True
-                                break
-                        
-                        if has_real_threat:
-                            # Only consider it an escape if the destination is NOT also threatened
-                            if (to_x, to_y) not in hot_squares:
-                                escape_moves.append(move)
-                            else:
-                                # If destination is also threatened, check if it's actually capturable
-                                is_to_unsafe = False
-                                for landing_x, landing_y in hot_squares[(to_x, to_y)]:
-                                    if state.board[landing_y][landing_x] is None:
-                                        is_to_unsafe = True
-                                        break
-                                
-                                if is_to_unsafe:
-                                    unsafe_moves.append(move)  # Moving to another threatened position
-                                else:
-                                    escape_moves.append(move)  # Destination is threatened but not capturable
-                            continue
+                    # Check if this is an escape move (from a threatened position)
+                    is_from_threatened = False
+                    for landing_x, landing_y in hot_squares.get((from_x, from_y), []):
+                        if state.board[landing_y][landing_x] is None:
+                            is_from_threatened = True
+                            break
                     
-                    # Category 5: Check if destination is a hot square
-                    if (to_x, to_y) in hot_squares:
-                        is_unsafe = False
-                        for landing_x, landing_y in hot_squares[(to_x, to_y)]:
-                            is_landing_empty = state.board[landing_y][landing_x] is None
-                            goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
-                            if is_landing_empty or goat_from_landing:
-                                unsafe_moves.append(move)
-                                is_unsafe = True
-                                break
-                        if is_unsafe:
-                            continue
+                    # Add escape score (+2 if escaping from a threatened position)
+                    if is_from_threatened:
+                        score += 2
                     
-                    # Category 3: If we got here, it's a safe move
-                    safe_moves.append(move)
+                    # Check if destination is safe
+                    is_to_threatened = False
+                    for landing_x, landing_y in hot_squares.get((to_x, to_y), []):
+                        is_landing_empty = state.board[landing_y][landing_x] is None
+                        goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
+                        if is_landing_empty or goat_from_landing:
+                            is_to_threatened = True
+                            break
+                    
+                    # Add safety score (+1 if destination is safe)
+                    if not is_to_threatened:
+                        score += 1
+                
+                # Add the move and its score to our list
+                move_scores.append((move, score))
             
-            # Return moves in new priority order:
-            # 1. Safe blocking moves
-            # 2. Escape moves
-            # 3. Safe moves
-            # 4. Unsafe blocking moves (blocking but on threatened squares)
-            # 5. Unsafe moves
-            return safe_blocking_moves + escape_moves + safe_moves + unsafe_blocking_moves + unsafe_moves
+            # Sort moves by score (highest first)
+            move_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Return ordered moves
+            return [move for move, _ in move_scores]
 
     def _order_moves_minimax(self, state: GameState, moves: List[Dict]) -> List[Dict]:
         """

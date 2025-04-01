@@ -55,7 +55,7 @@ BOARD_TO_USE = BOARD_STRING_3
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "GOAT"            # "GOAT" or "TIGER"
+TURN = "TIGER"            # "GOAT" or "TIGER"
 GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
@@ -65,7 +65,7 @@ RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 5
+MINIMAX_MAX_DEPTH = 6
 
 # MCTS parameters
 MCTS_ITERATIONS = 0
