@@ -19,7 +19,6 @@ class MinimaxAgent:
         self.randomize_equal_moves = randomize_equal_moves  # Flag to control move randomization
         self.transposition_table = {}  # For storing evaluated positions
         self.inferred_moves = {}  # For tracking moves inferred from transposition table
-        self.tt_hits = 0  # Counter for all transposition table hits
         
         # Transposition table management parameters
         self.max_table_size = max_table_size  # Maximum number of entries
@@ -387,7 +386,6 @@ class MinimaxAgent:
         self.inferred_moves = {}
         self.tt_entries_by_depth = {}
         self.tt_insertion_count = 0
-        self.tt_hits = 0  # Reset hits counter
         
         valid_moves = state.get_valid_moves()
         
@@ -399,32 +397,26 @@ class MinimaxAgent:
         alpha = float('-inf')
         beta = float('inf')
         
-        # Debug: Track move evaluations and symmetry
+        # Debug: Track move evaluations
         move_evals = []
-        root_symmetries = {}  # Track symmetrical positions at root
         
         for move in ordered_moves:
             next_state = state.clone()
             next_state.apply_move(move)
             
+            # Temporarily disable transposition table for top-level moves
+            original_tt = self.transposition_table
+            self.transposition_table = {}
+            
             next_is_max = next_state.turn == "TIGER"
             # Create move sequence with this first move and pass it to minimax
             move_sequence = [move]
             
-            # Check for symmetrical position at root before evaluation
-            canonical_key, symmetry_type = self._get_canonical_state(next_state)
-            tt_key = (canonical_key, self.max_depth - 1, next_is_max)
+            # Get the score
+            value = self.minimax(next_state, move_sequence, alpha, beta, next_is_max)
             
-            if tt_key in self.transposition_table:
-                value = self.transposition_table[tt_key]
-                if self.debug_mode:
-                    print(f"\nFound symmetrical root position for move {move}")
-                    print(f"Symmetry type: {symmetry_type}")
-                    print(f"Reusing value: {value}")
-                    root_symmetries[str(move)] = (symmetry_type, value)
-            else:
-                # Get the score through regular minimax
-                value = self.minimax(next_state, move_sequence, alpha, beta, next_is_max)
+            # Restore the transposition table
+            self.transposition_table = original_tt
             
             # Save evaluation for debugging
             if self.debug_mode:
@@ -447,14 +439,9 @@ class MinimaxAgent:
         
         # Debug: Print move evaluations and best moves
         if self.debug_mode:
-            print("\nMove evaluations:")
+            print("Move evaluations:")
             for move, score in move_evals:
                 print(f"  {move}: {score}")
-            
-            if root_symmetries:
-                print("\nRoot-level symmetries found:")
-                for move_str, (sym_type, value) in root_symmetries.items():
-                    print(f"  {move_str}: {sym_type} symmetry, value = {value}")
             
             # Print inferred moves from transposition table
             if self.inferred_moves:
@@ -464,7 +451,7 @@ class MinimaxAgent:
             
             print(f"\nBest moves: {best_moves}")
             print(f"Best value: {best_value}")
-            print(f"Transposition table hits: {self.tt_hits}")
+            print(f"Transposition table hits: {len(self.inferred_moves)}")
             print(f"Transposition table size: {len(self.transposition_table)}")
             
             # Print additional TT info
@@ -539,9 +526,6 @@ class MinimaxAgent:
         
         # Check transposition table for exact match
         if tt_key in self.transposition_table:
-            # Increment hits counter
-            self.tt_hits += 1
-            
             # For debugging, track when we use the transposition table at depth 1
             value = self.transposition_table[tt_key]
             
