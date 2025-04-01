@@ -39,7 +39,7 @@ BOARD_STRING_3 = [
     "_____",
     "_____",
     "_____",
-    "T__GT"
+    "TG__T"
     ]
 
 BOARD_STRING_4 = [
@@ -55,20 +55,20 @@ BOARD_TO_USE = BOARD_STRING_3
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "TIGER"            # "GOAT" or "TIGER"
+TURN = "GOAT"            # "GOAT" or "TIGER"
 GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
-RUN_MINIMAX = True
-RUN_MCTS = False
+RUN_MINIMAX = False
+RUN_MCTS = True
 
 # Agent parameters
 # Minimax parameters
 MINIMAX_MAX_DEPTH = 6
 
 # MCTS parameters
-MCTS_ITERATIONS = 0
+MCTS_ITERATIONS = 20000
 MCTS_EXPLORATION_WEIGHT = 1.414
 MCTS_ROLLOUT_POLICY = "lightweight"
 MCTS_MAX_ROLLOUT_DEPTH = 6
