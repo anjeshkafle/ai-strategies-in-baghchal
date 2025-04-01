@@ -235,9 +235,12 @@ const WelcomeScreen = () => {
               {/* Goat Agent Settings */}
               {settings.players.goat.type === "AI" &&
                 settings.showAdvancedSettings && (
-                  <div className="mt-2 ml-4">
+                  <div className="mt-3 mb-4 bg-gray-750 p-3 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-300 mb-2">
+                      Goat AI Settings
+                    </h3>
                     {settings.players.goat.model === "minimax" ? (
-                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
                             Search Depth (1-9)
@@ -260,7 +263,7 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                         <div className="flex items-center">
@@ -291,7 +294,7 @@ const WelcomeScreen = () => {
                         </div>
                       </div>
                     ) : settings.players.goat.model === "mcts" ? (
-                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
                             Iterations (100-100000)
@@ -315,7 +318,7 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-24 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                         <div>
@@ -341,14 +344,14 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
                             Rollout Policy
                           </label>
-                          <CustomSelect
+                          <select
                             value={
                               settings.players.goat.settings?.rollout_policy ||
                               DEFAULT_AGENT_SETTINGS.mcts.rollout_policy
@@ -360,9 +363,14 @@ const WelcomeScreen = () => {
                                 e.target.value
                               )
                             }
-                            options={ROLLOUT_POLICIES}
-                            className="w-full max-w-[180px] text-sm"
-                          />
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          >
+                            {ROLLOUT_POLICIES.map((policy) => (
+                              <option key={policy.value} value={policy.value}>
+                                {policy.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
@@ -387,12 +395,19 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                       </div>
                     ) : null}
                   </div>
+                )}
+
+              {/* Divider between sections */}
+              {settings.players.goat.type === "AI" &&
+                settings.players.tiger.type === "AI" &&
+                settings.showAdvancedSettings && (
+                  <div className="my-3 border-t border-gray-700"></div>
                 )}
 
               {/* Tiger Player Selection */}
@@ -440,9 +455,12 @@ const WelcomeScreen = () => {
               {/* Tiger Agent Settings */}
               {settings.players.tiger.type === "AI" &&
                 settings.showAdvancedSettings && (
-                  <div className="mt-2 ml-4">
+                  <div className="mt-3 bg-gray-750 p-3 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-300 mb-2">
+                      Tiger AI Settings
+                    </h3>
                     {settings.players.tiger.model === "minimax" ? (
-                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
                             Search Depth (1-9)
@@ -465,7 +483,7 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                         <div className="flex items-center">
@@ -496,7 +514,7 @@ const WelcomeScreen = () => {
                         </div>
                       </div>
                     ) : settings.players.tiger.model === "mcts" ? (
-                      <div className="flex flex-wrap gap-x-8 gap-y-2">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
                             Iterations (100-100000)
@@ -520,7 +538,7 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-24 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                         <div>
@@ -546,14 +564,14 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
                             Rollout Policy
                           </label>
-                          <CustomSelect
+                          <select
                             value={
                               settings.players.tiger.settings?.rollout_policy ||
                               DEFAULT_AGENT_SETTINGS.mcts.rollout_policy
@@ -565,9 +583,14 @@ const WelcomeScreen = () => {
                                 e.target.value
                               )
                             }
-                            options={ROLLOUT_POLICIES}
-                            className="w-full max-w-[180px] text-sm"
-                          />
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                          >
+                            {ROLLOUT_POLICIES.map((policy) => (
+                              <option key={policy.value} value={policy.value}>
+                                {policy.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="text-gray-300 block text-sm mb-1">
@@ -592,7 +615,7 @@ const WelcomeScreen = () => {
                                 )
                               )
                             }
-                            className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm"
+                            className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
                       </div>
