@@ -35,7 +35,7 @@ class MinimaxAgent:
         
         # Capture-related weights
         self.base_capture_value = 3000           # Base value for each captured goat
-        self.capture_speed_weight = 500          # Weight for depth-sensitive capture bonus
+        self.capture_speed_weight = 20000          # Weight for depth-sensitive capture bonus
         
         # Positioning weights
         self.dispersion_weight = 100             # Weight for tiger dispersion
@@ -44,7 +44,7 @@ class MinimaxAgent:
         # Debug mode flag
         self.debug_mode = True
     
-    def evaluate(self, state: GameState, move_sequence: List[Dict] = None, captures_at_depth: Dict[int, int] = None) -> float:
+    def evaluate(self, state: GameState, move_sequence: List[Dict] = None) -> float:
         """
         Evaluates the current game state from Tiger's perspective using dynamic equilibrium points.
         Uses several core heuristics with weights and balance points that adapt to game progression:
@@ -59,10 +59,6 @@ class MinimaxAgent:
         # Get move sequence length
         move_sequence_length = len(move_sequence)
         
-        # Log board state and move sequence for debugging
-        if self.debug_mode and move_sequence_length > 0:
-            self._log_board_and_moves(state, move_sequence)
-            
         # Check for terminal states first
         winner = state.get_winner()
         if winner == "TIGER":
@@ -76,7 +72,7 @@ class MinimaxAgent:
         raw_score = self._compute_raw_score(state)
         
         # Adjust the score based on move sequence and captures
-        final_score = self._adjust_score(raw_score, state, move_sequence, captures_at_depth)
+        final_score = self._adjust_score(raw_score, state, move_sequence)
         
         return final_score
      
@@ -191,10 +187,10 @@ class MinimaxAgent:
         return score
     
    
-    def _adjust_score(self, raw_score: float, state: GameState, move_sequence: List[Dict], captures_at_depth: Dict[int, int] = None) -> float:
+    def _adjust_score(self, raw_score: float, state: GameState, move_sequence: List[Dict]) -> float:
         """
         Adjusts the raw evaluation score by applying move sequence length penalty and capture bonuses.
-        Now uses move_sequence to determine captures, ignoring captures_at_depth.
+        Uses move_sequence to determine captures.
         """
         # Get move sequence length
         move_sequence_length = len(move_sequence)
@@ -220,11 +216,6 @@ class MinimaxAgent:
                 remaining_depth = self.max_depth - i
                 capture_bonus = self.capture_speed_weight * remaining_depth
                 adjusted_score += capture_bonus
-                
-                # Log capture bonus if debugging is enabled
-                if self.debug_mode:
-                    print(f"Capture at move {i+1}: bonus = {capture_bonus}")
-        
         # Apply move sequence length penalty
         adjusted_score -= move_sequence_length
         
@@ -411,18 +402,7 @@ class MinimaxAgent:
         
         for move in ordered_moves:
             next_state = state.clone()
-            
-            # Track captures before applying the move
-            goats_captured_before = next_state.goats_captured
-            
             next_state.apply_move(move)
-            
-            # Initialize capture tracking dictionary for this move
-            captures_at_depth = {}
-            
-            # Track if this move resulted in an immediate capture (depth 0)
-            if next_state.goats_captured > goats_captured_before:
-                captures_at_depth[0] = 1
             
             # Temporarily disable transposition table for top-level moves
             original_tt = self.transposition_table
@@ -432,19 +412,15 @@ class MinimaxAgent:
             # Create move sequence with this first move and pass it to minimax
             move_sequence = [move]
             
-            # Get both the score and updated captures dictionary
-            value, updated_captures = self.minimax(next_state, move_sequence, alpha, beta, next_is_max, captures_at_depth)
+            # Get the score
+            value = self.minimax(next_state, move_sequence, alpha, beta, next_is_max)
             
             # Restore the transposition table
             self.transposition_table = original_tt
             
-            # Ensure immediate captures (depth 0) are included in the updated captures
-            if 0 in captures_at_depth:
-                updated_captures[0] = captures_at_depth[0]
-            
             # Save evaluation for debugging
             if self.debug_mode:
-                move_evals.append((move, value, updated_captures))
+                move_evals.append((move, value))
             
             if state.turn == "TIGER":
                 if value > best_value:
@@ -464,10 +440,8 @@ class MinimaxAgent:
         # Debug: Print move evaluations and best moves
         if self.debug_mode:
             print("Move evaluations:")
-            for move, score, captures in move_evals:
-                captures_info = ", ".join(f"d{d}: {c}" for d, c in sorted(captures.items()))
-                captures_info = captures_info if captures_info else "none"
-                print(f"  {move}: {score} (captures: {captures_info})")
+            for move, score in move_evals:
+                print(f"  {move}: {score}")
             
             # Print inferred moves from transposition table
             if self.inferred_moves:
@@ -535,21 +509,16 @@ class MinimaxAgent:
         # Return just the ordered moves
         return [move for move, _ in move_scores]
 
-    def minimax(self, state: GameState, move_sequence: List[Dict], alpha: float, beta: float, is_maximizing: bool, captures_at_depth: Dict[int, int] = None):
+    def minimax(self, state: GameState, move_sequence: List[Dict], alpha: float, beta: float, is_maximizing: bool) -> float:
         """
-        Minimax algorithm with alpha-beta pruning, symmetry-aware transposition table, and capture tracking.
+        Minimax algorithm with alpha-beta pruning and symmetry-aware transposition table.
         Uses move_sequence to track the sequence of moves leading to the current state.
-        Returns a tuple of (value, captures_dict) to properly isolate capture tracking between branches.
+        
+        Returns:
+            float: The evaluation score for the position
         """
         # Calculate depth based on move sequence length
         depth = self.max_depth - len(move_sequence)
-        
-        # Initialize captures_at_depth if None
-        if captures_at_depth is None:
-            captures_at_depth = {}
-        else:
-            # Create a copy to avoid modifying the original
-            captures_at_depth = captures_at_depth.copy()
         
         # Get canonical representation for transposition table lookup
         canonical_key, symmetry_type = self._get_canonical_state(state)
@@ -558,60 +527,44 @@ class MinimaxAgent:
         # Check transposition table for exact match
         if tt_key in self.transposition_table:
             # For debugging, track when we use the transposition table at depth 1
-            value, stored_captures = self.transposition_table[tt_key]
+            value = self.transposition_table[tt_key]
             
             if depth == self.max_depth - 1 and self.debug_mode:
                 # Create a string representation of the state for debugging
                 state_str = self._state_to_string(state)
                 self.inferred_moves[state_str] = (value, symmetry_type)
             
-            # Return both the value and a copy of stored captures
-            return value, stored_captures.copy()
+            return value
         
         # Base cases
         if depth == 0 or state.is_terminal():
-            # Always evaluate from Tiger's perspective, pass move_sequence instead of just length
-            eval_score = self.evaluate(state, move_sequence, captures_at_depth)
+            # Always evaluate from Tiger's perspective
+            eval_score = self.evaluate(state, move_sequence)
             # Store exact evaluation in transposition table
-            self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
-            return eval_score, captures_at_depth.copy()
+            self._store_in_transposition_table(tt_key, eval_score, depth)
+            return eval_score
         
         valid_moves = state.get_valid_moves()
         if not valid_moves:
-            eval_score = self.evaluate(state, move_sequence, captures_at_depth)
-            self._store_in_transposition_table(tt_key, eval_score, depth, captures_at_depth)
-            return eval_score, captures_at_depth.copy()
+            eval_score = self.evaluate(state, move_sequence)
+            self._store_in_transposition_table(tt_key, eval_score, depth)
+            return eval_score
         
         # Order moves for better pruning
         ordered_moves = self._order_moves(state, valid_moves)
         
         best_value = -MinimaxAgent.INF if is_maximizing else MinimaxAgent.INF
-        best_captures = {}  # Track captures for the best move
         
         for move in ordered_moves:
             new_state = state.clone()
-            
-            # Track the current depth and captures before applying the move
-            current_depth = self.max_depth - depth
-            goats_captured_before = new_state.goats_captured
-            
             new_state.apply_move(move)
-            
-            # Create a copy of the captures_at_depth dictionary for this child node
-            child_captures = captures_at_depth.copy()
-            
-            # Check if a capture occurred at this move
-            goats_captured_after = new_state.goats_captured
-            if goats_captured_after > goats_captured_before:
-                # Store the capture at the current depth
-                child_captures[current_depth] = child_captures.get(current_depth, 0) + 1
             
             # Modify move sequence in place and restore after recursion
             move_sequence.append(move)
             
             # Next turn alternates maximizing/minimizing
             next_is_max = new_state.turn == "TIGER"
-            child_score, updated_captures = self.minimax(new_state, move_sequence, alpha, beta, next_is_max, child_captures)
+            child_score = self.minimax(new_state, move_sequence, alpha, beta, next_is_max)
             
             # Restore move sequence
             move_sequence.pop()
@@ -619,40 +572,27 @@ class MinimaxAgent:
             if is_maximizing:
                 if child_score > best_value:
                     best_value = child_score
-                    best_captures = updated_captures.copy()  # Save captures for best move
-                elif child_score == best_value:
-                    # For equal-scoring moves, don't merge capture info - each move 
-                    # should only report the captures reachable through its own path
-                    pass
                 alpha = max(alpha, best_value)
             else:
                 if child_score < best_value:
                     best_value = child_score
-                    best_captures = updated_captures.copy()  # Save captures for best move
-                elif child_score == best_value:
-                    # For equal-scoring moves, don't merge capture info
-                    pass
                 beta = min(beta, best_value)
                 
             if beta <= alpha:
                 break  # Alpha-beta pruning
         
-        # Store the exact score (not bounds) in the transposition table
-        self._store_in_transposition_table(tt_key, best_value, depth, best_captures)
+        # Store the exact score in the transposition table
+        self._store_in_transposition_table(tt_key, best_value, depth)
         
-        # Return both the value and captures dictionary
-        return best_value, best_captures
+        return best_value
     
-    def _store_in_transposition_table(self, tt_key, value, depth, captures_at_depth=None):
+    def _store_in_transposition_table(self, tt_key, value, depth):
         """
         Store a value in the transposition table with size management.
         Prioritizes higher depth entries when the table needs pruning.
         """
-        # Store the value with captures information
-        if captures_at_depth is None:
-            captures_at_depth = {}
-            
-        self.transposition_table[tt_key] = (value, captures_at_depth.copy())
+        # Store the value
+        self.transposition_table[tt_key] = value
         
         # Track the entry by depth for efficient pruning
         if depth not in self.tt_entries_by_depth:
@@ -1035,57 +975,3 @@ class MinimaxAgent:
         placement_quality = (outer_layer_goats + (middle_layer_goats * 0.67) + (center_goats * 0.33)) / total_goats
         
         return placement_quality
-
-    def _log_board_and_moves(self, state: GameState, move_sequence: List[Dict]) -> None:
-        """
-        Log the current board state and the move sequence that led to it.
-        This helps verify that the right move sequence leads to the position being evaluated.
-        """
-        # Create a visual representation of the board
-        board_visual = "\nBoard state after move sequence:\n"
-        for y in range(GameState.BOARD_SIZE):
-            row = ""
-            for x in range(GameState.BOARD_SIZE):
-                cell = state.board[y][x]
-                if cell is None:
-                    row += ". "
-                elif cell["type"] == "TIGER":
-                    row += "T "
-                else:  # GOAT
-                    row += "G "
-            board_visual += row + "\n"
-            
-        # Format the move sequence
-        moves_str = "Move sequence:\n"
-        for i, move in enumerate(move_sequence):
-            # Safe move type access with a default
-            move_type = move.get("type", "UNKNOWN")
-            
-            # Handle different move structures safely
-            if "from" in move and "to" in move:
-                # Movement move
-                from_x = move["from"].get("x", "?")
-                from_y = move["from"].get("y", "?")
-                to_x = move["to"].get("x", "?")
-                to_y = move["to"].get("y", "?")
-                
-                move_str = f"{i+1}. {move_type} from ({from_x},{from_y}) to ({to_x},{to_y})"
-                
-                if move.get("capture"):
-                    capture_x = move["capture"].get("x", "?")
-                    capture_y = move["capture"].get("y", "?")
-                    move_str += f" capturing at ({capture_x},{capture_y})"
-            elif "to" in move:
-                # Placement move
-                to_x = move["to"].get("x", "?")
-                to_y = move["to"].get("y", "?")
-                move_str = f"{i+1}. {move_type} at ({to_x},{to_y})"
-            else:
-                # Fallback for any unrecognized move format
-                move_str = f"{i+1}. {move_type} {str(move)}"
-            
-            moves_str += move_str + "\n"
-        
-        # Log the information
-        print(board_visual)
-        print(moves_str) 
