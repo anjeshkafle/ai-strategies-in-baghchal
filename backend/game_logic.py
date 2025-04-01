@@ -133,15 +133,21 @@ def get_all_possible_moves(board, phase, piece_type):
 
 def get_threatened_nodes(board):
     """
-    Get all board positions where if a goat is placed, it could be immediately captured by a tiger.
+    Get all potential tiger capture paths, regardless of whether positions are currently occupied.
     
     Args:
         board: The current game board
         
     Returns:
         A list of tuples (x, y, landing_x, landing_y) where:
-        - (x, y) are coordinates of a threatened position
+        - (x, y) are coordinates of a position that could be involved in a capture
         - (landing_x, landing_y) are coordinates where tiger would land after capturing
+        
+    Note:
+        This includes all possible capture scenarios:
+        1. Direct threats (empty goat position + empty landing)
+        2. Blocking opportunities (goat on hot square + empty landing)
+        3. Escape opportunities (goat on hot square)
     """
     threatened_nodes = []
     
@@ -174,16 +180,16 @@ def get_threatened_nodes(board):
             if not (is_in_bounds(goat_x, goat_y) and is_in_bounds(landing_x, landing_y)):
                 continue
             
-            # Check if the potential goat position is empty
-            if board[goat_y][goat_x] is not None:
-                continue
+            # Note: We are NOT checking if the goat position is empty anymore
+            # This allows finding potential capture paths even when positions are occupied
                 
             # Check connectivity from tiger to goat
             if not is_valid_connection(tiger_x, tiger_y, goat_x, goat_y):
                 continue
                 
-            # No need to check connectivity from goat to landing - if tiger to goat is connected
-            # and landing is in bounds, we can infer the extension exists in the same direction
+            # Check connectivity from goat to landing
+            if not is_valid_connection(goat_x, goat_y, landing_x, landing_y):
+                continue
             
             # Add to threatened nodes with landing coordinates
             threatened_nodes.append((goat_x, goat_y, landing_x, landing_y))

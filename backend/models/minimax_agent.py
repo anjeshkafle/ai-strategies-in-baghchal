@@ -461,8 +461,15 @@ class MinimaxAgent:
     def _order_moves(self, state: GameState, moves: List[Dict]) -> List[Dict]:
         """
         Order moves using a direct approach without state cloning or evaluation.
-        1. For tigers, put captures first, then other moves
-        2. For goats, put moves that could lead to capture last (using threatened nodes)
+        
+        For tigers:
+        1. Put captures first, then other moves
+        
+        For goats:
+        1. Safe moves (avoiding hot squares)
+        2. Escape moves (getting away from hot squares)
+        3. Blocking moves (placing a goat to block tiger's landing square)
+        4. Unsafe moves (moves that would lead to capture)
         """
         if state.turn == "TIGER":
             # Tiger's move ordering: captures first, then other moves
@@ -481,55 +488,123 @@ class MinimaxAgent:
             # Get threatened nodes to identify unsafe positions
             threatened_data = state.get_threatened_nodes()
             
-            # Create a lookup dictionary for faster checking
-            # Key is (x, y) of threatened position, value is (landing_x, landing_y)
-            threatened_lookup = {(x, y): (landing_x, landing_y) 
-                               for x, y, landing_x, landing_y in threatened_data}
+            # Create lookup dictionaries for faster checking
+            # hot_squares: positions that are threatened (could be captured)
+            # landing_squares: positions where tigers would land after capture
+            hot_squares = {}  # key: (x, y), value: list of (landing_x, landing_y)
+            landing_squares = {}  # key: (landing_x, landing_y), value: list of (x, y)
             
-            safe_moves = []
-            unsafe_moves = []
+            for x, y, landing_x, landing_y in threatened_data:
+                # Add to hot_squares dictionary
+                if (x, y) not in hot_squares:
+                    hot_squares[(x, y)] = []
+                hot_squares[(x, y)].append((landing_x, landing_y))
+                
+                # Add to landing_squares dictionary
+                if (landing_x, landing_y) not in landing_squares:
+                    landing_squares[(landing_x, landing_y)] = []
+                landing_squares[(landing_x, landing_y)].append((x, y))
+            
+            # Initialize move categories with different priorities
+            safe_moves = []      # Category 1: Moves that don't interact with any threats
+            escape_moves = []    # Category 2: Moves that escape from hot squares
+            blocking_moves = []  # Category 3: Moves that block tiger landings
+            unsafe_moves = []    # Category 4: Moves that enable capture
             
             for move in moves:
-                # PLACEMENT PHASE - check if placing a goat in a threatened position
                 if state.phase == "PLACEMENT":
+                    # PLACEMENT PHASE
                     target_x, target_y = move["x"], move["y"]
                     
-                    # Check if this position is threatened
-                    if (target_x, target_y) in threatened_lookup:
-                        # Get the landing position
-                        landing_x, landing_y = threatened_lookup[(target_x, target_y)]
+                    # Category 4: Check if placing on a hot square that would be captured
+                    if (target_x, target_y) in hot_squares:
+                        # For each potential landing square
+                        is_unsafe = False
+                        for landing_x, landing_y in hot_squares[(target_x, target_y)]:
+                            # Check if landing is empty (capture is possible)
+                            if state.board[landing_y][landing_x] is None:
+                                unsafe_moves.append(move)
+                                is_unsafe = True
+                                break
                         
-                        # Check if landing is empty (capture is possible)
-                        if state.board[landing_y][landing_x] is None:
-                            unsafe_moves.append(move)
-                        else:
-                            safe_moves.append(move)
-                    else:
-                        # Not threatened
-                        safe_moves.append(move)
-                
-                # MOVEMENT PHASE - check if destination is threatened or moving enables a capture
+                        if is_unsafe:
+                            continue
+                    
+                    # Category 3: Check if this placement blocks a capture
+                    if (target_x, target_y) in landing_squares:
+                        # This move blocks at least one potential capture
+                        # Check if any of the hot squares actually have goats on them
+                        has_real_block = False
+                        for hot_x, hot_y in landing_squares[(target_x, target_y)]:
+                            if state.board[hot_y][hot_x] is not None and state.board[hot_y][hot_x]["type"] == "GOAT":
+                                has_real_block = True
+                                break
+                        
+                        if has_real_block:
+                            blocking_moves.append(move)
+                            continue
+                    
+                    # Category 1: If we got here, it's a safe move
+                    safe_moves.append(move)
+                    
                 else:
+                    # MOVEMENT PHASE
                     from_x, from_y = move["from"]["x"], move["from"]["y"]
                     to_x, to_y = move["to"]["x"], move["to"]["y"]
                     
-                    # Check if destination is threatened
-                    if (to_x, to_y) in threatened_lookup:
-                        landing_x, landing_y = threatened_lookup[(to_x, to_y)]
+                    # Category 2: Check if this is an escape move
+                    # (Moving from a hot square that has a tiger threat with empty landing)
+                    if (from_x, from_y) in hot_squares:
+                        # Check if there's an actual threat (tiger can capture)
+                        has_real_threat = False
+                        for landing_x, landing_y in hot_squares[(from_x, from_y)]:
+                            if state.board[landing_y][landing_x] is None:
+                                has_real_threat = True
+                                break
                         
-                        # Check if landing is empty OR if this goat is moving from the landing position
-                        is_landing_empty = state.board[landing_y][landing_x] is None
-                        goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
-                        
-                        if is_landing_empty or goat_from_landing:
-                            unsafe_moves.append(move)
+                        if has_real_threat:
+                            # Moving away from a real threat is an escape
+                            escape_moves.append(move)
                             continue
                     
-                    # If we made it here, the move is safe
+                    # Category 4: Check if destination is a hot square
+                    if (to_x, to_y) in hot_squares:
+                        # For each potential landing square
+                        is_unsafe = False
+                        for landing_x, landing_y in hot_squares[(to_x, to_y)]:
+                            # Check if landing is empty OR if this goat is moving from the landing position
+                            is_landing_empty = state.board[landing_y][landing_x] is None
+                            goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
+                            
+                            if is_landing_empty or goat_from_landing:
+                                unsafe_moves.append(move)
+                                is_unsafe = True
+                                break
+                        
+                        if is_unsafe:
+                            continue
+                    
+                    # Category 3: Check if destination blocks a capture
+                    if (to_x, to_y) in landing_squares:
+                        # This move blocks at least one potential capture
+                        # Check if any of the hot squares actually have goats on them
+                        has_real_block = False
+                        for hot_x, hot_y in landing_squares[(to_x, to_y)]:
+                            if state.board[hot_y][hot_x] is not None and state.board[hot_y][hot_x]["type"] == "GOAT":
+                                # Don't count our own piece as a block if we're moving from that position
+                                if (hot_x, hot_y) != (from_x, from_y):
+                                    has_real_block = True
+                                    break
+                        
+                        if has_real_block:
+                            blocking_moves.append(move)
+                            continue
+                    
+                    # Category 1: If we got here, it's a safe move
                     safe_moves.append(move)
             
-            # Return safe moves first, then unsafe moves
-            return safe_moves + unsafe_moves
+            # Return moves in priority order
+            return safe_moves + escape_moves + blocking_moves + unsafe_moves
 
     def _order_moves_minimax(self, state: GameState, moves: List[Dict]) -> List[Dict]:
         """
