@@ -65,7 +65,7 @@ RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 6
+MINIMAX_MAX_DEPTH = 7
 
 # MCTS parameters
 MCTS_ITERATIONS = 0
