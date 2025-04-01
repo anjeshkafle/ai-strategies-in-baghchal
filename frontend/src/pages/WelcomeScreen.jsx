@@ -266,31 +266,36 @@ const WelcomeScreen = () => {
                             className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="randomize-goat"
-                            checked={
-                              settings.players.goat.settings
-                                ?.randomize_equal_moves ||
-                              DEFAULT_AGENT_SETTINGS.minimax
-                                .randomize_equal_moves
-                            }
-                            onChange={(e) =>
-                              updateAgentSettings(
-                                "goat",
-                                "randomize_equal_moves",
-                                e.target.checked
-                              )
-                            }
-                            className="bg-gray-700"
-                          />
-                          <label
-                            htmlFor="randomize-goat"
-                            className="text-gray-300 text-sm ml-2"
-                          >
-                            Randomize equal moves
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Randomize Equal Moves
                           </label>
+                          <div className="h-[26px] flex items-center">
+                            <input
+                              type="checkbox"
+                              id="randomize-goat"
+                              checked={
+                                settings.players.goat.settings
+                                  ?.randomize_equal_moves ||
+                                DEFAULT_AGENT_SETTINGS.minimax
+                                  .randomize_equal_moves
+                              }
+                              onChange={(e) =>
+                                updateAgentSettings(
+                                  "goat",
+                                  "randomize_equal_moves",
+                                  e.target.checked
+                                )
+                              }
+                              className="bg-gray-700 w-4 h-4"
+                            />
+                            <label
+                              htmlFor="randomize-goat"
+                              className="text-gray-300 text-sm ml-2"
+                            >
+                              Enabled
+                            </label>
+                          </div>
                         </div>
                       </div>
                     ) : settings.players.goat.model === "mcts" ? (
@@ -486,31 +491,36 @@ const WelcomeScreen = () => {
                             className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm"
                           />
                         </div>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="randomize-tiger"
-                            checked={
-                              settings.players.tiger.settings
-                                ?.randomize_equal_moves ||
-                              DEFAULT_AGENT_SETTINGS.minimax
-                                .randomize_equal_moves
-                            }
-                            onChange={(e) =>
-                              updateAgentSettings(
-                                "tiger",
-                                "randomize_equal_moves",
-                                e.target.checked
-                              )
-                            }
-                            className="bg-gray-700"
-                          />
-                          <label
-                            htmlFor="randomize-tiger"
-                            className="text-gray-300 text-sm ml-2"
-                          >
-                            Randomize equal moves
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Randomize Equal Moves
                           </label>
+                          <div className="h-[26px] flex items-center">
+                            <input
+                              type="checkbox"
+                              id="randomize-tiger"
+                              checked={
+                                settings.players.tiger.settings
+                                  ?.randomize_equal_moves ||
+                                DEFAULT_AGENT_SETTINGS.minimax
+                                  .randomize_equal_moves
+                              }
+                              onChange={(e) =>
+                                updateAgentSettings(
+                                  "tiger",
+                                  "randomize_equal_moves",
+                                  e.target.checked
+                                )
+                              }
+                              className="bg-gray-700 w-4 h-4"
+                            />
+                            <label
+                              htmlFor="randomize-tiger"
+                              className="text-gray-300 text-sm ml-2"
+                            >
+                              Enabled
+                            </label>
+                          </div>
                         </div>
                       </div>
                     ) : settings.players.tiger.model === "mcts" ? (
