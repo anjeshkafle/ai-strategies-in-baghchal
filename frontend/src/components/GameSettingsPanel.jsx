@@ -178,52 +178,57 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
     }
   };
 
-  // Handler for applying settings
-  const handleApplySettings = () => {
-    // Prepare the time control settings
-    let updatedTimeControl;
+  // Handler for applying settings or just resuming
+  const handleApplyOrResume = () => {
+    if (hasChanges) {
+      // Apply settings and resume
+      let updatedTimeControl;
 
-    if (settings.selectedPreset.name === "Unchanged") {
-      // Keep the original time controls
-      updatedTimeControl = { ...timeControl };
-      console.log("Using unchanged time control:", updatedTimeControl);
-    } else if (settings.isCustom) {
-      updatedTimeControl = {
-        initial: settings.customTime.initial,
-        increment: settings.customTime.useIncrement
-          ? settings.customTime.increment
-          : 0,
-      };
-      console.log("Using custom time control:", updatedTimeControl);
+      if (settings.selectedPreset.name === "Unchanged") {
+        // Keep the original time controls
+        updatedTimeControl = { ...timeControl };
+        console.log("Using unchanged time control:", updatedTimeControl);
+      } else if (settings.isCustom) {
+        updatedTimeControl = {
+          initial: settings.customTime.initial,
+          increment: settings.customTime.useIncrement
+            ? settings.customTime.increment
+            : 0,
+        };
+        console.log("Using custom time control:", updatedTimeControl);
+      } else {
+        updatedTimeControl = {
+          initial: settings.selectedPreset.initial,
+          increment: settings.selectedPreset.increment,
+        };
+        console.log(
+          "Using preset time control:",
+          updatedTimeControl,
+          "from preset:",
+          settings.selectedPreset
+        );
+      }
+
+      // Log what we're applying
+      console.log("Applying settings:", {
+        players: settings.players,
+        timeControl: updatedTimeControl,
+      });
+
+      onApplySettings({
+        players: settings.players,
+        timeControl: updatedTimeControl,
+      });
+
+      // Reset changes state after applying
+      setHasChanges(false);
+
+      // Update original settings to reflect the new state
+      setOriginalSettings(JSON.parse(JSON.stringify(settings)));
     } else {
-      updatedTimeControl = {
-        initial: settings.selectedPreset.initial,
-        increment: settings.selectedPreset.increment,
-      };
-      console.log(
-        "Using preset time control:",
-        updatedTimeControl,
-        "from preset:",
-        settings.selectedPreset
-      );
+      // Just resume without applying changes
+      onTogglePause();
     }
-
-    // Log what we're applying
-    console.log("Applying settings:", {
-      players: settings.players,
-      timeControl: updatedTimeControl,
-    });
-
-    onApplySettings({
-      players: settings.players,
-      timeControl: updatedTimeControl,
-    });
-
-    // Reset changes state after applying
-    setHasChanges(false);
-
-    // Update original settings to reflect the new state
-    setOriginalSettings(JSON.parse(JSON.stringify(settings)));
   };
 
   return (
@@ -910,19 +915,19 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
         </div>
       </div>
 
-      {/* Footer with Apply button */}
+      {/* Footer with Resume/Apply button */}
       {isPaused && (
         <div className="p-4 border-t border-gray-700">
           <button
-            onClick={handleApplySettings}
+            onClick={handleApplyOrResume}
             className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
               hasChanges
                 ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-gray-600 text-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700 text-white"
             }`}
-            disabled={!isPaused || gameStatus !== "PLAYING" || !hasChanges}
+            disabled={gameStatus !== "PLAYING"}
           >
-            Apply and Resume
+            {hasChanges ? "Apply and Resume" : "Resume"}
           </button>
         </div>
       )}
