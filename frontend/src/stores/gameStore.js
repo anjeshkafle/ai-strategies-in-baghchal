@@ -151,11 +151,20 @@ export const useGameStore = create((set, get) => ({
     }
   },
 
-  // Update settings mid-game
+  // Update settings mid-game and resume
   updateGameSettings: (settings) => {
     const state = get();
 
     if (state.gameStatus !== "PLAYING" || !state.isPaused) return;
+
+    console.log("Current state before update:", {
+      players: state.players,
+      timeControl: state.timeControl,
+      tigerTime: state.tigerTime,
+      goatTime: state.goatTime,
+    });
+
+    console.log("Updating game settings with:", settings);
 
     // Determine new perspective if player types changed
     let newPerspective = state.perspective;
@@ -173,11 +182,55 @@ export const useGameStore = create((set, get) => ({
       newPerspective = "GOAT";
     }
 
-    // Update the settings
-    set({
-      players: settings.players,
-      timeControl: settings.timeControl,
-      perspective: newPerspective,
+    // Check if time control settings have changed
+    const timeControlChanged =
+      settings.timeControl.initial !== state.timeControl.initial ||
+      settings.timeControl.increment !== state.timeControl.increment;
+
+    // If time control has changed, update the actual game times
+    if (timeControlChanged) {
+      // Preserve relative time proportions
+      const tigerTimeRatio = state.tigerTime / state.timeControl.initial;
+      const goatTimeRatio = state.goatTime / state.timeControl.initial;
+
+      // Calculate new times based on the ratio or use new initial time if ratio > 1
+      const newTigerTime = Math.min(
+        settings.timeControl.initial,
+        Math.round(tigerTimeRatio * settings.timeControl.initial)
+      );
+
+      const newGoatTime = Math.min(
+        settings.timeControl.initial,
+        Math.round(goatTimeRatio * settings.timeControl.initial)
+      );
+
+      console.log("Updating game times:", {
+        tigerTime: `${state.tigerTime} → ${newTigerTime}`,
+        goatTime: `${state.goatTime} → ${newGoatTime}`,
+      });
+
+      // Update all time-related state
+      set({
+        players: settings.players,
+        timeControl: settings.timeControl,
+        perspective: newPerspective,
+        tigerTime: newTigerTime,
+        goatTime: newGoatTime,
+      });
+    } else {
+      // Just update players and perspective
+      set({
+        players: settings.players,
+        timeControl: settings.timeControl,
+        perspective: newPerspective,
+      });
+    }
+
+    console.log("Settings updated, new state:", {
+      players: get().players,
+      timeControl: get().timeControl,
+      tigerTime: get().tigerTime,
+      goatTime: get().goatTime,
     });
 
     // Toggle pause state to resume the game

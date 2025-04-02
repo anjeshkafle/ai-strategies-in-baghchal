@@ -186,6 +186,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
     if (settings.selectedPreset.name === "Unchanged") {
       // Keep the original time controls
       updatedTimeControl = { ...timeControl };
+      console.log("Using unchanged time control:", updatedTimeControl);
     } else if (settings.isCustom) {
       updatedTimeControl = {
         initial: settings.customTime.initial,
@@ -193,12 +194,25 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
           ? settings.customTime.increment
           : 0,
       };
+      console.log("Using custom time control:", updatedTimeControl);
     } else {
       updatedTimeControl = {
         initial: settings.selectedPreset.initial,
         increment: settings.selectedPreset.increment,
       };
+      console.log(
+        "Using preset time control:",
+        updatedTimeControl,
+        "from preset:",
+        settings.selectedPreset
+      );
     }
+
+    // Log what we're applying
+    console.log("Applying settings:", {
+      players: settings.players,
+      timeControl: updatedTimeControl,
+    });
 
     onApplySettings({
       players: settings.players,
@@ -217,21 +231,25 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
       {/* Header with Pause/Resume button */}
       <div className="p-4 border-b border-gray-700 flex items-center justify-between">
         <h2 className="text-lg font-bold text-white">Game Settings</h2>
-        <button
-          onClick={onTogglePause}
-          className={`px-4 py-2 rounded text-sm font-medium ${
-            isPaused
-              ? "bg-green-600 hover:bg-green-700 text-white"
-              : "bg-yellow-600 hover:bg-yellow-700 text-white"
-          }`}
-          disabled={gameStatus !== "PLAYING"}
-        >
-          {isPaused ? "Resume Game" : "Pause Game"}
-        </button>
+        {!isPaused && (
+          <button
+            onClick={onTogglePause}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-medium"
+            disabled={gameStatus !== "PLAYING"}
+          >
+            Pause Game
+          </button>
+        )}
       </div>
 
       {/* Settings content - scrollable */}
       <div className="flex-grow overflow-y-auto p-4 space-y-6">
+        {!isPaused && (
+          <div className="p-4 bg-gray-750 rounded-lg text-center text-gray-400">
+            Settings can be changed when the game is paused.
+          </div>
+        )}
+
         {/* Player Selection */}
         <div className="space-y-4">
           <h3 className="text-md font-bold text-white border-b border-gray-700 pb-2">
@@ -904,7 +922,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
             }`}
             disabled={!isPaused || gameStatus !== "PLAYING" || !hasChanges}
           >
-            Apply Settings
+            Apply and Resume
           </button>
         </div>
       )}
