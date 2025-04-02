@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 
-const CustomSelect = ({ value, onChange, options }) => {
+const CustomSelect = ({ value, onChange, options, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -16,6 +16,7 @@ const CustomSelect = ({ value, onChange, options }) => {
   }, []);
 
   const handleSelect = (optionValue) => {
+    if (disabled) return;
     onChange({ target: { value: optionValue } });
     setIsOpen(false);
   };
@@ -28,14 +29,19 @@ const CustomSelect = ({ value, onChange, options }) => {
     <div className="relative w-36" ref={dropdownRef}>
       <button
         type="button"
-        className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-left flex items-center justify-between hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
-        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full rounded-lg px-3 py-2 text-left flex items-center justify-between ${
+          disabled
+            ? "bg-gray-800 text-gray-500 cursor-not-allowed"
+            : "bg-gray-700 text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
+        }`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
       >
         <span>{selectedOption?.label}</span>
-        <span className="text-gray-300">▼</span>
+        <span className={disabled ? "text-gray-500" : "text-gray-300"}>▼</span>
       </button>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div className="absolute z-50 w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-lg">
           {availableOptions.map((option) => (
             <button

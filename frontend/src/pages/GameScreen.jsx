@@ -6,6 +6,7 @@ import useImage from "use-image";
 import spriteGoat from "../assets/sprite_goat.png";
 import spriteTiger from "../assets/sprite_tiger.png";
 import Modal from "../components/Modal";
+import GameSettingsPanel from "../components/GameSettingsPanel";
 
 const GameScreen = () => {
   const navigate = useNavigate();
@@ -26,6 +27,10 @@ const GameScreen = () => {
     isAIThinking,
     players,
     handleAIMove,
+    isPaused,
+    togglePause,
+    updateGameSettings,
+    timeControl,
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -64,14 +69,14 @@ const GameScreen = () => {
   };
 
   useEffect(() => {
-    if (gameStatus === "PLAYING") {
+    if (gameStatus === "PLAYING" && !isPaused) {
       const cleanup = startClock();
       return cleanup;
     }
-  }, [gameStatus, startClock]);
+  }, [gameStatus, startClock, isPaused]);
 
   useEffect(() => {
-    if (gameStatus === "PLAYING") {
+    if (gameStatus === "PLAYING" && !isPaused) {
       const currentPlayer = players[turn.toLowerCase()];
       if (currentPlayer.type === "AI" && !isAIThinking) {
         // Add a small delay before triggering AI move to allow for animations
@@ -82,7 +87,7 @@ const GameScreen = () => {
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [turn, phase, gameStatus, players, handleAIMove, isAIThinking]);
+  }, [turn, phase, gameStatus, players, handleAIMove, isAIThinking, isPaused]);
 
   // Helper function to render player panel
   const renderPlayerPanel = (isTopPanel) => {
@@ -134,7 +139,7 @@ const GameScreen = () => {
                     alt={isTiger ? "Tiger" : "Goat"}
                     className="w-8 h-8 object-contain"
                   />
-                  {turn === playerType && (
+                  {turn === playerType && !isPaused && (
                     <div className="absolute -bottom-1.5 -right-1.5 w-2.5 h-2.5 bg-yellow-400 rounded-full animate-pulse" />
                   )}
                 </div>
@@ -150,7 +155,7 @@ const GameScreen = () => {
             </div>
             <div
               className={`flex flex-col items-end ${
-                turn === playerType
+                turn === playerType && !isPaused
                   ? isTiger
                     ? "text-red-400"
                     : "text-green-400"
@@ -162,7 +167,7 @@ const GameScreen = () => {
               </span>
               <span
                 className={`text-xl font-mono font-bold ${
-                  turn === playerType
+                  turn === playerType && !isPaused
                     ? ACTIVE_TIME_STATUS_STYLES[
                         getTimeStatus(isTiger ? tigerTime : goatTime)
                       ]
@@ -225,6 +230,14 @@ const GameScreen = () => {
     setIsModalOpen(false);
   };
 
+  const handleTogglePause = () => {
+    togglePause();
+  };
+
+  const handleApplySettings = (newSettings) => {
+    updateGameSettings(newSettings);
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-900">
       {/* Top Navigation */}
@@ -240,11 +253,13 @@ const GameScreen = () => {
             </div>
           </div>
           <div className="hidden md:flex items-center gap-4">
-            <button className="text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1.5 rounded-md transition-colors">
-              Rules
-            </button>
-            <button className="text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1.5 rounded-md transition-colors">
-              Settings
+            <button
+              onClick={handleTogglePause}
+              className={`text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1.5 rounded-md transition-colors ${
+                isPaused ? "bg-gray-700" : ""
+              }`}
+            >
+              {isPaused ? "Resume" : "Pause"}
             </button>
           </div>
         </div>
@@ -258,8 +273,24 @@ const GameScreen = () => {
           <div className="bg-gray-800">{renderPlayerPanel(true)}</div>
 
           {/* Board */}
-          <div className="flex-1 aspect-square w-full bg-gray-800">
+          <div className="flex-1 aspect-square w-full bg-gray-800 relative">
             <Board />
+            {/* Pause overlay for mobile */}
+            {isPaused && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-[1px] flex items-center justify-center">
+                <div className="bg-gray-800/90 p-4 rounded-lg text-center">
+                  <h3 className="text-xl font-bold text-white mb-2">
+                    Game Paused
+                  </h3>
+                  <button
+                    onClick={handleTogglePause}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded"
+                  >
+                    Resume Game
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Bottom Player Panel and Actions */}
@@ -269,6 +300,16 @@ const GameScreen = () => {
               {gameStatus === "PLAYING" ? (
                 <>
                   <button
+                    onClick={handleTogglePause}
+                    className={`flex-1 px-3 py-2 ${
+                      isPaused
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-yellow-600 hover:bg-yellow-700"
+                    } text-white text-sm font-medium rounded`}
+                  >
+                    {isPaused ? "Resume" : "Pause"}
+                  </button>
+                  <button
                     onClick={handleStopGame}
                     className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded"
                   >
@@ -277,11 +318,11 @@ const GameScreen = () => {
                   <button
                     onClick={undoMoves}
                     className={`flex-1 px-3 py-2 ${
-                      canUndo
+                      canUndo && !isPaused
                         ? "bg-blue-600 hover:bg-blue-700"
                         : "bg-gray-600 cursor-not-allowed"
                     } text-white text-sm font-medium rounded`}
-                    disabled={!canUndo}
+                    disabled={!canUndo || isPaused}
                   >
                     Undo
                   </button>
@@ -299,122 +340,145 @@ const GameScreen = () => {
         </div>
 
         {/* Desktop Layout */}
-        <div className="hidden md:flex gap-2 p-2 items-center justify-center h-full">
-          <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4.5rem)] relative">
-            <Board />
-            {gameStatus !== "PLAYING" && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-[2px] flex items-center justify-center p-8">
-                <div className="w-full max-w-lg bg-gray-800/90 rounded-xl p-8 shadow-2xl border border-gray-700/50">
-                  <div className="text-center space-y-4">
-                    <h2 className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                      {gameStatus === "TIGERS_WIN"
-                        ? "Tigers Win!"
-                        : "Goats Win!"}
-                    </h2>
-                    <p className="text-xl text-gray-300 font-medium">
-                      {gameStatus === "TIGERS_WIN"
-                        ? goatsCaptured >= 5
-                          ? "Tigers captured 5 goats"
-                          : "Goats ran out of time"
-                        : tigerTime <= 0
-                        ? "Tigers ran out of time"
-                        : "Tigers have no legal moves"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+        <div className="hidden md:flex gap-2 p-2 items-stretch justify-between h-full w-full">
+          {/* Left Section - Game Settings Panel */}
+          <div className="flex-1 self-stretch max-w-md">
+            <GameSettingsPanel
+              isPaused={isPaused}
+              onTogglePause={handleTogglePause}
+              onApplySettings={handleApplySettings}
+            />
           </div>
 
-          {/* Right Section - Only visible on desktop */}
-          <div className="flex flex-col gap-2 w-72 h-[calc(100vh-4.5rem)] self-center">
-            <div className="bg-gray-800 rounded-lg flex flex-col flex-grow">
-              {renderPlayerPanel(true)}
-              <div className="flex-grow overflow-y-auto custom-scrollbar h-[50vh] border-b border-gray-700">
-                <div className="p-2">
-                  <div className="space-y-1">
-                    {/* Group moves into pairs */}
-                    {Array.from({
-                      length: Math.ceil(moveHistory.length / 2),
-                    }).map((_, i) => {
-                      const goatMove = moveHistory[i * 2];
-                      const tigerMove = moveHistory[i * 2 + 1];
-
-                      // Helper to check if a move is a capture (when source and destination are 2 nodes apart)
-                      const isCapture = (move) => {
-                        if (!move || move.length !== 5) return false;
-                        const sourceCol = move.charCodeAt(1) - 65;
-                        const sourceRow = parseInt(move[2]) - 1;
-                        const destCol = move.charCodeAt(3) - 65;
-                        const destRow = parseInt(move[4]) - 1;
-                        return (
-                          Math.abs(sourceCol - destCol) > 1 ||
-                          Math.abs(sourceRow - destRow) > 1
-                        );
-                      };
-
-                      return (
-                        <div key={i} className="flex text-xs">
-                          <span className="w-6 text-gray-500">{i + 1}.</span>
-                          <span className="w-[45%] text-gray-300">
-                            {goatMove &&
-                              (goatMove.length === 3
-                                ? `Goat to ${goatMove.slice(1)}`
-                                : `Goat ${goatMove.slice(
-                                    1,
-                                    3
-                                  )} to ${goatMove.slice(3)}`)}
-                          </span>
-                          <span
-                            className={`w-[45%] ${
-                              isCapture(tigerMove)
-                                ? "text-red-400"
-                                : "text-gray-300"
-                            }`}
-                          >
-                            {tigerMove &&
-                              `Tiger ${tigerMove.slice(
-                                1,
-                                3
-                              )} to ${tigerMove.slice(3)}`}
-                          </span>
-                        </div>
-                      );
-                    })}
+          {/* Center and Right Sections - Combined */}
+          <div className="flex gap-2 items-center">
+            {/* Board - Now in the middle */}
+            <div className="bg-gray-800 rounded-lg aspect-square h-[calc(100vh-4.5rem)] relative">
+              <Board />
+              {gameStatus !== "PLAYING" && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-[2px] flex items-center justify-center p-8">
+                  <div className="w-full max-w-lg bg-gray-800/90 rounded-xl p-8 shadow-2xl border border-gray-700/50">
+                    <div className="text-center space-y-4">
+                      <h2 className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+                        {gameStatus === "TIGERS_WIN"
+                          ? "Tigers Win!"
+                          : "Goats Win!"}
+                      </h2>
+                      <p className="text-xl text-gray-300 font-medium">
+                        {gameStatus === "TIGERS_WIN"
+                          ? goatsCaptured >= 5
+                            ? "Tigers captured 5 goats"
+                            : "Goats ran out of time"
+                          : tigerTime <= 0
+                          ? "Tigers ran out of time"
+                          : "Tigers have no legal moves"}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              {renderPlayerPanel(false)}
-            </div>
-            <div className="bg-gray-800 rounded-lg p-2 flex gap-2">
-              {gameStatus === "PLAYING" ? (
-                <>
-                  <button
-                    onClick={handleStopGame}
-                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded"
-                  >
-                    Stop Game
-                  </button>
-                  <button
-                    onClick={undoMoves}
-                    className={`flex-1 px-3 py-2 ${
-                      canUndo
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : "bg-gray-600 cursor-not-allowed"
-                    } text-white text-sm font-medium rounded`}
-                    disabled={!canUndo}
-                  >
-                    Undo Move
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleMainMenu}
-                  className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded"
-                >
-                  Main Menu
-                </button>
               )}
+              {/* Pause overlay for desktop */}
+              {isPaused && gameStatus === "PLAYING" && (
+                <div className="absolute inset-0 bg-black bg-opacity-40 backdrop-blur-[1px] flex items-center justify-center">
+                  <div className="bg-gradient-to-b from-yellow-500/20 to-transparent p-6 rounded-full">
+                    <div className="text-4xl font-bold text-white text-center">
+                      PAUSED
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Section - Player Info & Moves */}
+            <div className="flex flex-col gap-2 w-72 h-[calc(100vh-4.5rem)] self-center">
+              <div className="bg-gray-800 rounded-lg flex flex-col flex-grow">
+                {renderPlayerPanel(true)}
+                <div className="flex-grow overflow-y-auto custom-scrollbar h-[50vh] border-b border-gray-700">
+                  <div className="p-2">
+                    <div className="space-y-1">
+                      {/* Group moves into pairs */}
+                      {Array.from({
+                        length: Math.ceil(moveHistory.length / 2),
+                      }).map((_, i) => {
+                        const goatMove = moveHistory[i * 2];
+                        const tigerMove = moveHistory[i * 2 + 1];
+
+                        // Helper to check if a move is a capture (when source and destination are 2 nodes apart)
+                        const isCapture = (move) => {
+                          if (!move || move.length !== 5) return false;
+                          const sourceCol = move.charCodeAt(1) - 65;
+                          const sourceRow = parseInt(move[2]) - 1;
+                          const destCol = move.charCodeAt(3) - 65;
+                          const destRow = parseInt(move[4]) - 1;
+                          return (
+                            Math.abs(sourceCol - destCol) > 1 ||
+                            Math.abs(sourceRow - destRow) > 1
+                          );
+                        };
+
+                        return (
+                          <div key={i} className="flex text-xs">
+                            <span className="w-6 text-gray-500">{i + 1}.</span>
+                            <span className="w-[45%] text-gray-300">
+                              {goatMove &&
+                                (goatMove.length === 3
+                                  ? `Goat to ${goatMove.slice(1)}`
+                                  : `Goat ${goatMove.slice(
+                                      1,
+                                      3
+                                    )} to ${goatMove.slice(3)}`)}
+                            </span>
+                            <span
+                              className={`w-[45%] ${
+                                isCapture(tigerMove)
+                                  ? "text-red-400"
+                                  : "text-gray-300"
+                              }`}
+                            >
+                              {tigerMove &&
+                                `Tiger ${tigerMove.slice(
+                                  1,
+                                  3
+                                )} to ${tigerMove.slice(3)}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                {renderPlayerPanel(false)}
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2 flex gap-2">
+                {gameStatus === "PLAYING" ? (
+                  <>
+                    <button
+                      onClick={handleStopGame}
+                      className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded"
+                    >
+                      Stop Game
+                    </button>
+                    <button
+                      onClick={undoMoves}
+                      className={`flex-1 px-3 py-2 ${
+                        canUndo && !isPaused
+                          ? "bg-blue-600 hover:bg-blue-700"
+                          : "bg-gray-600 cursor-not-allowed"
+                      } text-white text-sm font-medium rounded`}
+                      disabled={!canUndo || isPaused}
+                    >
+                      Undo Move
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleMainMenu}
+                    className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded"
+                  >
+                    Main Menu
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

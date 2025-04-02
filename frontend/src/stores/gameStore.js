@@ -68,6 +68,7 @@ const initialState = {
   isAIThinking: false,
   lastMove: null, // { from?: {x,y}, to: {x,y} }
   currentAbortController: null,
+  isPaused: false, // New state for pause functionality
 };
 
 // Helper function to convert grid coordinates to notation
@@ -121,13 +122,78 @@ export const useGameStore = create((set, get) => ({
         increment: 5,
       },
       currentAbortController: null,
+      isPaused: false, // Reset paused state
     });
+  },
+
+  // Toggle pause state
+  togglePause: () => {
+    const state = get();
+
+    if (state.gameStatus !== "PLAYING") return;
+
+    const newPaused = !state.isPaused;
+
+    // If pausing, cancel any AI move in progress
+    if (newPaused && state.isAIThinking) {
+      get().cancelCurrentRequest();
+    }
+
+    set({
+      isPaused: newPaused,
+      // When pausing, stop the clock
+      clockRunning: newPaused ? false : state.clockRunning,
+    });
+
+    // If resuming, restart the clock if needed
+    if (!newPaused && state.gameStatus === "PLAYING" && !state.clockRunning) {
+      get().startClock();
+    }
+  },
+
+  // Update settings mid-game
+  updateGameSettings: (settings) => {
+    const state = get();
+
+    if (state.gameStatus !== "PLAYING" || !state.isPaused) return;
+
+    // Determine new perspective if player types changed
+    let newPerspective = state.perspective;
+
+    // If humans and AI switch roles, update the perspective accordingly
+    if (
+      settings.players.goat.type !== "HUMAN" &&
+      settings.players.tiger.type === "HUMAN"
+    ) {
+      newPerspective = "TIGER";
+    } else if (
+      settings.players.goat.type === "HUMAN" &&
+      settings.players.tiger.type !== "HUMAN"
+    ) {
+      newPerspective = "GOAT";
+    }
+
+    // Update the settings
+    set({
+      players: settings.players,
+      timeControl: settings.timeControl,
+      perspective: newPerspective,
+    });
+
+    // Toggle pause state to resume the game
+    setTimeout(() => {
+      get().togglePause();
+    }, 100);
   },
 
   // Select a piece
   selectPiece: (x, y) => {
     console.log("selectPiece called:", x, y);
     const state = get();
+
+    // Don't allow interactions when paused
+    if (state.isPaused) return;
+
     const piece = state.board[y][x];
 
     console.log("Current state:", {
@@ -180,6 +246,9 @@ export const useGameStore = create((set, get) => ({
   // Make a move
   makeMove: async (toX, toY) => {
     const state = get();
+
+    // Don't allow moves if game is paused
+    if (state.isPaused) return false;
 
     // Only check game status, not isAIThinking
     if (state.gameStatus !== "PLAYING") return false;
@@ -413,10 +482,18 @@ export const useGameStore = create((set, get) => ({
 
   // Start the clock
   startClock: () => {
+    // Don't start the clock if game is paused
+    const state = get();
+    if (state.isPaused) return () => {};
+
     set({ clockRunning: true });
     const intervalId = setInterval(() => {
       const state = get();
-      if (!state.clockRunning || state.gameStatus !== "PLAYING") {
+      if (
+        !state.clockRunning ||
+        state.gameStatus !== "PLAYING" ||
+        state.isPaused
+      ) {
         clearInterval(intervalId);
         return;
       }
@@ -478,7 +555,10 @@ export const useGameStore = create((set, get) => ({
     // First cancel any ongoing request
     get().cancelCurrentRequest();
 
+    // Don't allow undo if game is paused
     const state = get();
+    if (state.isPaused) return;
+
     if (state.moveHistory.length === 0) return;
 
     // Remove last move from history
@@ -533,7 +613,7 @@ export const useGameStore = create((set, get) => ({
   // Handle AI move
   handleAIMove: async () => {
     const state = get();
-    if (state.gameStatus !== "PLAYING") return;
+    if (state.gameStatus !== "PLAYING" || state.isPaused) return;
 
     const currentPlayer = state.players[state.turn.toLowerCase()];
     if (currentPlayer.type !== "AI" || !currentPlayer.model) return;
