@@ -117,6 +117,9 @@ class MCTSAgent:
         
         # Cache for position evaluations during rollouts
         self._eval_cache = {}  # Format: {state_hash: evaluation_score}
+        
+        # Store previous search tree root for reuse
+        self.previous_root = None
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using MCTS."""
@@ -157,9 +160,30 @@ class MCTSAgent:
                 
                 return valid_moves[0]
             
-            # Create root node
-            root = MCTSNode(state)
+            # Tree reuse - attempt to find a matching child node from previous search
+            root = None
+            tree_reused = False
             
+            if self.previous_root is not None:
+                for child in self.previous_root.children:
+                    # Match the board state and game parameters
+                    if (self._board_matches(child.state.board, state.board) and
+                        child.state.turn == state.turn and
+                        child.state.phase == state.phase and
+                        child.state.goats_placed == state.goats_placed and
+                        child.state.goats_captured == state.goats_captured):
+                        
+                        # Found matching state - reuse this subtree
+                        root = child
+                        root.parent = None  # Detach from old tree
+                        tree_reused = True
+                        print(f"Reusing subtree from previous search with {root.visits} prior visits!")
+                        break
+            
+            # If no matching subtree found, create a new root
+            if root is None:
+                root = MCTSNode(state)
+                
             # Run MCTS for specified number of iterations or until timeout
             iterations_completed = 0
             for i in range(self.iterations):
@@ -285,7 +309,16 @@ class MCTSAgent:
             print(f"Move details: {best_child.move}")
             print(f"MCTS win rate: {mcts_win_rate:.4f}")
             print(f"Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
+            if tree_reused:
+                print(f"Tree reuse: YES - benefited from {iterations_completed} new iterations + previous knowledge")
+            else:
+                print(f"Tree reuse: NO - fresh search with {iterations_completed} iterations")
             print("==================================\n")
+            
+            # Store this tree's root for future reuse
+            # Specifically store the root BEFORE applying the best move
+            # This allows us to reuse child nodes later
+            self.previous_root = root
             
             return best_child.move
             
@@ -297,6 +330,24 @@ class MCTSAgent:
             if valid_moves:
                 return random.choice(valid_moves)
             return None
+            
+    def _board_matches(self, board1, board2) -> bool:
+        """Compare two game boards for equality"""
+        for y in range(len(board1)):
+            for x in range(len(board1[y])):
+                cell1 = board1[y][x]
+                cell2 = board2[y][x]
+                
+                # Compare None values
+                if (cell1 is None) != (cell2 is None):
+                    return False
+                
+                # Compare piece types
+                if cell1 is not None and cell2 is not None:
+                    if cell1["type"] != cell2["type"]:
+                        return False
+        
+        return True
     
     def rollout(self, state: GameState) -> float:
         """Perform a rollout from the given state based on the selected policy."""
