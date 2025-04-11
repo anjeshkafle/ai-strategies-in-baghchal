@@ -23,6 +23,7 @@ class MCTSTournamentConfig:
     games_per_matchup: int = 40
     output_dir: str = "simulation_results"
     parallel_ranges: List[ParallelRange] = None  # For parallel execution
+    parallel_games: int = None  # Number of parallel games to run per process
 
     def validate_ranges(self, total_matchups: int) -> List[Dict[str, int]]:
         """

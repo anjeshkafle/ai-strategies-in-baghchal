@@ -123,22 +123,26 @@ class MCTSAgent:
     
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using MCTS."""
+        # Debug flag - set to True to print detailed statistics
+        debug = False
         try:
             import time
             start_time = time.time()
             
             # Print current board state win rate prediction
             current_win_rate = self.predict_win_rate(state)
-            print("\n======== INITIAL STATE ========")
-            print(f"Player turn: {state.turn}")
-            print(f"Phase: {state.phase}")
-            print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}")
-            print(f"Current win rate prediction: {current_win_rate:.4f}")
-            if state.turn == "TIGER":
-                print(f"(Higher values favor TIGER: 1.0=Tiger win, 0.0=Goat win)")
-            else:
-                print(f"(Lower values favor GOAT: 1.0=Tiger win, 0.0=Goat win)")
-            print("===============================\n")
+            if debug:
+                print("\n======== INITIAL STATE ========")
+                print(f"Player turn: {state.turn}")
+                print(f"Phase: {state.phase}")
+                print(f"Goats placed: {state.goats_placed}, Goats captured: {state.goats_captured}")
+                print(f"Current win rate prediction: {current_win_rate:.4f}")
+                if state.turn == "TIGER":
+                    print(f"(Higher values favor TIGER: 1.0=Tiger win, 0.0=Goat win)")
+                else:
+                    print(f"(Lower values favor GOAT: 1.0=Tiger win, 0.0=Goat win)")
+                print("===============================\n")
+                
             
             # Check for edge cases first
             valid_moves = state.get_valid_moves()
@@ -147,7 +151,8 @@ class MCTSAgent:
                 
             # If there's only one valid move, return it without running MCTS
             if len(valid_moves) == 1:
-                print(f"Only one valid move available, returning immediately")
+                if debug:
+                    print(f"Only one valid move available, returning immediately")
                 
                 # Show win rate after applying the move
                 next_state = state.clone()
@@ -156,7 +161,9 @@ class MCTSAgent:
                 
                 win_rate_change = after_win_rate - current_win_rate
                 change_str = f"+{win_rate_change:.4f}" if win_rate_change >= 0 else f"{win_rate_change:.4f}"
-                print(f"Win rate after move: {after_win_rate:.4f} ({change_str})")
+                
+                if debug:
+                    print(f"Win rate after move: {after_win_rate:.4f} ({change_str})")
                 
                 return valid_moves[0]
             
@@ -214,10 +221,10 @@ class MCTSAgent:
                     
                 iterations_completed = i + 1
             
-            print(f"MCTS completed {iterations_completed} iterations in {time.time() - start_time:.2f} seconds")
+            if debug:
+                print(f"MCTS completed {iterations_completed} iterations in {time.time() - start_time:.2f} seconds")
             
-            # Debug flag - set to True to print detailed statistics
-            debug = False
+            
             
             if debug:
                 print("\n========== MOVE ANALYSIS ==========")
@@ -259,9 +266,10 @@ class MCTSAgent:
             capture_moves = [(child, child.value / child.visits if child.visits > 0 else 0) 
                             for child in root.children if child.move.get("capture")]
             if capture_moves:
-                print("\n========== CAPTURE MOVES ==========")
+                if debug:
+                    print("\n========== CAPTURE MOVES ==========")
                 for child, raw_win_rate in capture_moves:
-                    # Convert to root's perspective if players are different
+                        # Convert to root's perspective if players are different
                     if root.state.turn != child.state.turn:
                         mcts_win_rate = 1.0 - raw_win_rate
                     else:
@@ -275,11 +283,13 @@ class MCTSAgent:
                     win_rate_change = predicted_win_rate - current_win_rate
                     change_str = f"+{win_rate_change:.4f}" if win_rate_change >= 0 else f"{win_rate_change:.4f}"
                     
-                    print(f"  Capture move: {child.move}")
-                    print(f"    Visits: {child.visits} ({child.visits/root.visits*100:.1f}% of total)")
-                    print(f"    MCTS win rate: {mcts_win_rate:.4f}")
-                    print(f"    Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
-                print("==================================\n")
+                    if debug:
+                        print(f"  Capture move: {child.move}")
+                        print(f"    Visits: {child.visits} ({child.visits/root.visits*100:.1f}% of total)")
+                        print(f"    MCTS win rate: {mcts_win_rate:.4f}")
+                        print(f"    Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
+                if debug:   
+                    print("==================================\n")
             
             # Standard MCTS selection: choose child with most visits
             best_child = max(root.children, key=lambda c: c.visits)
@@ -304,17 +314,17 @@ class MCTSAgent:
             win_rate_change = predicted_win_rate - current_win_rate
             change_str = f"+{win_rate_change:.4f}" if win_rate_change >= 0 else f"{win_rate_change:.4f}"
             
-            print("\n========== SELECTED MOVE ==========")
-            print(f"Selected {capture_text} with {best_child.visits} visits ({best_child.visits/root.visits*100:.1f}% of total)")
-            print(f"Move details: {best_child.move}")
-            print(f"MCTS win rate: {mcts_win_rate:.4f}")
-            print(f"Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
-            if tree_reused:
-                print(f"Tree reuse: YES - benefited from {iterations_completed} new iterations + previous knowledge")
-            else:
-                print(f"Tree reuse: NO - fresh search with {iterations_completed} iterations")
-            print("==================================\n")
-            
+            if debug:
+                print("\n========== SELECTED MOVE ==========")
+                print(f"Selected {capture_text} with {best_child.visits} visits ({best_child.visits/root.visits*100:.1f}% of total)")
+                print(f"Move details: {best_child.move}")
+                print(f"MCTS win rate: {mcts_win_rate:.4f}")
+                print(f"Predicted win rate: {predicted_win_rate:.4f} ({change_str})")
+                if tree_reused:
+                    print(f"Tree reuse: YES - benefited from {iterations_completed} new iterations + previous knowledge")
+                else:
+                    print(f"Tree reuse: NO - fresh search with {iterations_completed} iterations")
+                print("==================================\n")
             # Store this tree's root for future reuse
             # Specifically store the root BEFORE applying the best move
             # This allows us to reuse child nodes later

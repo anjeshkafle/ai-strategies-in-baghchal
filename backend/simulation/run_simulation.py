@@ -77,6 +77,7 @@ def run_mcts_tournament(config_path: str):
     print(f"  Rollout depths: {mcts_config.rollout_depths}")
     print(f"  Games per matchup: {mcts_config.games_per_matchup}")
     print(f"  Output directory: {mcts_config.output_dir}")
+    print(f"  Parallel games: {mcts_config.parallel_games if mcts_config.parallel_games else 'auto'}")
     print()
     
     controller = SimulationController(output_dir=mcts_config.output_dir)
@@ -95,7 +96,8 @@ def run_mcts_tournament(config_path: str):
                 rollout_depths=mcts_config.rollout_depths,
                 games_per_matchup=mcts_config.games_per_matchup,
                 start_idx=start_idx,
-                end_idx=end_idx
+                end_idx=end_idx,
+                parallel_games=mcts_config.parallel_games
             )
             
             print(f"Tournament progress saved to: {output_file}")
@@ -105,7 +107,8 @@ def run_mcts_tournament(config_path: str):
             rollout_policies=mcts_config.rollout_policies,
             iterations=mcts_config.iterations,
             rollout_depths=mcts_config.rollout_depths,
-            games_per_matchup=mcts_config.games_per_matchup
+            games_per_matchup=mcts_config.games_per_matchup,
+            parallel_games=mcts_config.parallel_games
         )
         
         print(f"Tournament progress saved to: {output_file}")

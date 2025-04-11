@@ -1,9 +1,9 @@
 {
   "mcts_tournament": {
-    "rollout_policies": ["lightweight"],
-    "iterations": [1000],
+    "rollout_policies": ["lightweight", "random"],
+    "iterations": [1000, 3000],
     "rollout_depths": [4, 6],
-    "games_per_matchup": 2,
+    "games_per_matchup": 8,
     "output_dir": "simulation_results"
   }
 }
