@@ -622,6 +622,9 @@ class MCTSAgent:
                         from_x, from_y = move["from"]["x"], move["from"]["y"]
                         to_x, to_y = move["to"]["x"], move["to"]["y"]
                         
+                        # Keep track of safety status
+                        is_safe = True
+                        
                         # Check if destination is threatened
                         if (to_x, to_y) in threatened_lookup:
                             landing_x, landing_y = threatened_lookup[(to_x, to_y)]
@@ -631,26 +634,54 @@ class MCTSAgent:
                             goat_from_landing = (from_x, from_y) == (landing_x, landing_y)
                             
                             if is_landing_empty or goat_from_landing:
-                                unsafe_moves.append(move)
-                                continue
+                                is_safe = False
                         
-                        # If we made it here, the move is safe
-                        safe_moves.append(move)
+                        # Check if emptying the source position enables a capture
+                        # by finding any threatened positions that would land at our source position
+                        for (x, y), (landing_x, landing_y) in threatened_lookup.items():
+                            # If a tiger can capture a goat and land at our source position,
+                            # then this move enables a capture
+                            if (landing_x, landing_y) == (from_x, from_y):
+                                # Additionally, check if the goat being captured exists
+                                # x,y is the position of the captured goat
+                                if current_state.board[y][x] is not None and current_state.board[y][x]["type"] == "GOAT":
+                                    is_safe = False
+                                    break
+                        
+                        # Categorize based on safety
+                        if is_safe:
+                            safe_moves.append(move)
+                        else:
+                            unsafe_moves.append(move)
                 
                 # Calculate progressive bias - as empty cells decrease, allow more exploration
                 # Early game: almost always choose safe moves
                 # Late game: consider unsafe moves more frequently
-                safe_bias = min(1.0, empty_cells / 21 + 0.2)
+                # safe_bias = min(1.0, empty_cells / 21 + 0.2)
                 
-                # Properly mutually exclusive choice between safe and unsafe moves:
+                # New formula - progressive bias that starts high and gradually decreases
+                # Starts at 0.95 and can decrease to 0.75 by late game
+                # This preserves the idea of trying risky moves more often as game progresses
+                safe_bias = max(0.75, 0.95 - (0.20 * (1 - empty_cells / 21)))
+                
+                # Properly balance probabilities for individual moves across categories
                 if safe_moves and unsafe_moves:
-                    # Both options are available - use bias to choose between categories
-                    if random.random() < safe_bias:
-                        # Choose from ONLY safe moves
-                        selected_move = random.choice(safe_moves)
-                    else:
-                        # Choose from ONLY unsafe moves
-                        selected_move = random.choice(unsafe_moves)
+                    # Calculate per-move probabilities that sum to 1.0
+                    # (total_moves is unused and can be removed)
+                    
+                    # Probability for any individual safe move
+                    safe_move_prob = safe_bias / len(safe_moves)
+                    
+                    # Probability for any individual unsafe move
+                    unsafe_move_prob = (1 - safe_bias) / len(unsafe_moves)
+                    
+                    # Combine moves with their probabilities
+                    moves_with_probs = [(move, safe_move_prob) for move in safe_moves] + \
+                                      [(move, unsafe_move_prob) for move in unsafe_moves]
+                    
+                    # Select a move using these individual probabilities
+                    moves, probs = zip(*moves_with_probs)
+                    selected_move = random.choices(moves, weights=probs, k=1)[0]
                 elif safe_moves:
                     # Only safe moves available
                     selected_move = random.choice(safe_moves)
