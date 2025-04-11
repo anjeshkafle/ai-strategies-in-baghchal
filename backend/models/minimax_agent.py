@@ -32,7 +32,7 @@ class MinimaxAgent:
         self.edge_weight = 300                   # Weight for goat edge preference
         
         # Debug mode flag
-        self.debug_mode = True
+        self.debug_mode = False
     
     def evaluate(self, state: GameState, move_sequence: List[Dict] = None) -> float:
         """

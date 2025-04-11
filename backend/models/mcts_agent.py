@@ -217,7 +217,7 @@ class MCTSAgent:
             print(f"MCTS completed {iterations_completed} iterations in {time.time() - start_time:.2f} seconds")
             
             # Debug flag - set to True to print detailed statistics
-            debug = True
+            debug = False
             
             if debug:
                 print("\n========== MOVE ANALYSIS ==========")

@@ -2,10 +2,15 @@ from typing import Dict, List, Tuple, Optional, Any
 import time
 import json
 import uuid
+import sys
+import os
+
+# Add the parent directory to the path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from models.game_state import GameState
-from models.minimax_agent import MinimaxAgent
 from models.mcts_agent import MCTSAgent
+from models.minimax_agent import MinimaxAgent
 
 class GameRunner:
     """

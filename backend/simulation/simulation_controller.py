@@ -127,8 +127,8 @@ class SimulationController:
                         'rollout_policy': policy,
                         'iterations': iteration,
                         'rollout_depth': depth,
-                        'exploration_weight': 1.0,  # Fixed for tournament
-                        'guided_strictness': 0.8    # Fixed for tournament
+                        'exploration_weight': 1.0,
+                        'guided_strictness': 0.8
                     }
                     mcts_configs.append(config)
         
@@ -140,65 +140,74 @@ class SimulationController:
             end_idx = len(all_matchups)
         
         matchups_to_process = all_matchups[start_idx:end_idx]
-        print(f"Processing MCTS tournament matchups {start_idx} to {end_idx-1} " 
-              f"({len(matchups_to_process)} of {len(all_matchups)} total matchups)")
+        total_matchups = len(matchups_to_process)
+        total_games = total_matchups * games_per_matchup
+        
+        print(f"\nMCTS Tournament Setup:")
+        print(f"  Total configurations: {len(mcts_configs)}")
+        print(f"  Total matchups to process: {total_matchups}")
+        print(f"  Games per matchup: {games_per_matchup}")
+        print(f"  Total games to play: {total_games}")
+        print(f"  Processing matchups {start_idx} to {end_idx-1}")
+        print()
         
         # Create or find output file
         if output_file is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = os.path.join(self.mcts_tournament_dir, f"mcts_tournament_{timestamp}_{start_idx}_{end_idx}.csv")
         else:
-            # If specific output file provided, use it for resumption
             output_file = os.path.join(self.mcts_tournament_dir, output_file)
         
         # Get existing game IDs to avoid duplication
         existing_game_ids = self._find_existing_results(output_file)
-        
-        # Get existing matchup counts to know how many games are already done
-        matchup_counts = self._find_existing_matchups(output_file)
+        existing_matchups = self._find_existing_matchups(output_file)
         
         print(f"Found {len(existing_game_ids)} existing games in output file")
         
-        # Setup CSV file - if it exists, open in append mode
+        # Setup CSV file
         file_exists = os.path.exists(output_file)
         
         with open(output_file, 'a' if file_exists else 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=self.csv_headers)
             
-            # Only write header if creating a new file
             if not file_exists:
                 writer.writeheader()
+            
+            # Track progress
+            games_played = 0
+            games_saved = 0
+            last_progress_update = time.time()
             
             # Process each matchup
             for i, (config1, config2) in enumerate(matchups_to_process):
                 config1_str = json.dumps(config1)
                 config2_str = json.dumps(config2)
                 
-                # Calculate how many games we've already played for this matchup in each direction
-                tiger1_goat2_played = matchup_counts.get((config1_str, config2_str), 0)
-                tiger2_goat1_played = matchup_counts.get((config2_str, config1_str), 0)
+                # Calculate how many games we've already played for this matchup
+                tiger1_goat2_played = existing_matchups.get((config1_str, config2_str), 0)
+                tiger2_goat1_played = existing_matchups.get((config2_str, config1_str), 0)
                 
                 half_games = games_per_matchup // 2
                 
-                print(f"Matchup {start_idx + i + 1}/{end_idx}: "
-                      f"{config1['rollout_policy']}-{config1['iterations']}-{config1['rollout_depth']} vs "
-                      f"{config2['rollout_policy']}-{config2['iterations']}-{config2['rollout_depth']}")
+                print(f"\nMatchup {i+1}/{total_matchups}:")
+                print(f"  Config 1: {config1['rollout_policy']}-{config1['iterations']}-{config1['rollout_depth']}")
+                print(f"  Config 2: {config2['rollout_policy']}-{config2['iterations']}-{config2['rollout_depth']}")
                 print(f"  Already played: {tiger1_goat2_played}/{half_games} (config1 as Tiger) and "
                       f"{tiger2_goat1_played}/{half_games} (config2 as Tiger)")
                 
-                # Track games completed in this session
-                games_played_this_session = 0
-                
                 # First half: config1 as Tiger, config2 as Goat
-                for _ in range(half_games - tiger1_goat2_played):
+                for game_num in range(half_games - tiger1_goat2_played):
+                    if time.time() - last_progress_update > 5:  # Update progress every 5 seconds
+                        print(f"  Progress: {games_played}/{total_games} games played, {games_saved} saved")
+                        last_progress_update = time.time()
+                    
                     runner = GameRunner(config1, config2)
                     game_result = runner.run_game()
+                    games_played += 1
                     
-                    # Skip if we've already recorded this game
                     if game_result["game_id"] in existing_game_ids:
                         continue
                     
-                    # Prepare row data
                     row = {
                         "game_id": game_result["game_id"],
                         "winner": game_result["winner"],
@@ -217,24 +226,24 @@ class SimulationController:
                         "goat_config": config2_str
                     }
                     
-                    # Write to CSV
                     writer.writerow(row)
-                    csvfile.flush()  # Ensure data is written immediately
-                    
-                    # Track this game as completed
+                    csvfile.flush()
+                    games_saved += 1
                     existing_game_ids.add(game_result["game_id"])
-                    games_played_this_session += 1
                 
                 # Second half: config2 as Tiger, config1 as Goat
-                for _ in range(half_games - tiger2_goat1_played):
+                for game_num in range(half_games - tiger2_goat1_played):
+                    if time.time() - last_progress_update > 5:
+                        print(f"  Progress: {games_played}/{total_games} games played, {games_saved} saved")
+                        last_progress_update = time.time()
+                    
                     runner = GameRunner(config2, config1)
                     game_result = runner.run_game()
+                    games_played += 1
                     
-                    # Skip if we've already recorded this game
                     if game_result["game_id"] in existing_game_ids:
                         continue
                     
-                    # Prepare row data
                     row = {
                         "game_id": game_result["game_id"],
                         "winner": game_result["winner"],
@@ -253,17 +262,17 @@ class SimulationController:
                         "goat_config": config1_str
                     }
                     
-                    # Write to CSV
                     writer.writerow(row)
-                    csvfile.flush()  # Ensure data is written immediately
-                    
-                    # Track this game as completed
+                    csvfile.flush()
+                    games_saved += 1
                     existing_game_ids.add(game_result["game_id"])
-                    games_played_this_session += 1
                 
-                print(f"  Completed {games_played_this_session} new games in this session")
+                print(f"  Completed {games_played}/{total_games} games in this matchup")
         
-        print(f"MCTS tournament progress saved to {output_file}")
+        print(f"\nTournament complete!")
+        print(f"Total games played: {games_played}")
+        print(f"Total games saved: {games_saved}")
+        print(f"Results saved to: {output_file}")
         return output_file
     
     def run_main_competition(self, 
