@@ -110,6 +110,8 @@ def parse_move_history(move_str: str) -> List[Dict]:
     """Parse the compact move history string into move objects."""
     moves = []
     current_player = "GOAT"  # Goats move first in placement phase
+    goats_placed = 0
+    
     for move in move_str.split(','):
         move_type = move[0]
         if move_type == 'p':  # placement
@@ -120,17 +122,31 @@ def parse_move_history(move_str: str) -> List[Dict]:
                 'x': x,
                 'y': y
             })
+            goats_placed += 1
+            if goats_placed >= 20:  # All goats placed, switch to movement phase
+                current_player = "TIGER"  # Tigers move first in movement phase
         elif move_type == 'm':  # movement
             from_x = int(move[1])
             from_y = int(move[2])
             to_x = int(move[3])
             to_y = int(move[4])
-            moves.append({
+            
+            # Check for capture
+            move_dict = {
                 'type': 'movement',
                 'player': current_player,
                 'from': {'x': from_x, 'y': from_y},
                 'to': {'x': to_x, 'y': to_y}
-            })
+            }
+            
+            # If there's a capture (format: mfrom_xfrom_yto_xto_yccap_xcap_y)
+            if len(move) > 5 and move[5] == 'c':
+                cap_x = int(move[6])
+                cap_y = int(move[7])
+                move_dict['capture'] = {'x': cap_x, 'y': cap_y}
+            
+            moves.append(move_dict)
+            
         # Switch player for next move
         current_player = "GOAT" if current_player == "TIGER" else "TIGER"
     return moves
@@ -180,10 +196,6 @@ def play_game(game_id: str):
     total_moves = len(game_data['move_history'])
     game_state = GameState()
     game_state.board = create_initial_board()  # Set initial tiger positions
-    game_state.phase = "PLACEMENT"
-    game_state.turn = "GOAT"
-    game_state.goats_placed = 0
-    game_state.goats_captured = 0
     
     while True:
         clear_screen()
@@ -196,21 +208,29 @@ def play_game(game_id: str):
         elif key == '\x1b[C':  # Right arrow
             if current_move < total_moves:
                 move = game_data['move_history'][current_move]
-                game_state.apply_move(move)
-                current_move += 1
+                try:
+                    game_state.apply_move(move)
+                    current_move += 1
+                except ValueError as e:
+                    print(f"\nError applying move: {e}")
+                    print(f"Move: {move}")
+                    print(f"Current state: phase={game_state.phase}, turn={game_state.turn}, goats_placed={game_state.goats_placed}")
+                    input("Press Enter to continue...")
         elif key == '\x1b[D':  # Left arrow
             if current_move > 0:
                 current_move -= 1
                 # Reset and replay up to current move
                 game_state = GameState()
                 game_state.board = create_initial_board()  # Reset with initial tigers
-                game_state.phase = "PLACEMENT"
-                game_state.turn = "GOAT"
-                game_state.goats_placed = 0
-                game_state.goats_captured = 0
                 for i in range(current_move):
                     move = game_data['move_history'][i]
-                    game_state.apply_move(move)
+                    try:
+                        game_state.apply_move(move)
+                    except ValueError as e:
+                        print(f"\nError replaying move {i}: {e}")
+                        print(f"Move: {move}")
+                        print(f"Current state: phase={game_state.phase}, turn={game_state.turn}, goats_placed={game_state.goats_placed}")
+                        input("Press Enter to continue...")
 
 def main():
     """Main entry point."""
