@@ -6,6 +6,10 @@ This script runs tournament games between different MCTS configurations
 to determine the best settings. It supports parallelization by specifying
 start and end indices for the matchups to process.
 
+It also handles interruptions automatically by resuming from the most recent
+file for the given index range, ensuring that all games will be completed
+even if execution is terminated and restarted multiple times.
+
 Example usage:
     # Run all matchups
     python run_mcts_tournament.py
@@ -49,6 +53,9 @@ def parse_args():
     
     parser.add_argument("--output_dir", type=str, default="simulation_results",
                         help="Directory to save results (default: simulation_results)")
+
+    parser.add_argument("--new", action="store_true",
+                        help="Force creation of a new file instead of resuming")
     
     return parser.parse_args()
 
@@ -68,16 +75,28 @@ def main():
     
     controller = SimulationController(output_dir=args.output_dir)
     
+    # Look for existing file to resume from, unless --new is specified
+    existing_file = None
+    if not args.new:
+        existing_file = controller.find_most_recent_tournament_file(args.start, args.end)
+        if existing_file:
+            print(f"Found existing tournament file: {existing_file}")
+            print(f"Resuming from this file...")
+        else:
+            print("No existing tournament file found. Starting fresh.")
+    
     output_file = controller.run_mcts_tournament(
         rollout_policies=args.rollout_policies,
         iterations=args.iterations,
         rollout_depths=args.rollout_depths,
         games_per_matchup=args.games,
         start_idx=args.start,
-        end_idx=args.end
+        end_idx=args.end,
+        output_file=existing_file
     )
     
-    print(f"Tournament complete! Results saved to: {output_file}")
+    print(f"Tournament progress saved to: {output_file}")
+    print(f"You can resume this tournament at any time by running the same command.")
 
 if __name__ == "__main__":
     main() 
