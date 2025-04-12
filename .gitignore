@@ -20,6 +20,9 @@ backend/*.pyc
 backend/*.pyo
 backend/*.pyd
 backend/data/
+backend/simulation/simulation_results/
+backend/simulation_results/
+backend/simulation/simulation_config.json
 
 # Editor directories and files
 .vscode/
