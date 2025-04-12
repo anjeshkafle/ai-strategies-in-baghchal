@@ -79,18 +79,29 @@ class TestMCTSTournamentDistribution(unittest.TestCase):
             tiger_counts = [data["tiger_games"] for data in matchups.values()]
             goat_counts = [data["goat_games"] for data in matchups.values()]
             
+            # Calculate max difference between matchups
+            if counts:
+                min_count = min(counts) 
+                max_count = max(counts)
+                game_count_diff = max_count - min_count
+            else:
+                min_count = max_count = game_count_diff = 0
+                
             # Calculate max difference between tiger and goat games for any matchup
             role_diffs = [abs(data["tiger_games"] - data["goat_games"]) for data in matchups.values()]
-            
-            min_count = min(counts) if counts else 0
-            max_count = max(counts) if counts else 0
-            avg_count = sum(counts) / len(counts) if counts else 0
             max_role_diff = max(role_diffs) if role_diffs else 0
+            
+            # Calculate rounds (total games divided by 2)
+            rounds = [data["total"] // 2 for data in matchups.values()]
+            min_round = min(rounds) if rounds else 0
+            max_round = max(rounds) if rounds else 0
+            round_diff = max_round - min_round
             
             # Print results
             print(f"Total matchups: {len(matchups)}")
             print(f"Total games: {len(df)}")
-            print(f"Games per matchup: min={min_count}, max={max_count}, avg={avg_count:.1f}")
+            print(f"Games per matchup: min={min_count}, max={max_count}, diff={game_count_diff}")
+            print(f"Rounds per matchup: min={min_round}, max={max_round}, diff={round_diff}")
             print(f"Max difference between tiger/goat roles: {max_role_diff}")
             
             # Extract config details for better reporting
@@ -103,28 +114,38 @@ class TestMCTSTournamentDistribution(unittest.TestCase):
                 config1_desc = f"{config1['rollout_policy']}-{config1['iterations']}-{config1['rollout_depth']}"
                 config2_desc = f"{config2['rollout_policy']}-{config2['iterations']}-{config2['rollout_depth']}"
                 
+                round_num = data["total"] // 2
+                role_balance = abs(data["tiger_games"] - data["goat_games"])
+                
                 matchup_details.append({
                     "config1": config1_desc,
                     "config2": config2_desc,
                     "total_games": data["total"],
+                    "round": round_num,
                     "config1_as_tiger": data["tiger_games"] if configs[0] == configs[0] else data["goat_games"],
                     "config2_as_tiger": data["goat_games"] if configs[0] == configs[0] else data["tiger_games"],
-                    "role_balance": abs(data["tiger_games"] - data["goat_games"])
+                    "role_balance_diff": role_balance
                 })
             
             print("\nMatchup Details:")
             for detail in sorted(matchup_details, key=lambda x: x["total_games"]):
-                print(f"  {detail['config1']} vs {detail['config2']}: {detail['total_games']} games "
-                      f"({detail['config1_as_tiger']}/{detail['config2_as_tiger']}), "
-                      f"role balance diff: {detail['role_balance']}")
+                print(f"  {detail['config1']} vs {detail['config2']}: {detail['total_games']} games (round {detail['round']}), "
+                      f"tiger/goat: {detail['config1_as_tiger']}/{detail['config2_as_tiger']}, "
+                      f"role diff: {detail['role_balance_diff']}")
             
-            # Assert that the range between min and max games is reasonable
-            # For a short 10-minute run, a difference of 2 is acceptable
-            self.assertLessEqual(max_count - min_count, 4, 
-                               f"Game distribution too uneven: min={min_count}, max={max_count}")
+            # Assert that the difference between rounds is at most 1
+            # This ensures matchups progress through rounds in lockstep
+            self.assertLessEqual(round_diff, 1, 
+                               f"Round distribution too uneven: min={min_round}, max={max_round}, diff={round_diff}")
             
-            # Assert that the difference between tiger and goat roles is small
-            self.assertLessEqual(max_role_diff, 2,
+            # Assert that the total game count difference is at most 2
+            # With round-based scheduling, this should never exceed 2
+            self.assertLessEqual(game_count_diff, 2, 
+                               f"Game distribution too uneven: min={min_count}, max={max_count}, diff={game_count_diff}")
+            
+            # Assert that the difference between tiger and goat roles within any matchup is at most 1
+            # This ensures roles are balanced within each matchup
+            self.assertLessEqual(max_role_diff, 1,
                                f"Role balance too uneven: max difference={max_role_diff}")
             
         except FileNotFoundError:

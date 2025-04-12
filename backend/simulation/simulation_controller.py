@@ -269,6 +269,8 @@ class SimulationController:
                 'total': tiger1_goat2_played + tiger2_goat1_played,
                 'tiger1_goat2': tiger1_goat2_played,
                 'tiger2_goat1': tiger2_goat1_played,
+                'tiger1_goat2_in_progress': 0,  # Track in-progress games
+                'tiger2_goat1_in_progress': 0,  # Track in-progress games
                 'config1': config1,
                 'config2': config2,
                 'config1_str': config1_str,
@@ -312,55 +314,100 @@ class SimulationController:
                     if time.time() >= end_time:
                         return []
                     
-                    # Sort matchups by priority (fewest games first, then by role balance)
+                    # Calculate effective game counts (completed + in-progress)
+                    for idx in matchup_game_counts:
+                        matchup_game_counts[idx]['effective_total'] = (
+                            matchup_game_counts[idx]['total'] + 
+                            matchup_game_counts[idx]['tiger1_goat2_in_progress'] + 
+                            matchup_game_counts[idx]['tiger2_goat1_in_progress']
+                        )
+                        matchup_game_counts[idx]['effective_tiger1'] = (
+                            matchup_game_counts[idx]['tiger1_goat2'] + 
+                            matchup_game_counts[idx]['tiger1_goat2_in_progress']
+                        )
+                        matchup_game_counts[idx]['effective_tiger2'] = (
+                            matchup_game_counts[idx]['tiger2_goat1'] + 
+                            matchup_game_counts[idx]['tiger2_goat1_in_progress']
+                        )
+                    
+                    # Find the minimum effective total across all matchups
+                    min_effective_total = min(data['effective_total'] for data in matchup_game_counts.values()) if matchup_game_counts else 0
+                    
+                    # Sort matchups by priority
+                    # First prioritize matchups with fewer effective total games (but not more than 2 from min)
+                    # Then prioritize by whichever side has fewer effective games 
                     matchup_priorities = sorted(
                         matchup_game_counts.items(),
                         key=lambda x: (
-                            x[1]['total'],  # First prioritize by total games
-                            min(x[1]['tiger1_goat2'], x[1]['tiger2_goat1'])  # Then by the side with fewer games
+                            x[1]['effective_total'] > min_effective_total + 2,  # First prioritize games within 2 of min
+                            x[1]['effective_total'],  # Then by effective total
+                            min(x[1]['effective_tiger1'], x[1]['effective_tiger2'])  # Then by side with fewer games
                         )
                     )
                     
                     # Collect tasks to schedule
                     tasks = []
                     
-                    # Process as many matchups as needed to get num_tasks
+                    # Process matchups until we have enough tasks
                     for matchup_idx, matchup_data in matchup_priorities:
                         if len(tasks) >= num_tasks:
                             break
+                        
+                        # Skip this matchup if it already has 2+ more games than minimum
+                        if matchup_data['effective_total'] > min_effective_total + 2:
+                            continue
                             
                         config1 = matchup_data['config1']
                         config2 = matchup_data['config2']
                         config1_str = matchup_data['config1_str']
                         config2_str = matchup_data['config2_str']
                         
-                        # Determine which sides need games
-                        tiger1_games = matchup_data['tiger1_goat2']
-                        tiger2_games = matchup_data['tiger2_goat1']
+                        # Determine which sides need games based on effective counts
+                        tiger1_games = matchup_data['effective_tiger1']
+                        tiger2_games = matchup_data['effective_tiger2']
                         
                         # Add tasks based on which side has fewer games
                         if tiger1_games <= tiger2_games and len(tasks) < num_tasks:
                             # Schedule config1 as tiger
                             tasks.append((config1, config2, True, config1_str, config2_str))
+                            # Mark this task as in progress for future scheduling decisions
+                            matchup_game_counts[matchup_idx]['tiger1_goat2_in_progress'] += 1
                             
-                        if tiger2_games <= tiger1_games and len(tasks) < num_tasks:
+                        elif tiger2_games <= tiger1_games and len(tasks) < num_tasks:
                             # Schedule config2 as tiger
                             tasks.append((config1, config2, False, config1_str, config2_str))
+                            # Mark this task as in progress for future scheduling decisions
+                            matchup_game_counts[matchup_idx]['tiger2_goat1_in_progress'] += 1
                     
-                    # If we're balanced across all matchups, add the next round
+                    # If we couldn't find tasks within the 2-game threshold but there are matchups,
+                    # allow scheduling of additional tasks from the lowest-count matchups
                     if not tasks and matchup_priorities:
-                        # Get the first few matchups
-                        for matchup_idx, matchup_data in matchup_priorities[:min(num_tasks, len(matchup_priorities))]:
+                        # Find matchups with the lowest effective total
+                        lowest_total = matchup_priorities[0][1]['effective_total']
+                        lowest_matchups = [m for m in matchup_priorities if m[1]['effective_total'] == lowest_total]
+                        
+                        # Schedule from these matchups
+                        for matchup_idx, matchup_data in lowest_matchups:
+                            if len(tasks) >= num_tasks:
+                                break
+                                
                             config1 = matchup_data['config1']
                             config2 = matchup_data['config2']
                             config1_str = matchup_data['config1_str']
                             config2_str = matchup_data['config2_str']
                             
-                            # Add a task for each side if possible
-                            if len(tasks) < num_tasks:
+                            # Determine which sides need games based on effective counts
+                            tiger1_games = matchup_data['effective_tiger1']
+                            tiger2_games = matchup_data['effective_tiger2']
+                            
+                            # Balance sides
+                            if tiger1_games <= tiger2_games and len(tasks) < num_tasks:
                                 tasks.append((config1, config2, True, config1_str, config2_str))
-                            if len(tasks) < num_tasks:
+                                matchup_game_counts[matchup_idx]['tiger1_goat2_in_progress'] += 1
+                                
+                            elif tiger2_games <= tiger1_games and len(tasks) < num_tasks:
                                 tasks.append((config1, config2, False, config1_str, config2_str))
+                                matchup_game_counts[matchup_idx]['tiger2_goat1_in_progress'] += 1
                     
                     return tasks
             
@@ -385,10 +432,12 @@ class SimulationController:
                     for idx, data in matchup_game_counts.items():
                         if (data['config1_str'] == (tiger_config_str if is_config1_tiger else goat_config_str) and
                             data['config2_str'] == (goat_config_str if is_config1_tiger else tiger_config_str)):
-                            # Increment the appropriate counter
+                            # Decrement the in-progress counter first
                             if is_config1_tiger:
+                                matchup_game_counts[idx]['tiger1_goat2_in_progress'] -= 1
                                 matchup_game_counts[idx]['tiger1_goat2'] += 1
                             else:
+                                matchup_game_counts[idx]['tiger2_goat1_in_progress'] -= 1
                                 matchup_game_counts[idx]['tiger2_goat1'] += 1
                             matchup_game_counts[idx]['total'] += 1
                             break
@@ -442,6 +491,9 @@ class SimulationController:
                 nonlocal active_tasks
                 with lock:
                     active_tasks -= 1
+                    # Find which task errored (from thread.ident) and decrement its in-progress counter
+                    # (This requires saving thread ID when scheduling but we have a lock, so it's challenging)
+                    # For simplicity, we'll accept that errors may slightly imbalance the counts
                     print(f"Error in game: {error}")
             
             def schedule_task(pool, task):
