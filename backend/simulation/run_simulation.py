@@ -72,9 +72,24 @@ def run_mcts_tournament(config_path: str):
     
     print(f"Starting MCTS tournament at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Configuration:")
-    print(f"  Rollout policies: {mcts_config.rollout_policies}")
-    print(f"  Iterations: {mcts_config.iterations}")
-    print(f"  Rollout depths: {mcts_config.rollout_depths}")
+    
+    # Get all configurations that will be tested
+    all_configs = mcts_config.get_all_configs()
+    policies = set()
+    iterations = set()
+    depths = set()
+    
+    # Extract unique values for reporting
+    for config in all_configs:
+        policies.add(config['rollout_policy'])
+        iterations.add(config['iterations'])
+        depths.add(config['rollout_depth'])
+    
+    print(f"  Configuration groups: {len(mcts_config.configurations)}")
+    print(f"  Unique policies: {sorted(policies)}")
+    print(f"  Unique iterations: {sorted(iterations)}")
+    print(f"  Unique depths: {sorted(depths)}")
+    print(f"  Total unique configurations: {len(all_configs)}")
     print(f"  Max simulation time: {mcts_config.max_simulation_time} minutes")
     print(f"  Output directory: {mcts_config.output_dir}")
     print(f"  Parallel games: {mcts_config.parallel_games if mcts_config.parallel_games else 'auto'}")
@@ -90,10 +105,11 @@ def run_mcts_tournament(config_path: str):
             
             print(f"Processing matchups from index {start_idx} to {end_idx if end_idx is not None else 'end'}")
             
+            # Get all MCTS configs from all configuration groups
+            mcts_configs = mcts_config.get_all_configs()
+            
             output_file = controller.run_mcts_tournament(
-                rollout_policies=mcts_config.rollout_policies,
-                iterations=mcts_config.iterations,
-                rollout_depths=mcts_config.rollout_depths,
+                mcts_configs=mcts_configs,  # Pass pre-generated configs
                 max_simulation_time=mcts_config.max_simulation_time,
                 start_idx=start_idx,
                 end_idx=end_idx,
@@ -103,10 +119,11 @@ def run_mcts_tournament(config_path: str):
             print(f"Tournament progress saved to: {output_file}")
     else:
         # Run all matchups
+        # Get all MCTS configs from all configuration groups
+        mcts_configs = mcts_config.get_all_configs()
+        
         output_file = controller.run_mcts_tournament(
-            rollout_policies=mcts_config.rollout_policies,
-            iterations=mcts_config.iterations,
-            rollout_depths=mcts_config.rollout_depths,
+            mcts_configs=mcts_configs,  # Pass pre-generated configs
             max_simulation_time=mcts_config.max_simulation_time,
             parallel_games=mcts_config.parallel_games
         )

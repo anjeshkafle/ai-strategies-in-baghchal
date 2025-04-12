@@ -165,9 +165,10 @@ class SimulationController:
         return most_recent
     
     def run_mcts_tournament(self, 
-                          rollout_policies: List[str] = ["random", "lightweight", "guided"],
-                          iterations: List[int] = [10000, 15000, 20000],
-                          rollout_depths: List[int] = [4, 6],
+                          mcts_configs: List[Dict] = None,
+                          rollout_policies: List[str] = None,
+                          iterations: List[int] = None,
+                          rollout_depths: List[int] = None,
                           max_simulation_time: int = 60,  # Maximum time in minutes
                           start_idx: int = 0,
                           end_idx: int = None,
@@ -177,9 +178,10 @@ class SimulationController:
         Run a tournament between all combinations of MCTS configurations.
         
         Args:
-            rollout_policies: List of rollout policies to test
-            iterations: List of iteration counts to test
-            rollout_depths: List of rollout depths to test
+            mcts_configs: Pre-generated list of MCTS configurations (new format)
+            rollout_policies: List of rollout policies to test (legacy format)
+            iterations: List of iteration counts to test (legacy format)
+            rollout_depths: List of rollout depths to test (legacy format)
             max_simulation_time: Maximum time to run the simulation in minutes
             start_idx: Starting index of matchup to process (for parallelization)
             end_idx: Ending index of matchup to process (for parallelization)
@@ -193,20 +195,25 @@ class SimulationController:
         if parallel_games is None:
             parallel_games = max(1, mp.cpu_count() - 1)
         
-        # Generate all MCTS configurations
-        mcts_configs = []
-        for policy in rollout_policies:
-            for iteration in iterations:
-                for depth in rollout_depths:
-                    config = {
-                        'algorithm': 'mcts',
-                        'rollout_policy': policy,
-                        'iterations': iteration,
-                        'rollout_depth': depth,
-                        'exploration_weight': 1.0,
-                        'guided_strictness': 0.8
-                    }
-                    mcts_configs.append(config)
+        # Generate all MCTS configurations (either from pre-generated or from parameters)
+        if mcts_configs is None:
+            # Legacy format - generate configurations from individual parameters
+            if rollout_policies is None or iterations is None or rollout_depths is None:
+                raise ValueError("Either mcts_configs or all of rollout_policies, iterations, and rollout_depths must be provided")
+                
+            mcts_configs = []
+            for policy in rollout_policies:
+                for iteration in iterations:
+                    for depth in rollout_depths:
+                        config = {
+                            'algorithm': 'mcts',
+                            'rollout_policy': policy,
+                            'iterations': iteration,
+                            'rollout_depth': depth,
+                            'exploration_weight': 1.0,
+                            'guided_strictness': 0.8
+                        }
+                        mcts_configs.append(config)
         
         # Generate all matchups (each config plays against every other)
         all_matchups = list(itertools.combinations(mcts_configs, 2))

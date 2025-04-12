@@ -4,7 +4,7 @@ Configuration settings for the simulation module.
 
 import os
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
@@ -15,16 +15,71 @@ class ParallelRange:
     end: Optional[int] = None    # If None, runs to the end
 
 @dataclass
+class MCTSConfigGroup:
+    """Configuration group for a set of MCTS parameters to test."""
+    rollout_policies: List[str] = field(default_factory=lambda: ["random"])
+    iterations: List[int] = field(default_factory=lambda: [10000])
+    rollout_depths: List[int] = field(default_factory=lambda: [4])
+
+@dataclass
 class MCTSTournamentConfig:
     """Configuration for MCTS tournament."""
-    rollout_policies: List[str] = field(default_factory=lambda: ["random", "lightweight", "guided"])
-    iterations: List[int] = field(default_factory=lambda: [10000, 15000, 20000])
-    rollout_depths: List[int] = field(default_factory=lambda: [4, 6])
+    configurations: List[MCTSConfigGroup] = None
+    rollout_policies: List[str] = None  # Legacy support
+    iterations: List[int] = None  # Legacy support
+    rollout_depths: List[int] = None  # Legacy support
     max_simulation_time: int = 60  # Maximum time in minutes to run the simulation
     output_dir: str = "simulation_results"
     parallel_ranges: List[ParallelRange] = None  # For parallel execution
     parallel_games: int = None  # Number of parallel games to run per process
 
+    def __post_init__(self):
+        # Check if we're using legacy format and convert to new format
+        if self.configurations is None:
+            self.configurations = []
+            
+            # Convert legacy parameters to a single configuration group if provided
+            if self.rollout_policies or self.iterations or self.rollout_depths:
+                self.configurations.append(MCTSConfigGroup(
+                    rollout_policies=self.rollout_policies or ["random", "lightweight", "guided"],
+                    iterations=self.iterations or [10000, 15000, 20000],
+                    rollout_depths=self.rollout_depths or [4, 6]
+                ))
+            # Otherwise use default values
+            else:
+                self.configurations.append(MCTSConfigGroup())
+        
+        # Clear legacy fields to avoid confusion
+        self.rollout_policies = None
+        self.iterations = None
+        self.rollout_depths = None
+
+    def get_all_configs(self) -> List[Dict]:
+        """
+        Generate all MCTS configurations from all configuration groups.
+        
+        Returns:
+            List of all configurations to test
+        """
+        all_configs = []
+        
+        for config_group in self.configurations:
+            # Generate combinations for this group
+            for policy in config_group.rollout_policies:
+                for iteration in config_group.iterations:
+                    for depth in config_group.rollout_depths:
+                        config = {
+                            'algorithm': 'mcts',
+                            'rollout_policy': policy,
+                            'iterations': iteration,
+                            'rollout_depth': depth,
+                            'exploration_weight': 1.0,
+                            'guided_strictness': 0.8
+                        }
+                        all_configs.append(config)
+        
+        return all_configs
+    
     def validate_ranges(self, total_matchups: int) -> List[Dict[str, int]]:
         """
         Validate and process parallel ranges.
@@ -154,6 +209,17 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
                     end=r.get('end')
                 ))
             mcts_dict['parallel_ranges'] = ranges
+        
+        # Handle configuration groups
+        if 'configurations' in mcts_dict:
+            config_groups = []
+            for group in mcts_dict.get('configurations', []):
+                config_groups.append(MCTSConfigGroup(
+                    rollout_policies=group.get('rollout_policies', ["random"]),
+                    iterations=group.get('iterations', [10000]),
+                    rollout_depths=group.get('rollout_depths', [4])
+                ))
+            mcts_dict['configurations'] = config_groups
             
         mcts_config = MCTSTournamentConfig(**mcts_dict)
         
