@@ -168,7 +168,7 @@ class SimulationController:
                           rollout_policies: List[str] = ["random", "lightweight", "guided"],
                           iterations: List[int] = [10000, 15000, 20000],
                           rollout_depths: List[int] = [4, 6],
-                          games_per_matchup: int = 40,
+                          max_simulation_time: int = 60,  # Maximum time in minutes
                           start_idx: int = 0,
                           end_idx: int = None,
                           output_file: str = None,
@@ -180,7 +180,7 @@ class SimulationController:
             rollout_policies: List of rollout policies to test
             iterations: List of iteration counts to test
             rollout_depths: List of rollout depths to test
-            games_per_matchup: Number of games to play per matchup
+            max_simulation_time: Maximum time to run the simulation in minutes
             start_idx: Starting index of matchup to process (for parallelization)
             end_idx: Ending index of matchup to process (for parallelization)
             output_file: Optional specific output file path (for resuming)
@@ -217,13 +217,11 @@ class SimulationController:
         
         matchups_to_process = all_matchups[start_idx:end_idx]
         total_matchups = len(matchups_to_process)
-        total_games = total_matchups * games_per_matchup
         
         print(f"\nMCTS Tournament Setup:")
         print(f"  Total configurations: {len(mcts_configs)}")
         print(f"  Total matchups to process: {total_matchups}")
-        print(f"  Games per matchup: {games_per_matchup}")
-        print(f"  Total games to play: {total_games}")
+        print(f"  Max simulation time: {max_simulation_time} minutes")
         print(f"  Processing matchups {start_idx} to {end_idx-1}")
         print(f"  Running {parallel_games} games in parallel")
         print()
@@ -255,10 +253,36 @@ class SimulationController:
         
         print(f"Found {len(existing_game_ids)} existing games in output file")
         
-        # For each matchup, calculate how many games we've already played
-        total_existing_games = sum(existing_matchups.values())
-        total_remaining_games = total_games - total_existing_games
-        print(f"Total existing games: {total_existing_games}, Remaining games: {total_remaining_games}")
+        # Calculate how many games exist per matchup for balanced scheduling
+        matchup_game_counts = {}
+        for i, (config1, config2) in enumerate(matchups_to_process):
+            config1_str = json.dumps(config1)
+            config2_str = json.dumps(config2)
+            
+            # Count games in both directions (config1 as tiger, config2 as tiger)
+            tiger1_goat2_played = existing_matchups.get((config1_str, config2_str), 0)
+            tiger2_goat1_played = existing_matchups.get((config2_str, config1_str), 0)
+            
+            # Store counts for each matchup
+            matchup_idx = i
+            matchup_game_counts[matchup_idx] = {
+                'total': tiger1_goat2_played + tiger2_goat1_played,
+                'tiger1_goat2': tiger1_goat2_played,
+                'tiger2_goat1': tiger2_goat1_played,
+                'config1': config1,
+                'config2': config2,
+                'config1_str': config1_str,
+                'config2_str': config2_str
+            }
+        
+        # Calculate the minimum and maximum games per matchup
+        min_games = min(data['total'] for data in matchup_game_counts.values()) if matchup_game_counts else 0
+        max_games = max(data['total'] for data in matchup_game_counts.values()) if matchup_game_counts else 0
+        
+        print(f"Existing games per matchup: min={min_games}, max={max_games}")
+        
+        # Calculate end time for the simulation
+        end_time = time.time() + (max_simulation_time * 60)  # Convert minutes to seconds
         
         # Setup CSV file
         file_exists = os.path.exists(output_file)
@@ -273,99 +297,227 @@ class SimulationController:
             games_played = 0
             games_saved = 0
             last_progress_update = time.time()
+            simulation_start_time = time.time()
             
-            # Initialize process pool
-            with mp.Pool(processes=parallel_games) as pool:
-                # Process each matchup
-                for i, (config1, config2) in enumerate(matchups_to_process):
-                    config1_str = json.dumps(config1)
-                    config2_str = json.dumps(config2)
+            # Initialize thread lock
+            import threading
+            lock = threading.Lock()
+            active_tasks = 0
+            
+            # Define helper functions outside the pool to avoid closure issues
+            def get_next_tasks(num_tasks=1, pool_running=True):
+                """Get the next highest priority tasks to execute."""
+                with lock:
+                    # Skip if we're out of time
+                    if time.time() >= end_time:
+                        return []
                     
-                    # Calculate how many games we've already played for this matchup
-                    tiger1_goat2_played = existing_matchups.get((config1_str, config2_str), 0)
-                    tiger2_goat1_played = existing_matchups.get((config2_str, config1_str), 0)
+                    # Sort matchups by priority (fewest games first, then by role balance)
+                    matchup_priorities = sorted(
+                        matchup_game_counts.items(),
+                        key=lambda x: (
+                            x[1]['total'],  # First prioritize by total games
+                            min(x[1]['tiger1_goat2'], x[1]['tiger2_goat1'])  # Then by the side with fewer games
+                        )
+                    )
                     
-                    half_games = games_per_matchup // 2
+                    # Collect tasks to schedule
+                    tasks = []
                     
-                    print(f"\nMatchup {i+1}/{total_matchups}:")
-                    print(f"  Config 1: {config1['rollout_policy']}-{config1['iterations']}-{config1['rollout_depth']}")
-                    print(f"  Config 2: {config2['rollout_policy']}-{config2['iterations']}-{config2['rollout_depth']}")
-                    print(f"  Already played: {tiger1_goat2_played}/{half_games} (config1 as Tiger) and "
-                          f"{tiger2_goat1_played}/{half_games} (config2 as Tiger)")
-                    
-                    # Create tasks for first half: config1 as Tiger, config2 as Goat
-                    tasks_config1_tiger = [(config1, config2, True, config1_str, config2_str) 
-                                        for _ in range(half_games - tiger1_goat2_played)]
-                    
-                    # Create tasks for second half: config2 as Tiger, config1 as Goat
-                    tasks_config2_tiger = [(config1, config2, False, config1_str, config2_str) 
-                                        for _ in range(half_games - tiger2_goat1_played)]
-                    
-                    # Combine all tasks
-                    all_tasks = tasks_config1_tiger + tasks_config2_tiger
-                    
-                    if not all_tasks:
-                        print("  All games for this matchup already completed, skipping")
-                        continue
-                    
-                    # Run all games in parallel
-                    batch_start_time = time.time()
-                    print(f"  Starting {len(all_tasks)} games in parallel...")
-                    print(f"  Config1 as Tiger: {len(tasks_config1_tiger)} games, Config2 as Tiger: {len(tasks_config2_tiger)} games")
-                    
-                    for game_result in pool.imap_unordered(self._run_game_wrapper, all_tasks):
-                        games_played += 1
+                    # Process as many matchups as needed to get num_tasks
+                    for matchup_idx, matchup_data in matchup_priorities:
+                        if len(tasks) >= num_tasks:
+                            break
+                            
+                        config1 = matchup_data['config1']
+                        config2 = matchup_data['config2']
+                        config1_str = matchup_data['config1_str']
+                        config2_str = matchup_data['config2_str']
                         
-                        if game_result["game_id"] in existing_game_ids:
-                            continue
+                        # Determine which sides need games
+                        tiger1_games = matchup_data['tiger1_goat2']
+                        tiger2_games = matchup_data['tiger2_goat1']
                         
-                        # Use the role information that was added in the wrapper
-                        tiger_config_str = game_result["tiger_config_str"]
-                        goat_config_str = game_result["goat_config_str"]
-                        
-                        row = {
-                            "game_id": game_result["game_id"],
-                            "winner": game_result["winner"],
-                            "reason": game_result["reason"],
-                            "moves": game_result["moves"],
-                            "game_duration": game_result["game_duration"],
-                            "avg_tiger_move_time": game_result["avg_tiger_move_time"],
-                            "avg_goat_move_time": game_result["avg_goat_move_time"],
-                            "first_capture_move": game_result["first_capture_move"],
-                            "goats_captured": game_result["goats_captured"],
-                            "phase_transition_move": game_result["phase_transition_move"],
-                            "move_history": game_result["move_history"],
-                            "tiger_algorithm": "mcts",
-                            "tiger_config": tiger_config_str,
-                            "goat_algorithm": "mcts",
-                            "goat_config": goat_config_str
-                        }
-                        
-                        writer.writerow(row)
-                        csvfile.flush()
-                        games_saved += 1
-                        existing_game_ids.add(game_result["game_id"])
-                        
-                        # Update progress occasionally
-                        if time.time() - last_progress_update > 5:
-                            config1_tiger_count = sum(1 for t in all_tasks if t[2] is True and t in tasks_config1_tiger)
-                            config2_tiger_count = sum(1 for t in all_tasks if t[2] is False and t in tasks_config2_tiger)
-                            print(f"  Progress: {games_played}/{len(all_tasks)} games completed, {games_saved} saved")
-                            print(f"  Remaining: Config1 as Tiger: {config1_tiger_count}, Config2 as Tiger: {config2_tiger_count}")
-                            last_progress_update = time.time()
+                        # Add tasks based on which side has fewer games
+                        if tiger1_games <= tiger2_games and len(tasks) < num_tasks:
+                            # Schedule config1 as tiger
+                            tasks.append((config1, config2, True, config1_str, config2_str))
+                            
+                        if tiger2_games <= tiger1_games and len(tasks) < num_tasks:
+                            # Schedule config2 as tiger
+                            tasks.append((config1, config2, False, config1_str, config2_str))
                     
-                    # Count how many of each type we ended up with
-                    config1_tiger_played = existing_matchups.get((config1_str, config2_str), 0) + len(tasks_config1_tiger) - tiger1_goat2_played
-                    config2_tiger_played = existing_matchups.get((config2_str, config1_str), 0) + len(tasks_config2_tiger) - tiger2_goat1_played
+                    # If we're balanced across all matchups, add the next round
+                    if not tasks and matchup_priorities:
+                        # Get the first few matchups
+                        for matchup_idx, matchup_data in matchup_priorities[:min(num_tasks, len(matchup_priorities))]:
+                            config1 = matchup_data['config1']
+                            config2 = matchup_data['config2']
+                            config1_str = matchup_data['config1_str']
+                            config2_str = matchup_data['config2_str']
+                            
+                            # Add a task for each side if possible
+                            if len(tasks) < num_tasks:
+                                tasks.append((config1, config2, True, config1_str, config2_str))
+                            if len(tasks) < num_tasks:
+                                tasks.append((config1, config2, False, config1_str, config2_str))
                     
-                    batch_time = time.time() - batch_start_time
-                    print(f"  Completed {len(all_tasks)} games in {batch_time:.2f} seconds ({len(all_tasks)/batch_time:.2f} games/sec)")
-                    print(f"  Current totals: Config1 as Tiger: {config1_tiger_played}/{half_games}, Config2 as Tiger: {config2_tiger_played}/{half_games}")
-        
-        print(f"\nTournament complete!")
-        print(f"Total games played: {games_played}")
-        print(f"Total games saved: {games_saved}")
-        print(f"Results saved to: {output_file}")
+                    return tasks
+            
+            def on_game_complete(game_result):
+                """Callback when a game completes - process results and schedule next task."""
+                nonlocal games_played, games_saved, active_tasks, last_progress_update
+                
+                with lock:
+                    active_tasks -= 1
+                    games_played += 1
+                    
+                    if game_result["game_id"] in existing_game_ids:
+                        # Schedule a new task
+                        return
+                    
+                    # Use the role information from the result
+                    tiger_config_str = game_result["tiger_config_str"]
+                    goat_config_str = game_result["goat_config_str"]
+                    is_config1_tiger = game_result["is_config1_tiger"]
+                    
+                    # Update matchup counts
+                    for idx, data in matchup_game_counts.items():
+                        if (data['config1_str'] == (tiger_config_str if is_config1_tiger else goat_config_str) and
+                            data['config2_str'] == (goat_config_str if is_config1_tiger else tiger_config_str)):
+                            # Increment the appropriate counter
+                            if is_config1_tiger:
+                                matchup_game_counts[idx]['tiger1_goat2'] += 1
+                            else:
+                                matchup_game_counts[idx]['tiger2_goat1'] += 1
+                            matchup_game_counts[idx]['total'] += 1
+                            break
+                    
+                    # Prepare row for CSV
+                    row = {
+                        "game_id": game_result["game_id"],
+                        "winner": game_result["winner"],
+                        "reason": game_result["reason"],
+                        "moves": game_result["moves"],
+                        "game_duration": game_result["game_duration"],
+                        "avg_tiger_move_time": game_result["avg_tiger_move_time"],
+                        "avg_goat_move_time": game_result["avg_goat_move_time"],
+                        "first_capture_move": game_result["first_capture_move"],
+                        "goats_captured": game_result["goats_captured"],
+                        "phase_transition_move": game_result["phase_transition_move"],
+                        "move_history": game_result["move_history"],
+                        "tiger_algorithm": "mcts",
+                        "tiger_config": tiger_config_str,
+                        "goat_algorithm": "mcts",
+                        "goat_config": goat_config_str
+                    }
+                    
+                    # Write to CSV
+                    writer.writerow(row)
+                    csvfile.flush()
+                    games_saved += 1
+                    existing_game_ids.add(game_result["game_id"])
+                    
+                    # Update progress occasionally
+                    current_time = time.time()
+                    if current_time - last_progress_update > 5:
+                        elapsed_minutes = (current_time - simulation_start_time) / 60
+                        remaining_minutes = (end_time - current_time) / 60
+                        
+                        print(f"Progress: {games_played} games played, {games_saved} saved")
+                        print(f"Time: {elapsed_minutes:.1f} minutes elapsed, {remaining_minutes:.1f} minutes remaining")
+                        
+                        # Calculate game distribution stats
+                        counts = [data['total'] for data in matchup_game_counts.values()]
+                        min_count = min(counts) if counts else 0
+                        max_count = max(counts) if counts else 0
+                        avg_count = sum(counts) / len(counts) if counts else 0
+                        
+                        print(f"Game distribution: min={min_count}, max={max_count}, avg={avg_count:.1f}")
+                        print(f"Active tasks: {active_tasks}")
+                        last_progress_update = current_time
+            
+            def on_error(error):
+                """Handle errors in game execution."""
+                nonlocal active_tasks
+                with lock:
+                    active_tasks -= 1
+                    print(f"Error in game: {error}")
+            
+            def schedule_task(pool, task):
+                """Schedule a single task and track it."""
+                nonlocal active_tasks
+                with lock:
+                    if time.time() < end_time:
+                        # Schedule the task
+                        pool.apply_async(
+                            self._run_game_wrapper,
+                            args=(task,),
+                            callback=on_game_complete,
+                            error_callback=on_error
+                        )
+                        active_tasks += 1
+                        return True
+                return False
+            
+            # Create pool and run games
+            try:
+                with mp.Pool(processes=parallel_games) as pool:
+                    # Get initial tasks to schedule
+                    initial_tasks = get_next_tasks(parallel_games)
+                    print(f"Starting initial batch of {len(initial_tasks)} games...")
+                    
+                    # Schedule initial tasks
+                    for task in initial_tasks:
+                        schedule_task(pool, task)
+                    
+                    # Flag to track whether we've shown the time limit message
+                    time_limit_message_shown = False
+                    
+                    # Main simulation loop
+                    while active_tasks > 0 and time.time() < end_time:
+                        # Get tasks to replace completed ones
+                        if active_tasks < parallel_games:
+                            tasks_needed = parallel_games - active_tasks
+                            new_tasks = get_next_tasks(tasks_needed)
+                            
+                            for task in new_tasks:
+                                if not schedule_task(pool, task):
+                                    break
+                        
+                        # Sleep briefly to avoid CPU spinning
+                        time.sleep(0.1)
+                        
+                        # If we're close to time limit, notify once
+                        if time.time() + 60 > end_time and active_tasks > 0 and not time_limit_message_shown:
+                            print(f"Time limit approaching. Waiting for {active_tasks} active tasks to complete.")
+                            time_limit_message_shown = True
+                    
+                    # Make sure we wait for all tasks to complete
+                    pool.close()
+                    pool.join()
+                    
+            except Exception as e:
+                print(f"Error during simulation: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Summary
+            elapsed_minutes = (time.time() - simulation_start_time) / 60
+            print(f"\nSimulation complete!")
+            print(f"Total time: {elapsed_minutes:.1f} minutes")
+            print(f"Total games played: {games_played}")
+            print(f"Total games saved: {games_saved}")
+            
+            # Calculate final game distribution stats
+            counts = [data['total'] for data in matchup_game_counts.values()]
+            min_count = min(counts) if counts else 0
+            max_count = max(counts) if counts else 0
+            avg_count = sum(counts) / len(counts) if counts else 0
+            
+            print(f"Final game distribution: min={min_count}, max={max_count}, avg={avg_count:.1f}")
+            print(f"Results saved to: {output_file}")
+            
         return output_file
     
     def run_main_competition(self, 

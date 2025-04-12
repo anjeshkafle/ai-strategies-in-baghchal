@@ -20,7 +20,7 @@ class MCTSTournamentConfig:
     rollout_policies: List[str] = field(default_factory=lambda: ["random", "lightweight", "guided"])
     iterations: List[int] = field(default_factory=lambda: [10000, 15000, 20000])
     rollout_depths: List[int] = field(default_factory=lambda: [4, 6])
-    games_per_matchup: int = 40
+    max_simulation_time: int = 60  # Maximum time in minutes to run the simulation
     output_dir: str = "simulation_results"
     parallel_ranges: List[ParallelRange] = None  # For parallel execution
     parallel_games: int = None  # Number of parallel games to run per process

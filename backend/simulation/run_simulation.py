@@ -75,7 +75,7 @@ def run_mcts_tournament(config_path: str):
     print(f"  Rollout policies: {mcts_config.rollout_policies}")
     print(f"  Iterations: {mcts_config.iterations}")
     print(f"  Rollout depths: {mcts_config.rollout_depths}")
-    print(f"  Games per matchup: {mcts_config.games_per_matchup}")
+    print(f"  Max simulation time: {mcts_config.max_simulation_time} minutes")
     print(f"  Output directory: {mcts_config.output_dir}")
     print(f"  Parallel games: {mcts_config.parallel_games if mcts_config.parallel_games else 'auto'}")
     print()
@@ -94,7 +94,7 @@ def run_mcts_tournament(config_path: str):
                 rollout_policies=mcts_config.rollout_policies,
                 iterations=mcts_config.iterations,
                 rollout_depths=mcts_config.rollout_depths,
-                games_per_matchup=mcts_config.games_per_matchup,
+                max_simulation_time=mcts_config.max_simulation_time,
                 start_idx=start_idx,
                 end_idx=end_idx,
                 parallel_games=mcts_config.parallel_games
@@ -107,7 +107,7 @@ def run_mcts_tournament(config_path: str):
             rollout_policies=mcts_config.rollout_policies,
             iterations=mcts_config.iterations,
             rollout_depths=mcts_config.rollout_depths,
-            games_per_matchup=mcts_config.games_per_matchup,
+            max_simulation_time=mcts_config.max_simulation_time,
             parallel_games=mcts_config.parallel_games
         )
         
