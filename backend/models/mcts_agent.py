@@ -124,7 +124,7 @@ class MCTSAgent:
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using MCTS."""
         # Debug flag - set to True to print detailed statistics
-        debug = False
+        debug = True
         try:
             import time
             start_time = time.time()
@@ -868,23 +868,33 @@ class MCTSAgent:
         
         return result
         
-    def _calculate_dynamic_influence(self, effective_captures: float) -> float:
+    def _calculate_dynamic_influence(self, effective_captures: float, goats_placed: int = 20) -> float:
         """
-        Calculate capture influence that scales with the number of effective captures.
+        Calculate capture influence that scales with both the number of effective captures
+        and the game stage (goats placed).
         
         As captures approach 4 (one before terminal), the influence of captures increases.
+        In very early game, positional heuristics are more important than captures.
         
         Args:
             effective_captures: The effective capture count (can be negative for goat advantage)
+            goats_placed: Number of goats placed so far
         
         Returns:
-            Influence percentage (0.85 to 0.99)
+            Influence percentage (dynamically adjusted based on game stage)
         """
         # Use absolute value to ensure proper scaling for both tiger and goat advantage
         capture_abs = min(4.0, max(0.0, abs(effective_captures)))
         
-        # Base and maximum influence percentages
-        base_influence = 0.85
+        # Early game ratio - ranges from 1.0 to 0.0 as goats placed goes from 0 to 15
+        early_game_ratio = max(0.0, 1.0 - (goats_placed / 15.0))
+        
+        # Early game adjustment - reduce base influence significantly in early game
+        # For first few goats, base should be around 0.5-0.6 instead of 0.85
+        early_game_reduction = 0.35 * early_game_ratio  # Up to 0.35 reduction
+        
+        # Base and maximum influence percentages with early game adjustment
+        base_influence = 0.85 - early_game_reduction
         max_influence = 0.99
         
         # Linear interpolation based on capture count
@@ -1007,7 +1017,7 @@ class MCTSAgent:
         capture_effect = self._map_captures_to_win_rate(capture_deficit, goats_captured)
         
         # STEP 6: Calculate dynamic influence based on effective captures
-        capture_influence = self._calculate_dynamic_influence(effective_captures)
+        capture_influence = self._calculate_dynamic_influence(effective_captures, goats_placed)
         
         # STEP 7: Combine components with dynamic weighting
         # Capture component with non-linear effect and dynamic influence
@@ -1036,7 +1046,10 @@ class MCTSAgent:
         # Apply dynamic factors to weights
         position_weight = base_position_weight * position_weight_factor
         spacing_weight = base_spacing_weight * spacing_weight_factor
-        edge_weight = base_edge_weight * edge_weight_factor
+        
+        # Amplify edge weight significantly for early placement phase (first 5 goats)
+        early_placement_boost = max(0.0, 3.0 * (1.0 - min(1.0, goats_placed / 5)))
+        edge_weight = base_edge_weight * (edge_weight_factor + early_placement_boost)
         
         # Apply weighted factors
         heuristic_sum = (

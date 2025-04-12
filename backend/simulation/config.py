@@ -73,8 +73,8 @@ class MCTSTournamentConfig:
                             'rollout_policy': policy,
                             'iterations': iteration,
                             'rollout_depth': depth,
-                            'exploration_weight': 1.0,
-                            'guided_strictness': 0.8
+                            'exploration_weight': 1.414,
+                            'guided_strictness': 0.5
                         }
                         all_configs.append(config)
         

@@ -977,6 +977,15 @@ class MinimaxAgent:
         # Reduced score for goats on middle layer (0.67) or center (0.33)
         placement_quality = (outer_layer_goats + (middle_layer_goats * 0.67) + (center_goats * 0.33)) / total_goats
         
+        # Apply a severe penalty for center goats in early game (first 5 goats)
+        if total_goats <= 5 and center_goats > 0:
+            # Penalty proportional to center goats and inversely proportional to total goats
+            center_penalty = min(0.5, (center_goats / total_goats) * 0.6)
+            placement_quality -= center_penalty
+            
+            # Ensure we don't go below 0
+            placement_quality = max(0.0, placement_quality)
+        
         return placement_quality
 
     def _test_transformations(self, board):
