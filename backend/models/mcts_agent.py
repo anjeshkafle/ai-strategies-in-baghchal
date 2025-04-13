@@ -198,7 +198,8 @@ class MCTSAgent:
                 if i % 100 == 0:  # Check time periodically to avoid performance impact
                     current_time = time.time()
                     if current_time - start_time > self.max_time_seconds:
-                        print(f"MCTS timeout after {i} iterations ({current_time - start_time:.2f} seconds)")
+                        if debug:
+                            print(f"MCTS timeout after {i} iterations ({current_time - start_time:.2f} seconds)")
                         break
                 
                 # Selection phase - select a promising leaf node
