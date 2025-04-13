@@ -46,7 +46,11 @@ class SimulationController:
         ]
         
         # Initialize Google Sheets sync
-        self.sheets_sync = GoogleSheetsSync(webapp_url=google_sheets_url, batch_size=batch_size)
+        self.sheets_sync = GoogleSheetsSync(
+            webapp_url=google_sheets_url, 
+            batch_size=batch_size,
+            output_dir=output_dir
+        )
     
     def _find_existing_results(self, output_path: str) -> Set[str]:
         """
