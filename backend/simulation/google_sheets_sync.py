@@ -22,12 +22,10 @@ class GoogleSheetsSync:
             webapp_url: URL of the Google Apps Script web app
             batch_size: Number of rows to batch before syncing
         """
-        print(f"DEBUG: GoogleSheetsSync.__init__ received webapp_url={webapp_url}, type={type(webapp_url)}")
         self.webapp_url = webapp_url
         self.batch_size = batch_size
         self.row_buffer = []
         self.enabled = bool(webapp_url)  # Enable only if URL is provided
-        print(f"DEBUG: GoogleSheetsSync.enabled={self.enabled}")
         
         if self.enabled:
             print(f"Google Sheets sync enabled (batch size: {batch_size})")

@@ -33,15 +33,6 @@ def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Run MCTS configuration tournament")
     
-    parser.add_argument("--rollout_policies", nargs="+", default=["random", "lightweight", "guided"],
-                        help="Rollout policies to test (space-separated list)")
-    
-    parser.add_argument("--iterations", nargs="+", type=int, default=[10000, 15000, 20000],
-                        help="Iteration counts to test (space-separated list)")
-    
-    parser.add_argument("--rollout_depths", nargs="+", type=int, default=[4, 6],
-                        help="Rollout depths to test (space-separated list)")
-    
     parser.add_argument("--games", type=int, default=40,
                         help="Number of games per matchup (default: 40)")
     
@@ -77,12 +68,15 @@ def main():
     output_dir = args.output_dir or config.mcts_tournament.output_dir
     sheets_url = args.sheets_url or config.sheets_webapp_url
     batch_size = args.batch_size or config.sheets_batch_size
+    max_simulation_time = config.mcts_tournament.max_simulation_time
+    
+    # Get all configurations from config
+    mcts_configs = config.mcts_tournament.get_all_configs()
     
     print(f"Starting MCTS tournament at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Configuration:")
-    print(f"  Rollout policies: {args.rollout_policies}")
-    print(f"  Iterations: {args.iterations}")
-    print(f"  Rollout depths: {args.rollout_depths}")
+    print(f"  Total configurations: {len(mcts_configs)}")
+    print(f"  Max simulation time: {max_simulation_time} minutes")
     print(f"  Games per matchup: {args.games}")
     print(f"  Processing matchups from index {args.start} to {args.end if args.end is not None else 'end'}")
     print(f"  Output directory: {output_dir}")
@@ -109,10 +103,8 @@ def main():
             print("No existing tournament file found. Starting fresh.")
     
     output_file = controller.run_mcts_tournament(
-        rollout_policies=args.rollout_policies,
-        iterations=args.iterations,
-        rollout_depths=args.rollout_depths,
-        games_per_matchup=args.games,
+        mcts_configs=mcts_configs,
+        max_simulation_time=max_simulation_time,
         start_idx=args.start,
         end_idx=args.end,
         output_file=existing_file

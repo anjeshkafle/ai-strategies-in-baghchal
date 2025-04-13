@@ -28,7 +28,7 @@ class GameRunner:
         """
         self.tiger_config = tiger_config
         self.goat_config = goat_config
-        self.game_id = str(uuid.uuid4())[:8]  # Generate a unique game ID
+        self.game_id = str(uuid.uuid4())  # Generate a unique game ID
         self.move_history = []
         
     def _create_agent(self, config: Dict) -> Any:

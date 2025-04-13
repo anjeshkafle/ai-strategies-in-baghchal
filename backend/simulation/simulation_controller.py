@@ -172,9 +172,6 @@ class SimulationController:
     
     def run_mcts_tournament(self, 
                           mcts_configs: List[Dict] = None,
-                          rollout_policies: List[str] = None,
-                          iterations: List[int] = None,
-                          rollout_depths: List[int] = None,
                           max_simulation_time: int = 60,  # Maximum time in minutes
                           start_idx: int = 0,
                           end_idx: int = None,
@@ -184,10 +181,7 @@ class SimulationController:
         Run a tournament between all combinations of MCTS configurations.
         
         Args:
-            mcts_configs: Pre-generated list of MCTS configurations (new format)
-            rollout_policies: List of rollout policies to test (legacy format)
-            iterations: List of iteration counts to test (legacy format)
-            rollout_depths: List of rollout depths to test (legacy format)
+            mcts_configs: List of MCTS configurations to test
             max_simulation_time: Maximum time to run the simulation in minutes
             start_idx: Starting index of matchup to process (for parallelization)
             end_idx: Ending index of matchup to process (for parallelization)
@@ -201,25 +195,9 @@ class SimulationController:
         if parallel_games is None:
             parallel_games = max(1, mp.cpu_count() - 1)
         
-        # Generate all MCTS configurations (either from pre-generated or from parameters)
+        # Check that configurations are provided
         if mcts_configs is None:
-            # Legacy format - generate configurations from individual parameters
-            if rollout_policies is None or iterations is None or rollout_depths is None:
-                raise ValueError("Either mcts_configs or all of rollout_policies, iterations, and rollout_depths must be provided")
-                
-            mcts_configs = []
-            for policy in rollout_policies:
-                for iteration in iterations:
-                    for depth in rollout_depths:
-                        config = {
-                            'algorithm': 'mcts',
-                            'rollout_policy': policy,
-                            'iterations': iteration,
-                            'rollout_depth': depth,
-                            'exploration_weight': 1.0,
-                            'guided_strictness': 0.8
-                        }
-                        mcts_configs.append(config)
+            raise ValueError("mcts_configs must be provided")
         
         # Generate all matchups (each config plays against every other)
         all_matchups = list(itertools.combinations(mcts_configs, 2))
@@ -507,10 +485,35 @@ class SimulationController:
                 nonlocal active_tasks
                 with lock:
                     active_tasks -= 1
-                    # Find which task errored (from thread.ident) and decrement its in-progress counter
-                    # (This requires saving thread ID when scheduling but we have a lock, so it's challenging)
-                    # For simplicity, we'll accept that errors may slightly imbalance the counts
                     print(f"Error in game: {error}")
+                    
+                    # Since we can't easily identify which specific task failed,
+                    # we'll make a conservative adjustment to maintain balance:
+                    # Find the matchup with the highest in-progress count and decrement it
+                    max_in_progress = 0
+                    max_idx = None
+                    tiger1_higher = False
+                    
+                    for idx, data in matchup_game_counts.items():
+                        tiger1_count = data['tiger1_goat2_in_progress']
+                        tiger2_count = data['tiger2_goat1_in_progress']
+                        
+                        if tiger1_count > max_in_progress:
+                            max_in_progress = tiger1_count
+                            max_idx = idx
+                            tiger1_higher = True
+                        
+                        if tiger2_count > max_in_progress:
+                            max_in_progress = tiger2_count
+                            max_idx = idx
+                            tiger1_higher = False
+                    
+                    # Decrement the highest in-progress counter
+                    if max_idx is not None and max_in_progress > 0:
+                        if tiger1_higher:
+                            matchup_game_counts[max_idx]['tiger1_goat2_in_progress'] -= 1
+                        else:
+                            matchup_game_counts[max_idx]['tiger2_goat1_in_progress'] -= 1
             
             def schedule_task(pool, task):
                 """Schedule a single task and track it."""
