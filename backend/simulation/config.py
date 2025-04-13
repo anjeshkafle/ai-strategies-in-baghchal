@@ -20,8 +20,8 @@ class MCTSConfigGroup:
     rollout_policies: List[str] = field(default_factory=lambda: ["lightweight"])
     iterations: List[int] = field(default_factory=lambda: [10000])
     rollout_depths: List[int] = field(default_factory=lambda: [6])
-    exploration_weight: float = 1.414  # √2 is optimal for UCB1
-    guided_strictness: float = 0.5
+    exploration_weights: List[float] = field(default_factory=lambda: [1.414])  # √2 is optimal for UCB1
+    guided_strictness_values: List[float] = field(default_factory=lambda: [0.5])
 
 @dataclass
 class MCTSTournamentConfig:
@@ -51,15 +51,24 @@ class MCTSTournamentConfig:
             for policy in config_group.rollout_policies:
                 for iteration in config_group.iterations:
                     for depth in config_group.rollout_depths:
-                        config = {
-                            'algorithm': 'mcts',
-                            'rollout_policy': policy,
-                            'iterations': iteration,
-                            'rollout_depth': depth,
-                            'exploration_weight': config_group.exploration_weight,
-                            'guided_strictness': config_group.guided_strictness
-                        }
-                        all_configs.append(config)
+                        for exploration_weight in config_group.exploration_weights:
+                            # Only use multiple guided_strictness values for guided policy
+                            if policy == "guided":
+                                strictness_values = config_group.guided_strictness_values
+                            else:
+                                # For non-guided policies, just use the first value in the list
+                                strictness_values = [config_group.guided_strictness_values[0]]
+                                
+                            for guided_strictness in strictness_values:
+                                config = {
+                                    'algorithm': 'mcts',
+                                    'rollout_policy': policy,
+                                    'iterations': iteration,
+                                    'rollout_depth': depth,
+                                    'exploration_weight': exploration_weight,
+                                    'guided_strictness': guided_strictness
+                                }
+                                all_configs.append(config)
         
         return all_configs
     
@@ -203,12 +212,25 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
         if 'configurations' in mcts_dict:
             config_groups = []
             for group in mcts_dict.get('configurations', []):
+                # Handle both new and old parameter names for backward compatibility
+                exploration_weights = group.get('exploration_weights', None)
+                if exploration_weights is None:
+                    # If new parameter name not found, try old name and convert to list
+                    exploration_weight = group.get('exploration_weight', 1.414)
+                    exploration_weights = [exploration_weight]
+                
+                guided_strictness_values = group.get('guided_strictness_values', None)
+                if guided_strictness_values is None:
+                    # If new parameter name not found, try old name and convert to list
+                    guided_strictness = group.get('guided_strictness', 0.5)
+                    guided_strictness_values = [guided_strictness]
+                
                 config_groups.append(MCTSConfigGroup(
                     rollout_policies=group.get('rollout_policies', ["lightweight"]),
                     iterations=group.get('iterations', [10000]),
                     rollout_depths=group.get('rollout_depths', [6]),
-                    exploration_weight=group.get('exploration_weight', 1.414),
-                    guided_strictness=group.get('guided_strictness', 0.5)
+                    exploration_weights=exploration_weights,
+                    guided_strictness_values=guided_strictness_values
                 ))
             mcts_dict['configurations'] = config_groups
             
@@ -267,4 +289,4 @@ def save_config(config: SimulationConfig, config_path: str = "simulation_config.
     os.makedirs(os.path.dirname(os.path.abspath(config_path)), exist_ok=True)
     
     with open(config_path, 'w') as f:
-        json.dump(config_dict, f, indent=4) 
+        json.dump(config_dict, f, indent=2) 

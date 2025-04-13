@@ -85,17 +85,23 @@ def run_mcts_tournament(config_path: str):
     policies = set()
     iterations = set()
     depths = set()
+    exploration_weights = set()
+    guided_strictness_values = set()
     
     # Extract unique values for reporting
     for config_item in all_configs:
         policies.add(config_item['rollout_policy'])
         iterations.add(config_item['iterations'])
         depths.add(config_item['rollout_depth'])
+        exploration_weights.add(config_item['exploration_weight'])
+        guided_strictness_values.add(config_item['guided_strictness'])
     
     print(f"  Configuration groups: {len(mcts_config.configurations)}")
     print(f"  Unique policies: {sorted(policies)}")
     print(f"  Unique iterations: {sorted(iterations)}")
     print(f"  Unique depths: {sorted(depths)}")
+    print(f"  Unique exploration weights: {sorted(exploration_weights)}")
+    print(f"  Unique guided strictness values: {sorted(guided_strictness_values)}")
     print(f"  Total unique configurations: {len(all_configs)}")
     print(f"  Max simulation time: {mcts_config.max_simulation_time} minutes")
     print(f"  Output directory: {mcts_config.output_dir}")
@@ -174,6 +180,8 @@ def run_main_competition(config_path: str):
         print(f"  Policy: {best_config['config']['rollout_policy']}")
         print(f"  Iterations: {best_config['config']['iterations']}")
         print(f"  Depth: {best_config['config']['rollout_depth']}")
+        print(f"  Exploration Weight: {best_config['config'].get('exploration_weight', 1.414)}")
+        print(f"  Guided Strictness: {best_config['config'].get('guided_strictness', 0.5)}")
         print(f"  Overall Win Rate: {best_config['stats']['overall_win_rate']:.2%}")
         print(f"  95% CI: [{best_config['stats']['overall_ci'][0]:.2%}, {best_config['stats']['overall_ci'][1]:.2%}]")
         print(f"  Total Games: {best_config['stats']['total_games']}")

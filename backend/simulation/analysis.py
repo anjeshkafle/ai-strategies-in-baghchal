@@ -160,6 +160,8 @@ class TournamentAnalyzer:
             print(f"  Policy: {best['config']['rollout_policy']}")
             print(f"  Iterations: {best['config']['iterations']}")
             print(f"  Depth: {best['config']['rollout_depth']}")
+            print(f"  Exploration Weight: {best['config'].get('exploration_weight', 1.414)}")
+            print(f"  Guided Strictness: {best['config'].get('guided_strictness', 0.5)}")
             print(f"  Overall Win Rate: {best['stats']['overall_win_rate']:.2%}")
             print(f"  95% CI: [{best['stats']['overall_ci'][0]:.2%}, {best['stats']['overall_ci'][1]:.2%}]")
             print(f"  Total Games: {best['stats']['total_games']}")
@@ -168,6 +170,8 @@ class TournamentAnalyzer:
             print("------------------")
             for i, config in enumerate(best['all_configs'], 1):
                 print(f"\n{i}. {config['config']['rollout_policy']}-{config['config']['iterations']}-{config['config']['rollout_depth']}")
+                print(f"   Exploration Weight: {config['config'].get('exploration_weight', 1.414)}")
+                print(f"   Guided Strictness: {config['config'].get('guided_strictness', 0.5)}")
                 print(f"   Overall Win Rate: {config['overall_win_rate']:.2%}")
                 print(f"   95% CI: [{config['overall_ci'][0]:.2%}, {config['overall_ci'][1]:.2%}]")
                 print(f"   Total Games: {config['total_games']}")

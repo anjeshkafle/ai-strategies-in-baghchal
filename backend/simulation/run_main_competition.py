@@ -45,6 +45,12 @@ def parse_args():
     parser.add_argument("--depth", type=int, required=True,
                         help="Best MCTS rollout depth")
     
+    parser.add_argument("--exploration_weight", type=float, default=1.0,
+                        help="Exploration weight for UCB formula (default: 1.0)")
+    
+    parser.add_argument("--guided_strictness", type=float, default=0.8,
+                        help="Guided strictness for rollouts (default: 0.8)")
+    
     parser.add_argument("--minimax_depths", nargs="+", type=int, default=None,
                         help="Minimax depths to test (space-separated list, default: from config)")
     
@@ -98,8 +104,8 @@ def main():
         'rollout_policy': args.policy,
         'iterations': args.iterations,
         'rollout_depth': args.depth,
-        'exploration_weight': 1.0,
-        'guided_strictness': 0.8
+        'exploration_weight': args.exploration_weight,
+        'guided_strictness': args.guided_strictness
     }
     
     # Use command line arguments if provided, otherwise use values from config
@@ -112,6 +118,8 @@ def main():
     print(f"Starting main competition at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Configuration:")
     print(f"  Best MCTS: {args.policy} policy, {args.iterations} iterations, depth {args.depth}")
+    print(f"  Exploration weight: {args.exploration_weight}")
+    print(f"  Guided strictness: {args.guided_strictness}")
     print(f"  Minimax depths: {minimax_depths}")
     print(f"  Games per matchup: {games_per_matchup}")
     print(f"  Output directory: {output_dir}")

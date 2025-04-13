@@ -110,9 +110,11 @@ class TestMCTSTournamentDistribution(unittest.TestCase):
                 config1 = json.loads(configs[0])
                 config2 = json.loads(configs[1])
                 
-                # Simplify config representation
-                config1_desc = f"{config1['rollout_policy']}-{config1['iterations']}-{config1['rollout_depth']}"
-                config2_desc = f"{config2['rollout_policy']}-{config2['iterations']}-{config2['rollout_depth']}"
+                # Simplify config representation - include exploration weight and guided strictness
+                config1_desc = f"{config1['rollout_policy']}-{config1['iterations']}-{config1['rollout_depth']}-" \
+                               f"{config1.get('exploration_weight', 1.414)}-{config1.get('guided_strictness', 0.5)}"
+                config2_desc = f"{config2['rollout_policy']}-{config2['iterations']}-{config2['rollout_depth']}-" \
+                               f"{config2.get('exploration_weight', 1.414)}-{config2.get('guided_strictness', 0.5)}"
                 
                 round_num = data["total"] // 2
                 role_balance = abs(data["tiger_games"] - data["goat_games"])

@@ -124,7 +124,7 @@ class MCTSAgent:
     def get_move(self, state: GameState) -> Dict:
         """Get the best move for the current state using MCTS."""
         # Debug flag - set to True to print detailed statistics
-        debug = False
+        debug = True
         try:
             import time
             start_time = time.time()
