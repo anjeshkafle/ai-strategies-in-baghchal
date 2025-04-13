@@ -51,17 +51,32 @@ def parse_args():
     parser.add_argument("--end", type=int, default=None,
                         help="Ending index of matchups to process (default: all)")
     
-    parser.add_argument("--output_dir", type=str, default="simulation_results",
-                        help="Directory to save results (default: simulation_results)")
+    parser.add_argument("--output_dir", type=str, default=None,
+                        help="Directory to save results (default: from config)")
 
     parser.add_argument("--new", action="store_true",
                         help="Force creation of a new file instead of resuming")
+    
+    parser.add_argument("--sheets_url", type=str, default=None,
+                       help="Google Sheets web app URL for syncing results")
+    
+    parser.add_argument("--batch_size", type=int, default=None,
+                       help="Batch size for Google Sheets sync (default: 100)")
     
     return parser.parse_args()
 
 def main():
     """Run the MCTS tournament."""
     args = parse_args()
+    
+    # Load config
+    from backend.simulation.config import load_config
+    config = load_config()
+    
+    # Use command line arguments if provided, otherwise use values from config
+    output_dir = args.output_dir or config.mcts_tournament.output_dir
+    sheets_url = args.sheets_url or config.sheets_webapp_url
+    batch_size = args.batch_size or config.sheets_batch_size
     
     print(f"Starting MCTS tournament at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Configuration:")
@@ -70,10 +85,18 @@ def main():
     print(f"  Rollout depths: {args.rollout_depths}")
     print(f"  Games per matchup: {args.games}")
     print(f"  Processing matchups from index {args.start} to {args.end if args.end is not None else 'end'}")
-    print(f"  Output directory: {args.output_dir}")
+    print(f"  Output directory: {output_dir}")
+    if sheets_url:
+        print(f"  Google Sheets sync: Enabled (URL: {sheets_url}, batch size: {batch_size})")
+    else:
+        print(f"  Google Sheets sync: Disabled")
     print()
     
-    controller = SimulationController(output_dir=args.output_dir)
+    controller = SimulationController(
+        output_dir=output_dir,
+        google_sheets_url=sheets_url,
+        batch_size=batch_size
+    )
     
     # Look for existing file to resume from, unless --new is specified
     existing_file = None

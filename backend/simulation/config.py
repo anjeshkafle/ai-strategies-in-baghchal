@@ -134,6 +134,8 @@ class MainCompetitionConfig:
 @dataclass
 class SimulationConfig:
     """Main configuration for all simulations."""
+    sheets_webapp_url: Optional[str] = None  # URL for Google Sheets web app
+    sheets_batch_size: int = 100  # Batch size for Google Sheets sync
     mcts_tournament: MCTSTournamentConfig = None
     main_competition: MainCompetitionConfig = None
     
@@ -193,6 +195,10 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
     with open(config_path, 'r') as f:
         config_dict = json.load(f)
     
+    # Get top level configuration fields
+    sheets_webapp_url = config_dict.get('sheets_webapp_url')
+    sheets_batch_size = config_dict.get('sheets_batch_size', 100)
+    
     # Convert nested dictionaries to config objects
     mcts_config = None
     main_config = None
@@ -226,7 +232,12 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
     if 'main_competition' in config_dict:
         main_config = MainCompetitionConfig(**config_dict['main_competition'])
     
-    return SimulationConfig(mcts_tournament=mcts_config, main_competition=main_config)
+    return SimulationConfig(
+        sheets_webapp_url=sheets_webapp_url,
+        sheets_batch_size=sheets_batch_size,
+        mcts_tournament=mcts_config, 
+        main_competition=main_config
+    )
 
 def save_config(config: SimulationConfig, config_path: str = "simulation_config.json"):
     """
@@ -254,6 +265,14 @@ def save_config(config: SimulationConfig, config_path: str = "simulation_config.
     
     # Convert to dict but preserve only non-None values
     config_dict = {}
+    
+    # Add top-level fields
+    if config.sheets_webapp_url is not None:
+        config_dict['sheets_webapp_url'] = config.sheets_webapp_url
+    if config.sheets_batch_size is not None:
+        config_dict['sheets_batch_size'] = config.sheets_batch_size
+        
+    # Add nested objects
     if config.mcts_tournament:
         config_dict['mcts_tournament'] = convert_to_dict(config.mcts_tournament)
     if config.main_competition:

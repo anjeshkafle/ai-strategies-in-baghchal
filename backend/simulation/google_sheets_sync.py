@@ -1,0 +1,105 @@
+"""
+Google Sheets synchronization for simulation results.
+
+This module provides a simple way to sync simulation results to a Google Sheet
+via a Google Apps Script web app.
+"""
+
+import requests
+import time
+from typing import List, Dict, Any
+
+class GoogleSheetsSync:
+    """
+    Simple class to sync data to Google Sheets via a web app URL.
+    """
+    
+    def __init__(self, webapp_url=None, batch_size=100):
+        """
+        Initialize the sync helper.
+        
+        Args:
+            webapp_url: URL of the Google Apps Script web app
+            batch_size: Number of rows to batch before syncing
+        """
+        print(f"DEBUG: GoogleSheetsSync.__init__ received webapp_url={webapp_url}, type={type(webapp_url)}")
+        self.webapp_url = webapp_url
+        self.batch_size = batch_size
+        self.row_buffer = []
+        self.enabled = bool(webapp_url)  # Enable only if URL is provided
+        print(f"DEBUG: GoogleSheetsSync.enabled={self.enabled}")
+        
+        if self.enabled:
+            print(f"Google Sheets sync enabled (batch size: {batch_size})")
+        else:
+            print("Google Sheets sync disabled (no URL provided)")
+    
+    def add_row(self, row_dict: Dict[str, Any], headers: List[str]):
+        """
+        Add a row to the buffer and sync if batch size is reached.
+        
+        Args:
+            row_dict: Dictionary containing row data
+            headers: List of column headers for ordering values
+            
+        Returns:
+            True if sync was triggered, False otherwise
+        """
+        if not self.enabled:
+            return False
+        
+        # Convert dict to list in the correct order
+        row_values = [row_dict.get(header, "") for header in headers]
+        self.row_buffer.append(row_values)
+        
+        # Sync if batch size is reached
+        if len(self.row_buffer) >= self.batch_size:
+            return self.sync()
+            
+        return False
+    
+    def sync(self, force=False):
+        """
+        Sync buffered rows to Google Sheets.
+        
+        Args:
+            force: Whether to sync even if buffer is smaller than batch size
+            
+        Returns:
+            True if sync was successful, False otherwise
+        """
+        if not self.enabled:
+            return False
+            
+        if not self.row_buffer:
+            return False
+            
+        if not force and len(self.row_buffer) < self.batch_size:
+            return False
+        
+        try:
+            # Send data to Google Sheets web app
+            response = requests.post(
+                self.webapp_url,
+                json=self.row_buffer,
+                headers={"Content-Type": "application/json"},
+                timeout=10  # Add timeout to prevent hanging
+            )
+            
+            # Check if sync was successful
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") == "success":
+                    print(f"Successfully synced {len(self.row_buffer)} rows to Google Sheets")
+                    self.row_buffer.clear()  # Clear the buffer after successful sync
+                    return True
+                else:
+                    print(f"Error syncing to Google Sheets: {result.get('message', 'Unknown error')}")
+            else:
+                print(f"Error syncing to Google Sheets: HTTP {response.status_code}")
+                
+        except Exception as e:
+            print(f"Exception during Google Sheets sync: {str(e)}")
+            
+        # If we got here, sync failed but don't clear buffer - we'll retry later
+        return False 

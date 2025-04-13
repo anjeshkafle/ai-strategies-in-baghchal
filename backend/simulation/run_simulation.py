@@ -17,9 +17,10 @@ import pandas as pd
 # Add the parent directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from simulation.simulation_controller import SimulationController
-from simulation.config import load_config, save_config, SimulationConfig
-from simulation.analysis import TournamentAnalyzer
+# Use relative imports for modules in the same package
+from .simulation_controller import SimulationController
+from .config import load_config, save_config, SimulationConfig
+from .analysis import TournamentAnalyzer
 
 def find_best_mcts_config(results_file: str) -> dict:
     """
@@ -70,6 +71,12 @@ def run_mcts_tournament(config_path: str):
     config = load_config(config_path)
     mcts_config = config.mcts_tournament
     
+    # Debug the config structure
+    print("Config type:", type(config))
+    print("Config attributes:", dir(config))
+    print("sheets_webapp_url:", config.sheets_webapp_url)
+    print("sheets_batch_size:", config.sheets_batch_size)
+    
     print(f"Starting MCTS tournament at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Configuration:")
     
@@ -80,10 +87,10 @@ def run_mcts_tournament(config_path: str):
     depths = set()
     
     # Extract unique values for reporting
-    for config in all_configs:
-        policies.add(config['rollout_policy'])
-        iterations.add(config['iterations'])
-        depths.add(config['rollout_depth'])
+    for config_item in all_configs:
+        policies.add(config_item['rollout_policy'])
+        iterations.add(config_item['iterations'])
+        depths.add(config_item['rollout_depth'])
     
     print(f"  Configuration groups: {len(mcts_config.configurations)}")
     print(f"  Unique policies: {sorted(policies)}")
@@ -93,9 +100,21 @@ def run_mcts_tournament(config_path: str):
     print(f"  Max simulation time: {mcts_config.max_simulation_time} minutes")
     print(f"  Output directory: {mcts_config.output_dir}")
     print(f"  Parallel games: {mcts_config.parallel_games if mcts_config.parallel_games else 'auto'}")
+    if hasattr(config, 'sheets_webapp_url') and config.sheets_webapp_url:
+        print(f"  Google Sheets sync: Enabled (URL configured, batch size: {config.sheets_batch_size})")
+    else:
+        print(f"  Google Sheets sync: Disabled (no URL configured)")
     print()
     
-    controller = SimulationController(output_dir=mcts_config.output_dir)
+    # Initialize the controller with sheets settings
+    webapp_url = config.sheets_webapp_url if hasattr(config, 'sheets_webapp_url') else None
+    batch_size = config.sheets_batch_size if hasattr(config, 'sheets_batch_size') else 100
+    
+    controller = SimulationController(
+        output_dir=mcts_config.output_dir,
+        google_sheets_url=webapp_url,
+        batch_size=batch_size
+    )
     
     # If parallel ranges are specified, run each range
     if mcts_config.parallel_ranges:
@@ -137,6 +156,10 @@ def run_main_competition(config_path: str):
     config = load_config(config_path)
     main_config = config.main_competition
     
+    # Debug the config structure
+    print("Config type:", type(config))
+    print("Config attributes:", dir(config))
+    
     # If MCTS tournament results are specified, find the best config
     if not main_config.mcts_tournament_results:
         raise ValueError("mcts_tournament_results must be specified in the main_competition section")
@@ -166,9 +189,21 @@ def run_main_competition(config_path: str):
     print(f"  Minimax depths: {main_config.minimax_depths}")
     print(f"  Games per matchup: {main_config.games_per_matchup}")
     print(f"  Output directory: {main_config.output_dir}")
+    if hasattr(config, 'sheets_webapp_url') and config.sheets_webapp_url:
+        print(f"  Google Sheets sync: Enabled (URL configured, batch size: {config.sheets_batch_size})")
+    else:
+        print(f"  Google Sheets sync: Disabled (no URL configured)")
     print()
     
-    controller = SimulationController(output_dir=main_config.output_dir)
+    # Initialize the controller with sheets settings
+    webapp_url = config.sheets_webapp_url if hasattr(config, 'sheets_webapp_url') else None
+    batch_size = config.sheets_batch_size if hasattr(config, 'sheets_batch_size') else 100
+    
+    controller = SimulationController(
+        output_dir=main_config.output_dir,
+        google_sheets_url=webapp_url,
+        batch_size=batch_size
+    )
     
     output_file = controller.run_main_competition(
         best_mcts_config=best_config['config'],

@@ -9,18 +9,21 @@ import glob
 import multiprocessing as mp
 
 from .game_runner import GameRunner
+from .google_sheets_sync import GoogleSheetsSync
 
 class SimulationController:
     """
     Manages running multiple games between agent configurations and saving results.
     """
     
-    def __init__(self, output_dir: str = "simulation_results"):
+    def __init__(self, output_dir: str = "simulation_results", google_sheets_url: str = None, batch_size: int = 100):
         """
         Initialize the simulation controller.
         
         Args:
             output_dir: Directory to save results
+            google_sheets_url: URL for Google Sheets sync, or None to disable
+            batch_size: Batch size for Google Sheets sync
         """
         self.output_dir = output_dir
         
@@ -41,6 +44,9 @@ class SimulationController:
             "goats_captured", "phase_transition_move", "move_history",
             "tiger_algorithm", "tiger_config", "goat_algorithm", "goat_config"
         ]
+        
+        # Initialize Google Sheets sync
+        self.sheets_sync = GoogleSheetsSync(webapp_url=google_sheets_url, batch_size=batch_size)
     
     def _find_existing_results(self, output_path: str) -> Set[str]:
         """
@@ -474,6 +480,9 @@ class SimulationController:
                     games_saved += 1
                     existing_game_ids.add(game_result["game_id"])
                     
+                    # Sync to Google Sheets
+                    self.sheets_sync.add_row(row, self.csv_headers)
+                    
                     # Update progress occasionally
                     current_time = time.time()
                     if current_time - last_progress_update > 5:
@@ -577,6 +586,9 @@ class SimulationController:
             print(f"Final game distribution: min={min_count}, max={max_count}, avg={avg_count:.1f}")
             print(f"Results saved to: {output_file}")
             
+            # Final sync to Google Sheets
+            self.sheets_sync.sync(force=True)
+        
         return output_file
     
     def run_main_competition(self, 
@@ -683,6 +695,9 @@ class SimulationController:
                     writer.writerow(row)
                     csvfile.flush()  # Ensure data is written immediately
                     
+                    # Sync to Google Sheets
+                    self.sheets_sync.add_row(row, self.csv_headers)
+                    
                     # Track this game as completed
                     existing_game_ids.add(game_result["game_id"])
                     games_played_this_session += 1
@@ -722,11 +737,17 @@ class SimulationController:
                     writer.writerow(row)
                     csvfile.flush()  # Ensure data is written immediately
                     
+                    # Sync to Google Sheets
+                    self.sheets_sync.add_row(row, self.csv_headers)
+                    
                     # Track this game as completed
                     existing_game_ids.add(game_result["game_id"])
                     games_played_this_session += 1
                 
                 print(f"  Completed {games_played_this_session} new games for Minimax depth {depth}")
+        
+        # Final sync to Google Sheets
+        self.sheets_sync.sync(force=True)
         
         print(f"Main competition progress saved to {output_file}")
         return output_file 

@@ -45,17 +45,23 @@ def parse_args():
     parser.add_argument("--depth", type=int, required=True,
                         help="Best MCTS rollout depth")
     
-    parser.add_argument("--minimax_depths", nargs="+", type=int, default=[4, 5, 6],
-                        help="Minimax depths to test (space-separated list, default: 4 5 6)")
+    parser.add_argument("--minimax_depths", nargs="+", type=int, default=None,
+                        help="Minimax depths to test (space-separated list, default: from config)")
     
-    parser.add_argument("--games", type=int, default=1000,
-                        help="Number of games per matchup (default: 1000)")
+    parser.add_argument("--games", type=int, default=None,
+                        help="Number of games per matchup (default: from config)")
     
-    parser.add_argument("--output_dir", type=str, default="simulation_results",
-                        help="Directory to save results (default: simulation_results)")
+    parser.add_argument("--output_dir", type=str, default=None,
+                        help="Directory to save results (default: from config)")
     
     parser.add_argument("--new", action="store_true",
                         help="Force creation of a new file instead of resuming")
+    
+    parser.add_argument("--sheets_url", type=str, default=None,
+                       help="Google Sheets web app URL for syncing results")
+    
+    parser.add_argument("--batch_size", type=int, default=None,
+                       help="Batch size for Google Sheets sync (default: from config)")
     
     return parser.parse_args()
 
@@ -82,6 +88,10 @@ def main():
     """Run the main competition."""
     args = parse_args()
     
+    # Load config
+    from backend.simulation.config import load_config
+    config = load_config()
+    
     # Create the best MCTS configuration
     best_mcts_config = {
         'algorithm': 'mcts',
@@ -92,20 +102,35 @@ def main():
         'guided_strictness': 0.8
     }
     
+    # Use command line arguments if provided, otherwise use values from config
+    output_dir = args.output_dir or config.main_competition.output_dir
+    minimax_depths = args.minimax_depths or config.main_competition.minimax_depths
+    games_per_matchup = args.games or config.main_competition.games_per_matchup
+    sheets_url = args.sheets_url or config.sheets_webapp_url
+    batch_size = args.batch_size or config.sheets_batch_size
+    
     print(f"Starting main competition at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Configuration:")
     print(f"  Best MCTS: {args.policy} policy, {args.iterations} iterations, depth {args.depth}")
-    print(f"  Minimax depths: {args.minimax_depths}")
-    print(f"  Games per matchup: {args.games}")
-    print(f"  Output directory: {args.output_dir}")
+    print(f"  Minimax depths: {minimax_depths}")
+    print(f"  Games per matchup: {games_per_matchup}")
+    print(f"  Output directory: {output_dir}")
+    if sheets_url:
+        print(f"  Google Sheets sync: Enabled (URL: {sheets_url}, batch size: {batch_size})")
+    else:
+        print(f"  Google Sheets sync: Disabled")
     print()
     
-    controller = SimulationController(output_dir=args.output_dir)
+    controller = SimulationController(
+        output_dir=output_dir,
+        google_sheets_url=sheets_url,
+        batch_size=batch_size
+    )
     
     # Look for existing file to resume from, unless --new is specified
     existing_file = None
     if not args.new:
-        existing_file = find_most_recent_competition_file(args.output_dir)
+        existing_file = find_most_recent_competition_file(output_dir)
         if existing_file:
             print(f"Found existing competition file: {existing_file}")
             print(f"Resuming from this file...")
@@ -114,8 +139,8 @@ def main():
     
     output_file = controller.run_main_competition(
         best_mcts_config=best_mcts_config,
-        minimax_depths=args.minimax_depths,
-        games_per_matchup=args.games,
+        minimax_depths=minimax_depths,
+        games_per_matchup=games_per_matchup,
         output_file=existing_file
     )
     
