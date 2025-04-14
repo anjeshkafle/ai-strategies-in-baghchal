@@ -131,7 +131,7 @@ class MCTSAgent:
         # Debug configuration - set specific types of debug information to show
         debug_config = {
             'initial_state': False,   # Show information about the initial state
-            'move_analysis': False,    # Show detailed analysis of possible moves
+            'move_analysis': True,    # Show detailed analysis of possible moves
             'selected_move': False,    # Show information about the final selected move
             'timing': False,           # Show timing and iteration information
             'tree_reuse': False,       # Show tree reuse information
@@ -782,7 +782,8 @@ class MCTSAgent:
 
     def _map_captures_to_win_rate(self, capture_deficit: float, actual_captures: float) -> float:
         """
-        Maps capture deficit to a non-linear win rate effect that accounts for:
+        Maps capture deficit to a non-linear win rate effect using a smooth sigmoid function
+        that accounts for:
         1. How much better/worse than expected we're doing (deficit)
         2. How many captures remain until victory (5 - actual_captures)
         
@@ -793,7 +794,7 @@ class MCTSAgent:
         Returns:
             Win rate effect centered at 0 (to be added to 0.5)
         """
-        # Handle negative deficits (goat advantage) by mirroring the function
+        # Handle negative deficits (goat advantage) by tracking sign
         is_negative = capture_deficit < 0
         deficit_abs = abs(capture_deficit)
         
@@ -808,48 +809,32 @@ class MCTSAgent:
         # No deficit should map higher than what would represent a win
         deficit_abs = min(remaining_captures, deficit_abs)
         
-        # For each actual capture count, define the effect mapping
-        if actual_captures == 0:  # 5 remaining captures
-            if deficit_abs <= 1.0:
-                effect = deficit_abs * 0.25  # 0→0.25 (first tier)
-            elif deficit_abs <= 2.0:
-                effect = 0.25 + (deficit_abs - 1.0) * 0.10  # 0.25→0.35 (second tier)
-            elif deficit_abs <= 3.0:
-                effect = 0.35 + (deficit_abs - 2.0) * 0.08  # 0.35→0.43 (third tier)
-            elif deficit_abs <= 4.0:
-                effect = 0.43 + (deficit_abs - 3.0) * 0.05  # 0.43→0.48 (fourth tier)
-            else:  # deficit_abs <= 5.0
-                effect = 0.48 + (deficit_abs - 4.0) * 0.01  # 0.48→0.49 (fifth tier)
+        # Maximum effect increases as more goats are captured
+        # With 0 captures: max_effect = 0.49
+        # With 4 captures: max_effect = 0.49 (same to avoid jumps)
+        max_effect = 0.49
         
-        elif actual_captures == 1:  # 4 remaining captures
-            if deficit_abs <= 1.0:
-                effect = deficit_abs * 0.28  # 0→0.28 (first tier - steeper)
-            elif deficit_abs <= 2.0:
-                effect = 0.28 + (deficit_abs - 1.0) * 0.11  # 0.28→0.39 (second tier)
-            elif deficit_abs <= 3.0:
-                effect = 0.39 + (deficit_abs - 2.0) * 0.08  # 0.39→0.47 (third tier)
-            else:  # deficit_abs <= 4.0
-                effect = 0.47 + (deficit_abs - 3.0) * 0.02  # 0.47→0.49 (fourth tier)
+        # Steepness increases as more goats are captured
+        # This creates a sharper curve when close to winning
+        steepness_multiplier = 1.0 + (actual_captures / 4.0)
         
-        elif actual_captures == 2:  # 3 remaining captures
-            if deficit_abs <= 1.0:
-                effect = deficit_abs * 0.32  # 0→0.32 (first tier - even steeper)
-            elif deficit_abs <= 2.0:
-                effect = 0.32 + (deficit_abs - 1.0) * 0.13  # 0.32→0.45 (second tier)
-            else:  # deficit_abs <= 3.0
-                effect = 0.45 + (deficit_abs - 2.0) * 0.04  # 0.45→0.49 (third tier)
+        # Base steepness determines how quickly the sigmoid rises
+        # Higher = faster rise; tuned to match previous tiered approach
+        base_steepness = 2.0
+        steepness = base_steepness * steepness_multiplier
         
-        elif actual_captures == 3:  # 2 remaining captures
-            if deficit_abs <= 1.0:
-                effect = deficit_abs * 0.38  # 0→0.38 (first tier - quite steep)
-            else:  # deficit_abs <= 2.0
-                effect = 0.38 + (deficit_abs - 1.0) * 0.11  # 0.38→0.49 (second tier)
+        # Midpoint shifts based on remaining captures
+        # This creates different effective thresholds based on game stage
+        # As more goats are captured, an increasing proportion of deficit
+        # is needed to reach the midpoint
+        midpoint_divisor = 4.0 - (2.0 * (actual_captures / 4.0))
+        midpoint = remaining_captures / midpoint_divisor
         
-        else:  # actual_captures == 4, just 1 remaining capture
-            effect = deficit_abs * 0.49  # 0→0.49 (maximum effect in one step)
+        # Apply sigmoid function: max_effect / (1 + e^(-steepness * (x - midpoint)))
+        sigmoid_value = max_effect / (1 + math.exp(-steepness * (deficit_abs - midpoint)))
         
         # Apply negative sign if original deficit was negative
-        result = effect if not is_negative else -effect
+        result = sigmoid_value if not is_negative else -sigmoid_value
         
         return result
         
@@ -917,10 +902,19 @@ class MCTSAgent:
         goats_placed = state.goats_placed
         goats_captured = state.goats_captured
         
-        # Calculate expected captures at this stage
+        # CRITICAL FIX: Ensure win rate increases monotonically with actual captures
+        # Use actual captures as the primary determinant
+        # Create a base win rate that increases with captures (0.5 → 0.99 as captures go from 0 → 5)
+        # This ensures captures always have a strong positive effect
+        capture_base_rate = 0.5 + (goats_captured / 5.0) * 0.49
+        
+        # Calculate expected captures at this stage - using smooth function
         if goats_placed < 15:
-            expected_captures = 0
+            # Sigmoid function that stays close to 0 until approaching 15 goats
+            transition_steepness = 0.5
+            expected_captures = 2.0 / (1 + math.exp(-transition_steepness * (goats_placed - 15)))
         else:
+            # After 15 goats, linear progression (2/5 of additional goats)
             expected_captures = (goats_placed - 15) * (2 / 5)
         
         # STEP 2: Calculate effective future captures using key heuristics
@@ -934,9 +928,19 @@ class MCTSAgent:
         closed_regions = self.minimax_agent._count_closed_spaces(state, all_tiger_moves)
         total_closed_spaces = sum(len(region) for region in closed_regions)
         
-        # Scale closed spaces from 0.3 to 0.8 based on placement progress
-        placement_progress = min(1.0, goats_placed / 20)
-        closed_space_value = total_closed_spaces * (0.3 + (0.5 * placement_progress))
+        # Apply a smooth sigmoid-based scaling for closed spaces
+        # This avoids sharp transitions in impact between early and late game
+        min_closed_space_factor = 0.3
+        max_closed_space_factor = 0.8
+        factor_range = max_closed_space_factor - min_closed_space_factor
+        
+        # Sigmoid function: scale from min to max based on placement progress
+        # Centered at 10 goats (midpoint of placement phase)
+        placement_sigmoid = 1.0 / (1 + math.exp(-0.4 * (goats_placed - 10)))
+        closed_space_factor = min_closed_space_factor + (factor_range * placement_sigmoid)
+        
+        # Calculate closed space value using the smooth factor
+        closed_space_value = total_closed_spaces * closed_space_factor
         
         # Subtract closed space effect (negative contribution to effective captures)
         effective_captures -= closed_space_value
@@ -955,15 +959,17 @@ class MCTSAgent:
         # Tiger positional score (normalized 0-1, higher is better for tiger)
         position_score = self.minimax_agent._calculate_tiger_positional_score(state)
         
-        # Calculate dynamic equilibrium point for tiger position score
-        # 0.5 before 10 goats placed, gradually decreases to 0.33 by 15 goats placed, then stays at 0.33
-        if goats_placed < 10:
-            position_equilibrium = 0.5
-        elif goats_placed < 15:
-            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
-            position_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
-        else:
-            position_equilibrium = 0.33
+        # Calculate dynamic equilibrium point for tiger position score using sigmoid
+        # Smooth transition from 0.5 to 0.33 centered around 12.5 goats placed
+        position_max = 0.5
+        position_min = 0.33
+        position_range = position_max - position_min
+        position_transition_steepness = 0.4  # Controls how quickly the transition happens
+        position_transition_midpoint = 12.5  # Centered between early and late game
+        
+        # Sigmoid transition: starts at position_max, transitions to position_min
+        position_transition_factor = 1.0 / (1 + math.exp(-position_transition_steepness * (goats_placed - position_transition_midpoint)))
+        position_equilibrium = position_max - (position_range * position_transition_factor)
             
         # Convert using dynamic equilibrium point (centered at 0)
         position_factor = position_score - position_equilibrium
@@ -971,15 +977,9 @@ class MCTSAgent:
         # Tiger optimal spacing score (normalized 0-1, higher is better for tiger)
         spacing_score = self.minimax_agent._calculate_tiger_optimal_spacing(state)
         
-        # Calculate dynamic equilibrium point for optimal spacing score
-        # 0.5 before 10 goats placed, gradually decreases to 0.33 by 15 goats placed, then stays at 0.33
-        if goats_placed < 10:
-            spacing_equilibrium = 0.5
-        elif goats_placed < 15:
-            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
-            spacing_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
-        else:
-            spacing_equilibrium = 0.33
+        # Calculate dynamic equilibrium point for optimal spacing score using same sigmoid
+        # Uses same parameters as position score for consistency
+        spacing_equilibrium = position_equilibrium  # Same equilibrium pattern as position score
             
         # Convert using dynamic equilibrium point (centered at 0)
         spacing_factor = spacing_score - spacing_equilibrium
@@ -987,15 +987,36 @@ class MCTSAgent:
         # Goat edge preference (normalized 0-1, higher is better for goat)
         edge_score = self.minimax_agent._calculate_goat_edge_preference(state)
         
-        # Calculate dynamic equilibrium point for goat edge preference using a simplified approach
-        if goats_placed < 5:
-            edge_equilibrium = 1.0
-        elif goats_placed < 12:
-            edge_equilibrium = 0.8
-        else:
-            # Linear interpolation from 0.8 to 0.1 between 12 and 20 goats
-            # Clamp at 0.1 for goats_placed > 20
-            edge_equilibrium = max(0.1, 0.8 - (0.7 * min(1.0, (goats_placed - 12) / 8)))
+        # Calculate dynamic equilibrium for edge preference using smooth sigmoid transitions
+        # Early phase: transition from 1.0 to 0.8 (centered at 3 goats)
+        # Late phase: transition from 0.8 to 0.1 (centered at 16 goats)
+        
+        # Parameters for early transition (1.0 to 0.8)
+        early_max = 1.0
+        early_min = 0.8
+        early_range = early_max - early_min
+        early_steepness = 0.8  # Steeper for a faster early transition
+        early_midpoint = 3.0  # Centered early in placement phase
+        
+        # Parameters for late transition (0.8 to 0.1)
+        late_max = 0.8
+        late_min = 0.1
+        late_range = late_max - late_min
+        late_steepness = 0.3  # Gentler for a smoother late transition
+        late_midpoint = 16.0  # Centered later in game
+        
+        # Early transition factor (0 to 1)
+        early_transition = 1.0 / (1 + math.exp(-early_steepness * (goats_placed - early_midpoint)))
+        
+        # Late transition factor (0 to 1)
+        late_transition = 1.0 / (1 + math.exp(-late_steepness * (goats_placed - late_midpoint)))
+        
+        # Calculate equilibrium based on both transitions
+        # First apply early transition (1.0 to 0.8)
+        edge_equilibrium = early_max - (early_range * early_transition)
+        
+        # Then apply late transition (0.8 to 0.1) which takes effect later
+        edge_equilibrium = edge_equilibrium - (late_range * late_transition * early_transition)
             
         # Convert using dynamic equilibrium point (centered at 0, inverted since higher edge score favors goats)
         edge_factor = edge_equilibrium - edge_score
@@ -1046,8 +1067,12 @@ class MCTSAgent:
         )
         heuristic_component = 0.5 + heuristic_sum * heuristic_influence
         
-        # Combine components preserving 0.5 as neutral
-        final_win_rate = 0.5 + ((capture_component - 0.5) + (heuristic_component - 0.5))
+        # CRITICAL FIX: Blend the capture base rate (which guarantees monotonic increases with captures)
+        # with the heuristic-influenced rate, with more weight to the base rate as captures increase
+        capture_importance = min(1.0, goats_captured / 4.0)  # Increases from 0 to 1 as captures go from 0 to 4
+        blended_rate = (capture_base_rate * capture_importance) + (
+            (0.5 + ((capture_component - 0.5) + (heuristic_component - 0.5))) * (1.0 - capture_importance)
+        )
         
         # Ensure win rate stays within valid range
-        return max(0.01, min(0.99, final_win_rate))
+        return max(0.01, min(0.99, blended_rate))
