@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import Board from "../components/Board";
 import { useGameStore } from "../stores/gameStore";
 import { useNavigate } from "react-router-dom";
@@ -34,6 +34,7 @@ const GameScreen = () => {
   } = useGameStore();
   const remainingGoats = getRemainingGoats();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const wakeLockRef = useRef(null);
 
   const handleNewGame = () => {
     resetGame();
@@ -88,6 +89,63 @@ const GameScreen = () => {
       }
     }
   }, [turn, phase, gameStatus, players, handleAIMove, isAIThinking, isPaused]);
+
+  // Wake Lock implementation to prevent screen from sleeping
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request("screen");
+          console.log("Wake Lock is active");
+        } else {
+          console.log("Wake Lock API not supported in this browser");
+        }
+      } catch (err) {
+        console.log(`Wake Lock request failed: ${err.message}`);
+      }
+    };
+
+    const releaseWakeLock = () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current
+          .release()
+          .then(() => {
+            console.log("Wake Lock released");
+            wakeLockRef.current = null;
+          })
+          .catch((err) => {
+            console.error(`Failed to release Wake Lock: ${err.message}`);
+          });
+      }
+    };
+
+    // Handle visibility change
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === "visible" &&
+        gameStatus === "PLAYING" &&
+        !isPaused
+      ) {
+        requestWakeLock();
+      }
+    };
+
+    // Add visibility change listener
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Request wake lock when game is active
+    if (gameStatus === "PLAYING" && !isPaused) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    // Cleanup: release wake lock and remove event listener when component unmounts
+    return () => {
+      releaseWakeLock();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [gameStatus, isPaused]);
 
   // Helper function to render player panel
   const renderPlayerPanel = (isTopPanel) => {
