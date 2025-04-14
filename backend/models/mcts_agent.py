@@ -131,7 +131,7 @@ class MCTSAgent:
         # Debug configuration - set specific types of debug information to show
         debug_config = {
             'initial_state': False,   # Show information about the initial state
-            'move_analysis': False,    # Show detailed analysis of possible moves
+            'move_analysis': True,    # Show detailed analysis of possible moves
             'selected_move': False,    # Show information about the final selected move
             'timing': False,           # Show timing and iteration information
             'tree_reuse': False,       # Show tree reuse information
@@ -900,23 +900,41 @@ class MCTSAgent:
         # Get the threatened value and log the max value found
         threatened_value = self.minimax_agent._count_threatened_goats(all_tiger_moves, state.turn)
         
-        # Add threatened value directly to captures to create effective_captures
-        effective_captures = goats_captured + threatened_value
+        # Get closed spaces data
+        closed_regions = self.minimax_agent._count_closed_spaces(state, all_tiger_moves)
+        total_closed_spaces = sum(len(region) for region in closed_regions)
         
-        # Starting point for capture mapping: 0.2 -> 0.95 for captures 0-4
-        # Each capture adds (0.95 - 0.2) / 4 = 0.1875 to the win rate
-        # Use effective captures instead of just actual captures
-        capture_impact = (0.95 - 0.2) / 4.0  # 0.1875 per capture
+        # Calculate closed space impact on effective captures
+        # Scale from 0.3 at move 1, to 0.8 by move 15, then to 0.95 by move 20
+        if state.goats_placed <= 1:
+            closed_space_factor = 0.3
+        elif state.goats_placed <= 15:
+            # Linear interpolation between 0.3 and 0.8 as goats_placed goes from 1 to 15
+            closed_space_factor = 0.3 + (0.5 * (state.goats_placed - 1) / 14)
+        elif state.goats_placed >= 20:
+            closed_space_factor = 0.95
+        else:
+            # Linear interpolation between 0.8 and 0.95 as goats_placed goes from 15 to 20
+            closed_space_factor = 0.8 + (0.15 * (state.goats_placed - 15) / 5)
+        
+        # Calculate the closed space value by multiplying the factor with total closed spaces
+        closed_space_value = total_closed_spaces * closed_space_factor
+        
+        # Add threatened value and subtract closed_space_value to get effective_captures
+        effective_captures = goats_captured + threatened_value - closed_space_value
+        
+        # More radical mapping: 0.1 -> 0.95 for captures 0-4
+        # This uses the full range as requested
+        capture_impact = (0.95 - 0.1) / 4.0  # 0.2125 per capture
         
         # Cap effective captures at 4 for win rate calculation
-        capped_effective_captures = min(4.0, effective_captures)
-        capture_base_rate = 0.2 + (capped_effective_captures * capture_impact)
+        capped_effective_captures = min(4.0, max(0.0, effective_captures))
+        capture_base_rate = 0.1 + (capped_effective_captures * capture_impact)
         
-        # Reserve some space for positional heuristics, but make it small
-        # to ensure captures and threats remain dominant
-        # Maximum positional contribution is 20% of a single capture's impact
-        max_position_contribution = capture_impact * 0.2
-        
+        # Reserve much smaller space for positional heuristics
+        # Maximum positional contribution reduced to 5% of a single capture's impact
+        # This ensures captures remain even more dominant
+        max_position_contribution = capture_impact * 0.05
         
         # Calculate all positional factors used in minimax evaluation
         position_score = self.minimax_agent._calculate_tiger_positional_score(state)

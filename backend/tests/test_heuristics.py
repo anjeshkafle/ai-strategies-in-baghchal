@@ -54,12 +54,12 @@ def main():
     """Test for heuristics including the new positional score and optimal spacing."""
 
     board_2 = [
-        "T___T",
-        "_____",
-        "G____",
-        "_____",
-        "T___T"
-    ]
+  "GG_GG",
+  "GGGGG",
+  "GGGTG",
+  "GTT_G",
+  "GGTGG"
+]
     
     # Board weights matrix for reference (same as in the agent)
     board_weights = [
