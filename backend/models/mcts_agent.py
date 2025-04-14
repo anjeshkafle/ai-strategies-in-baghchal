@@ -131,7 +131,7 @@ class MCTSAgent:
         # Debug configuration - set specific types of debug information to show
         debug_config = {
             'initial_state': False,   # Show information about the initial state
-            'move_analysis': True,    # Show detailed analysis of possible moves
+            'move_analysis': False,    # Show detailed analysis of possible moves
             'selected_move': False,    # Show information about the final selected move
             'timing': False,           # Show timing and iteration information
             'tree_reuse': False,       # Show tree reuse information
