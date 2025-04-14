@@ -71,12 +71,6 @@ def run_mcts_tournament(config_path: str):
     config = load_config(config_path)
     mcts_config = config.mcts_tournament
     
-    # Debug the config structure
-    print("Config type:", type(config))
-    print("Config attributes:", dir(config))
-    print("sheets_webapp_url:", config.sheets_webapp_url)
-    print("sheets_batch_size:", config.sheets_batch_size)
-    
     print(f"Starting MCTS tournament at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Configuration:")
     
@@ -164,10 +158,6 @@ def run_main_competition(config_path: str):
     """Run the main competition using configuration file."""
     config = load_config(config_path)
     main_config = config.main_competition
-    
-    # Debug the config structure
-    print("Config type:", type(config))
-    print("Config attributes:", dir(config))
     
     # If MCTS tournament results are specified, find the best config
     if not main_config.mcts_tournament_results:

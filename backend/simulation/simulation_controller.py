@@ -406,6 +406,25 @@ class SimulationController:
                     
                     return tasks
             
+            def get_config_summary(config):
+                """Generate a short readable summary of an agent configuration"""
+                if 'rollout_policy' not in config:
+                    return "Unknown config"
+                
+                # Extract key parameters
+                policy = config.get('rollout_policy', 'unknown')
+                depth = config.get('rollout_depth', '?')
+                exploration = config.get('exploration_weight', 1.414)
+                
+                # Create a readable string
+                summary = f"{policy.capitalize()}"
+                if policy == "guided":
+                    strictness = config.get('guided_strictness', 0.5)
+                    summary += f"-{strictness}"
+                summary += f" d{depth} e{exploration}"
+                
+                return summary
+                
             def on_game_complete(game_result):
                 """Callback when a game completes - process results and schedule next task."""
                 nonlocal games_played, games_saved, active_tasks, last_progress_update
@@ -422,6 +441,33 @@ class SimulationController:
                     tiger_config_str = game_result["tiger_config_str"]
                     goat_config_str = game_result["goat_config_str"]
                     is_config1_tiger = game_result["is_config1_tiger"]
+                    
+                    # Get configurations to access details
+                    tiger_config = json.loads(tiger_config_str)
+                    goat_config = json.loads(goat_config_str)
+                    
+                    # Generate readable summaries
+                    tiger_summary = get_config_summary(tiger_config)
+                    goat_summary = get_config_summary(goat_config)
+                    
+                    # Determine the winner and create a concise message
+                    winner = game_result["winner"].upper()
+                    moves = game_result["moves"]
+                    goats_captured = game_result["goats_captured"]
+                    game_id = games_played  # Use a simple counter as game ID
+                    
+                    # Create victory message (one line, concise)
+                    if winner == "TIGER":
+                        victory_emoji = "🐯"
+                        victory_msg = f"#{game_id} COMPLETED: {victory_emoji} {tiger_summary} defeated {goat_summary} ({moves} moves, {goats_captured} captures)"
+                    elif winner == "GOAT":
+                        victory_emoji = "🐐"
+                        victory_msg = f"#{game_id} COMPLETED: {victory_emoji} {goat_summary} defeated {tiger_summary} ({moves} moves)"
+                    else:
+                        victory_emoji = "🤝"
+                        victory_msg = f"#{game_id} COMPLETED: {victory_emoji} DRAW between {tiger_summary} and {goat_summary} ({moves} moves)"
+                    
+                    print(victory_msg)
                     
                     # Update matchup counts
                     for idx, data in matchup_game_counts.items():
@@ -471,8 +517,9 @@ class SimulationController:
                         elapsed_minutes = (current_time - simulation_start_time) / 60
                         remaining_minutes = (end_time - current_time) / 60
                         
-                        print(f"Progress: {games_played} games played, {games_saved} saved")
-                        print(f"Time: {elapsed_minutes:.1f} minutes elapsed, {remaining_minutes:.1f} minutes remaining")
+                        print(f"\n==== TOURNAMENT PROGRESS ====")
+                        print(f"🎮 Games completed: {games_played} games played, {games_saved} saved to records")
+                        print(f"⏱️ Time: {elapsed_minutes:.1f} minutes elapsed, {remaining_minutes:.1f} minutes remaining")
                         
                         # Calculate game distribution stats
                         counts = [data['total'] for data in matchup_game_counts.values()]
@@ -480,8 +527,9 @@ class SimulationController:
                         max_count = max(counts) if counts else 0
                         avg_count = sum(counts) / len(counts) if counts else 0
                         
-                        print(f"Game distribution: min={min_count}, max={max_count}, avg={avg_count:.1f}")
-                        print(f"Active tasks: {active_tasks}")
+                        print(f"📊 Game distribution: min={min_count}, max={max_count}, avg={avg_count:.1f}")
+                        print(f"🔄 Active matches: {active_tasks}")
+                        print(f"============================\n")
                         last_progress_update = current_time
             
             def on_error(error):
@@ -524,6 +572,19 @@ class SimulationController:
                 nonlocal active_tasks
                 with lock:
                     if time.time() < end_time:
+                        config1, config2, is_config1_tiger, config1_str, config2_str = task
+                        tiger_config = config1 if is_config1_tiger else config2
+                        goat_config = config2 if is_config1_tiger else config1
+                        
+                        # Generate readable summaries for the matchup
+                        tiger_summary = get_config_summary(tiger_config)
+                        goat_summary = get_config_summary(goat_config)
+                        
+                        # Display info about the new matchup being scheduled
+                        match_id = active_tasks + 1  # Simple ID for the new match
+                        match_msg = f"#{match_id} STARTING: 🐯 {tiger_summary} vs 🐐 {goat_summary}"
+                        print(match_msg)
+                        
                         # Schedule the task
                         pool.apply_async(
                             self._run_game_wrapper,
@@ -540,7 +601,8 @@ class SimulationController:
                 with mp.Pool(processes=parallel_games) as pool:
                     # Get initial tasks to schedule
                     initial_tasks = get_next_tasks(parallel_games)
-                    print(f"Starting initial batch of {len(initial_tasks)} games...")
+                    print(f"\n🎬 TOURNAMENT STARTING! Scheduling initial batch of {len(initial_tasks)} games...")
+                    print(f"⚔️ Let the games begin! ⚔️\n")
                     
                     # Schedule initial tasks
                     for task in initial_tasks:
@@ -579,10 +641,10 @@ class SimulationController:
             
             # Summary
             elapsed_minutes = (time.time() - simulation_start_time) / 60
-            print(f"\nSimulation complete!")
-            print(f"Total time: {elapsed_minutes:.1f} minutes")
-            print(f"Total games played: {games_played}")
-            print(f"Total games saved: {games_saved}")
+            print(f"\n🏆 TOURNAMENT COMPLETE! 🏆")
+            print(f"⏱️ Total time: {elapsed_minutes:.1f} minutes")
+            print(f"🎮 Total games played: {games_played}")
+            print(f"💾 Total games saved: {games_saved}")
             
             # Calculate final game distribution stats
             counts = [data['total'] for data in matchup_game_counts.values()]
@@ -590,8 +652,8 @@ class SimulationController:
             max_count = max(counts) if counts else 0
             avg_count = sum(counts) / len(counts) if counts else 0
             
-            print(f"Final game distribution: min={min_count}, max={max_count}, avg={avg_count:.1f}")
-            print(f"Results saved to: {output_file}")
+            print(f"📊 Final game distribution: min={min_count}, max={max_count}, avg={avg_count:.1f}")
+            print(f"📁 Results saved to: {output_file}")
             
             # Final sync to Google Sheets
             self.sheets_sync.sync(force=True)
@@ -660,8 +722,8 @@ class SimulationController:
                 
                 half_games = games_per_matchup // 2
                 
-                print(f"Matchup: Minimax depth {depth} vs. Best MCTS")
-                print(f"  Already played: {minimax_tiger_played}/{half_games} (Minimax as Tiger) and "
+                print(f"\n🔥 EPIC SHOWDOWN: Minimax depth {depth} vs Best MCTS 🔥")
+                print(f"  🎮 Already played: {minimax_tiger_played}/{half_games} (Minimax as Tiger) and "
                       f"{mcts_tiger_played}/{half_games} (MCTS as Tiger)")
                 
                 # Track games completed in this session
@@ -670,7 +732,7 @@ class SimulationController:
                 # First half: Minimax as Tiger, MCTS as Goat
                 for game_num in range(half_games - minimax_tiger_played):
                     if game_num % 10 == 0:
-                        print(f"  Progress: {game_num}/{half_games - minimax_tiger_played} games (Minimax as Tiger)")
+                        print(f"  🐯 Progress: {game_num}/{half_games - minimax_tiger_played} games (Minimax as Tiger)")
                     
                     runner = GameRunner(minimax_config, best_mcts_config)
                     game_result = runner.run_game()
@@ -678,6 +740,25 @@ class SimulationController:
                     # Skip if we've already recorded this game
                     if game_result["game_id"] in existing_game_ids:
                         continue
+                    
+                    # Show the result in a fun way
+                    winner = game_result["winner"].upper()
+                    moves = game_result["moves"]
+                    goats_captured = game_result["goats_captured"]
+                    
+                    # Create victory message
+                    if winner == "TIGER":
+                        victory_emoji = "🐯"
+                        victory_msg = f"{victory_emoji} TIGER VICTORY! {victory_emoji} Minimax-d{depth} defeated MCTS in {moves} moves with {goats_captured} captures!"
+                    elif winner == "GOAT":
+                        victory_emoji = "🐐"
+                        victory_msg = f"{victory_emoji} GOAT VICTORY! {victory_emoji} MCTS outsmarted Minimax-d{depth} in {moves} moves!"
+                    else:
+                        victory_emoji = "🤝"
+                        victory_msg = f"{victory_emoji} DRAW! {victory_emoji} Minimax-d{depth} vs MCTS ended in a draw after {moves} moves!"
+                    
+                    if game_num % 10 == 0:
+                        print(f"    {victory_msg}")
                     
                     # Prepare row data
                     row = {
@@ -698,21 +779,19 @@ class SimulationController:
                         "goat_config": mcts_config_str
                     }
                     
-                    # Write to CSV
+                    # Write to CSV and track
                     writer.writerow(row)
-                    csvfile.flush()  # Ensure data is written immediately
-                    
-                    # Sync to Google Sheets
-                    self.sheets_sync.add_row(row, self.csv_headers)
-                    
-                    # Track this game as completed
+                    csvfile.flush()
                     existing_game_ids.add(game_result["game_id"])
                     games_played_this_session += 1
+                    
+                    # Sync to sheets
+                    self.sheets_sync.add_row(row, self.csv_headers)
                 
                 # Second half: MCTS as Tiger, Minimax as Goat
                 for game_num in range(half_games - mcts_tiger_played):
                     if game_num % 10 == 0:
-                        print(f"  Progress: {game_num}/{half_games - mcts_tiger_played} games (MCTS as Tiger)")
+                        print(f"  🐐 Progress: {game_num}/{half_games - mcts_tiger_played} games (MCTS as Tiger)")
                     
                     runner = GameRunner(best_mcts_config, minimax_config)
                     game_result = runner.run_game()
@@ -720,6 +799,25 @@ class SimulationController:
                     # Skip if we've already recorded this game
                     if game_result["game_id"] in existing_game_ids:
                         continue
+                    
+                    # Show the result in a fun way
+                    winner = game_result["winner"].upper()
+                    moves = game_result["moves"]
+                    goats_captured = game_result["goats_captured"]
+                    
+                    # Create victory message
+                    if winner == "TIGER":
+                        victory_emoji = "🐯"
+                        victory_msg = f"{victory_emoji} TIGER VICTORY! {victory_emoji} MCTS defeated Minimax-d{depth} in {moves} moves with {goats_captured} captures!"
+                    elif winner == "GOAT":
+                        victory_emoji = "🐐"
+                        victory_msg = f"{victory_emoji} GOAT VICTORY! {victory_emoji} Minimax-d{depth} outsmarted MCTS in {moves} moves!"
+                    else:
+                        victory_emoji = "🤝"
+                        victory_msg = f"{victory_emoji} DRAW! {victory_emoji} MCTS vs Minimax-d{depth} ended in a draw after {moves} moves!"
+                    
+                    if game_num % 10 == 0:
+                        print(f"    {victory_msg}")
                     
                     # Prepare row data
                     row = {
@@ -740,21 +838,22 @@ class SimulationController:
                         "goat_config": minimax_config_str
                     }
                     
-                    # Write to CSV
+                    # Write to CSV and track
                     writer.writerow(row)
-                    csvfile.flush()  # Ensure data is written immediately
-                    
-                    # Sync to Google Sheets
-                    self.sheets_sync.add_row(row, self.csv_headers)
-                    
-                    # Track this game as completed
+                    csvfile.flush()
                     existing_game_ids.add(game_result["game_id"])
                     games_played_this_session += 1
+                    
+                    # Sync to sheets
+                    self.sheets_sync.add_row(row, self.csv_headers)
                 
-                print(f"  Completed {games_played_this_session} new games for Minimax depth {depth}")
+                # Print completion for this depth
+                print(f"  ✅ Completed {games_played_this_session} games for Minimax depth {depth} vs MCTS")
+            
+            # Final sync
+            self.sheets_sync.sync(force=True)
+            
+            print(f"\n🏆 MAIN COMPETITION COMPLETE! 🏆")
+            print(f"📁 Results saved to: {output_file}")
         
-        # Final sync to Google Sheets
-        self.sheets_sync.sync(force=True)
-        
-        print(f"Main competition progress saved to {output_file}")
         return output_file 
