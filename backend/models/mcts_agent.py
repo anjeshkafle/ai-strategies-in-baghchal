@@ -904,6 +904,9 @@ class MCTSAgent:
         closed_regions = self.minimax_agent._count_closed_spaces(state, all_tiger_moves)
         total_closed_spaces = sum(len(region) for region in closed_regions)
         
+        # Count movable tigers
+        movable_tigers_count = self.minimax_agent._count_movable_tigers(all_tiger_moves)
+        
         # Calculate closed space impact on effective captures
         # Scale from 0.3 at move 1, to 0.8 by move 15, then to 0.95 by move 20
         if state.goats_placed <= 1:
@@ -941,16 +944,21 @@ class MCTSAgent:
         spacing_score = self.minimax_agent._calculate_tiger_optimal_spacing(state)
         edge_score = self.minimax_agent._calculate_goat_edge_preference(state)
         
+        # Normalize movable tigers count to 0-1 range (total tigers is 4)
+        normalized_movable_tigers = movable_tigers_count / 4.0
+        
         # Combine positional factors with appropriate weights
-        position_weight = 0.4
-        spacing_weight = 0.4
+        position_weight = 0.3
+        spacing_weight = 0.3
         edge_weight = 0.2
+        movable_tigers_weight = 0.2  # Add weight for movable tigers
         
         # Combine scores (invert edge score as it favors goats)
         position_combined = (
             position_score * position_weight +
             spacing_score * spacing_weight - 
-            edge_score * edge_weight  # Inverted because higher edge score favors goats
+            edge_score * edge_weight +  # Inverted because higher edge score favors goats
+            normalized_movable_tigers * movable_tigers_weight  # Add movable tigers factor
         )
         
         # Scale the positional contribution to fit within the allowed budget
