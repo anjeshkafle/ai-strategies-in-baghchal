@@ -943,8 +943,8 @@ class MCTSAgent:
         
         # Combine positional factors with appropriate weights
         position_weight = 0.4
-        spacing_weight = 0.3
-        edge_weight = 0.3
+        spacing_weight = 0.4
+        edge_weight = 0.2
         
         # Combine scores (invert edge score as it favors goats)
         position_combined = (
