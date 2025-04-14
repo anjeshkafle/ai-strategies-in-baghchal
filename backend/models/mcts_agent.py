@@ -876,203 +876,73 @@ class MCTSAgent:
 
     def predict_win_rate_advanced(self, state: GameState) -> float:
         """
-        Advanced win rate predictor that combines multiple heuristics:
-        1. Captures (raw and with adjustments)
-        2. Tiger positional score
-        3. Tiger optimal spacing
-        4. Goat edge preference
+        Advanced win rate predictor that prioritizes captures and threats, with secondary
+        consideration for positional factors.
         
         Returns a value from 0.0 to 1.0 from Tiger's perspective:
         - 0.0: Certain Goat win
         - 0.5: Balanced game
         - 1.0: Certain Tiger win
         """
-        # Short-circuit terminal states
+        # Handle terminal states
         if state.is_terminal():
             winner = state.get_winner()
-            if winner == "TIGER":
-                return 0.99  # Near certain Tiger win
-            elif winner == "GOAT":
-                return 0.01  # Near certain Goat win
-            else:
-                return 0.5   # Draw
+            if winner == "TIGER": return 1.0  # Definitive Tiger win
+            elif winner == "GOAT": return 0.0  # Definitive Goat win
+            else: return 0.5  # Draw
         
-        # STEP 1: Calculate expected captures based on game progression
-        # Track game state
-        goats_placed = state.goats_placed
+        # Get actual captures
         goats_captured = state.goats_captured
-        
-        # CRITICAL FIX: Ensure win rate increases monotonically with actual captures
-        # Use actual captures as the primary determinant
-        # Create a base win rate that increases with captures (0.5 → 0.99 as captures go from 0 → 5)
-        # This ensures captures always have a strong positive effect
-        capture_base_rate = 0.5 + (goats_captured / 5.0) * 0.49
-        
-        # Calculate expected captures at this stage - using smooth function
-        if goats_placed < 15:
-            # Sigmoid function that stays close to 0 until approaching 15 goats
-            transition_steepness = 0.5
-            expected_captures = 2.0 / (1 + math.exp(-transition_steepness * (goats_placed - 15)))
-        else:
-            # After 15 goats, linear progression (2/5 of additional goats)
-            expected_captures = (goats_placed - 15) * (2 / 5)
-        
-        # STEP 2: Calculate effective future captures using key heuristics
-        # Start with actual captures
-        effective_captures = goats_captured
-        
-        # Get all tiger moves (needed for heuristics calculation)
+            
+        # Get all tiger moves for threat calculation
         all_tiger_moves = get_all_possible_moves(state.board, "MOVEMENT", "TIGER")
         
-        # Closed spaces heuristic (more closed spaces favor goats)
-        closed_regions = self.minimax_agent._count_closed_spaces(state, all_tiger_moves)
-        total_closed_spaces = sum(len(region) for region in closed_regions)
-        
-        # Apply a smooth sigmoid-based scaling for closed spaces
-        # This avoids sharp transitions in impact between early and late game
-        min_closed_space_factor = 0.3
-        max_closed_space_factor = 0.8
-        factor_range = max_closed_space_factor - min_closed_space_factor
-        
-        # Sigmoid function: scale from min to max based on placement progress
-        # Centered at 10 goats (midpoint of placement phase)
-        placement_sigmoid = 1.0 / (1 + math.exp(-0.4 * (goats_placed - 10)))
-        closed_space_factor = min_closed_space_factor + (factor_range * placement_sigmoid)
-        
-        # Calculate closed space value using the smooth factor
-        closed_space_value = total_closed_spaces * closed_space_factor
-        
-        # Subtract closed space effect (negative contribution to effective captures)
-        effective_captures -= closed_space_value
-        
-        # Threatened goats (using updated function that returns normalized value)
+        # Get the threatened value and log the max value found
         threatened_value = self.minimax_agent._count_threatened_goats(all_tiger_moves, state.turn)
         
-        # Add threatened value to effective captures
-        effective_captures += threatened_value
+        # Add threatened value directly to captures to create effective_captures
+        effective_captures = goats_captured + threatened_value
         
-        # STEP 3: Calculate capture deficit (actual+potential - expected)
-        capture_deficit = effective_captures - expected_captures
+        # Starting point for capture mapping: 0.2 -> 0.95 for captures 0-4
+        # Each capture adds (0.95 - 0.2) / 4 = 0.1875 to the win rate
+        # Use effective captures instead of just actual captures
+        capture_impact = (0.95 - 0.2) / 4.0  # 0.1875 per capture
         
-        # STEP 4: Calculate additional positional heuristics with dynamic equilibrium points
+        # Cap effective captures at 4 for win rate calculation
+        capped_effective_captures = min(4.0, effective_captures)
+        capture_base_rate = 0.2 + (capped_effective_captures * capture_impact)
         
-        # Tiger positional score (normalized 0-1, higher is better for tiger)
+        # Reserve some space for positional heuristics, but make it small
+        # to ensure captures and threats remain dominant
+        # Maximum positional contribution is 20% of a single capture's impact
+        max_position_contribution = capture_impact * 0.2
+        
+        
+        # Calculate all positional factors used in minimax evaluation
         position_score = self.minimax_agent._calculate_tiger_positional_score(state)
-        
-        # Calculate dynamic equilibrium point for tiger position score using sigmoid
-        # Smooth transition from 0.5 to 0.33 centered around 12.5 goats placed
-        position_max = 0.5
-        position_min = 0.33
-        position_range = position_max - position_min
-        position_transition_steepness = 0.4  # Controls how quickly the transition happens
-        position_transition_midpoint = 12.5  # Centered between early and late game
-        
-        # Sigmoid transition: starts at position_max, transitions to position_min
-        position_transition_factor = 1.0 / (1 + math.exp(-position_transition_steepness * (goats_placed - position_transition_midpoint)))
-        position_equilibrium = position_max - (position_range * position_transition_factor)
-            
-        # Convert using dynamic equilibrium point (centered at 0)
-        position_factor = position_score - position_equilibrium
-        
-        # Tiger optimal spacing score (normalized 0-1, higher is better for tiger)
         spacing_score = self.minimax_agent._calculate_tiger_optimal_spacing(state)
-        
-        # Calculate dynamic equilibrium point for optimal spacing score using same sigmoid
-        # Uses same parameters as position score for consistency
-        spacing_equilibrium = position_equilibrium  # Same equilibrium pattern as position score
-            
-        # Convert using dynamic equilibrium point (centered at 0)
-        spacing_factor = spacing_score - spacing_equilibrium
-        
-        # Goat edge preference (normalized 0-1, higher is better for goat)
         edge_score = self.minimax_agent._calculate_goat_edge_preference(state)
         
-        # Calculate dynamic equilibrium for edge preference using smooth sigmoid transitions
-        # Early phase: transition from 1.0 to 0.8 (centered at 3 goats)
-        # Late phase: transition from 0.8 to 0.1 (centered at 16 goats)
+        # Combine positional factors with appropriate weights
+        position_weight = 0.4
+        spacing_weight = 0.3
+        edge_weight = 0.3
         
-        # Parameters for early transition (1.0 to 0.8)
-        early_max = 1.0
-        early_min = 0.8
-        early_range = early_max - early_min
-        early_steepness = 0.8  # Steeper for a faster early transition
-        early_midpoint = 3.0  # Centered early in placement phase
-        
-        # Parameters for late transition (0.8 to 0.1)
-        late_max = 0.8
-        late_min = 0.1
-        late_range = late_max - late_min
-        late_steepness = 0.3  # Gentler for a smoother late transition
-        late_midpoint = 16.0  # Centered later in game
-        
-        # Early transition factor (0 to 1)
-        early_transition = 1.0 / (1 + math.exp(-early_steepness * (goats_placed - early_midpoint)))
-        
-        # Late transition factor (0 to 1)
-        late_transition = 1.0 / (1 + math.exp(-late_steepness * (goats_placed - late_midpoint)))
-        
-        # Calculate equilibrium based on both transitions
-        # First apply early transition (1.0 to 0.8)
-        edge_equilibrium = early_max - (early_range * early_transition)
-        
-        # Then apply late transition (0.8 to 0.1) which takes effect later
-        edge_equilibrium = edge_equilibrium - (late_range * late_transition * early_transition)
-            
-        # Convert using dynamic equilibrium point (centered at 0, inverted since higher edge score favors goats)
-        edge_factor = edge_equilibrium - edge_score
-        
-        # STEP 5: Non-linear mapping of capture deficit to win rate effect
-        capture_effect = self._map_captures_to_win_rate(capture_deficit, goats_captured)
-        
-        # STEP 6: Calculate dynamic influence based on effective captures
-        capture_influence = self._calculate_dynamic_influence(effective_captures, goats_placed)
-        
-        # STEP 7: Combine components with dynamic weighting
-        # Capture component with non-linear effect and dynamic influence
-        capture_component = 0.5 + capture_effect * capture_influence
-        
-        # Additional heuristics with remaining influence (weighted according to minimax proportions)
-        heuristic_influence = 1.0 - capture_influence
-        
-        # Calculate early and late game ratios for dynamic weights
-        early_game_ratio = self._calculate_early_game_ratio(goats_placed)  # Decreases from 1.0 to 0.0 as goats_placed goes from 0 to 15
-        late_game_ratio = min(1, goats_placed / 15)         # Increases from 0.0 to 1.0 as goats_placed goes from 0 to 15
-        
-        # Dynamic weights similar to minimax agent:
-        # Position weight is more important in early game
-        position_weight_factor = 1.0 + (0.5 * early_game_ratio)  # Ranges from 1.0 to 1.5
-        # Edge weight is more important in early game
-        edge_weight_factor = 1.0 + (1.0 * early_game_ratio)      # Ranges from 1.0 to 2.0
-        # Spacing weight increases in mid-to-late game
-        spacing_weight_factor = 1.0 + (0.7 * late_game_ratio)    # Ranges from 1.0 to 1.7
-        
-        # Base weight proportions
-        base_position_weight = 1.0 / 5.5
-        base_spacing_weight = 1.5 / 5.5
-        base_edge_weight = 3.0 / 5.5
-        
-        # Apply dynamic factors to weights
-        position_weight = base_position_weight * position_weight_factor
-        spacing_weight = base_spacing_weight * spacing_weight_factor
-        
-        # Amplify edge weight significantly for early placement phase (first 5 goats)
-        early_placement_boost = max(0.0, 3.0 * (1.0 - min(1.0, goats_placed / 5)))
-        edge_weight = base_edge_weight * (edge_weight_factor + early_placement_boost)
-        
-        # Apply weighted factors
-        heuristic_sum = (
-            (position_factor * position_weight) + 
-            (spacing_factor * spacing_weight) + 
-            (edge_factor * edge_weight)
-        )
-        heuristic_component = 0.5 + heuristic_sum * heuristic_influence
-        
-        # CRITICAL FIX: Blend the capture base rate (which guarantees monotonic increases with captures)
-        # with the heuristic-influenced rate, with more weight to the base rate as captures increase
-        capture_importance = min(1.0, goats_captured / 4.0)  # Increases from 0 to 1 as captures go from 0 to 4
-        blended_rate = (capture_base_rate * capture_importance) + (
-            (0.5 + ((capture_component - 0.5) + (heuristic_component - 0.5))) * (1.0 - capture_importance)
+        # Combine scores (invert edge score as it favors goats)
+        position_combined = (
+            position_score * position_weight +
+            spacing_score * spacing_weight - 
+            edge_score * edge_weight  # Inverted because higher edge score favors goats
         )
         
-        # Ensure win rate stays within valid range
-        return max(0.01, min(0.99, blended_rate))
+        # Scale the positional contribution to fit within the allowed budget
+        # Normalize to [-1, 1] range first
+        normalized_position = max(-1.0, min(1.0, position_combined))
+        # Scale to fit within budget
+        position_contribution = normalized_position * max_position_contribution
+        
+        # Combine base rate with position contribution
+        win_rate = capture_base_rate + position_contribution
+        
+        # Ensure valid range
+        return max(0.01, min(0.99, win_rate))

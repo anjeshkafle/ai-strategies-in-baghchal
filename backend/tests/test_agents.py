@@ -37,7 +37,7 @@ BOARD_STRING_2 = [
 BOARD_STRING_3 = [
     "T___T",
     "_____",
-    "_____",
+    "_G___",
     "_____",
     "T___T"
     ]
@@ -55,8 +55,8 @@ BOARD_TO_USE = BOARD_STRING_3
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "GOAT"            # "GOAT" or "TIGER"
-GOATS_PLACED = 0
+TURN = "TIGER"            # "GOAT" or "TIGER"
+GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
