@@ -18,7 +18,7 @@ class ParallelRange:
 class MCTSConfigGroup:
     """Configuration group for a set of MCTS parameters to test."""
     rollout_policies: List[str] = field(default_factory=lambda: ["lightweight"])
-    iterations: List[int] = field(default_factory=lambda: [10000])
+    iterations: List[int] = field(default_factory=lambda: [None])  # Default to None (use time-based)
     rollout_depths: List[int] = field(default_factory=lambda: [6])
     exploration_weights: List[float] = field(default_factory=lambda: [1.414])  # √2 is optimal for UCB1
     guided_strictness_values: List[float] = field(default_factory=lambda: [0.5])
@@ -28,6 +28,7 @@ class MCTSTournamentConfig:
     """Configuration for MCTS tournament."""
     configurations: List[MCTSConfigGroup] = field(default_factory=list)
     max_simulation_time: int = 60  # Maximum time in minutes to run the simulation
+    max_time_per_move: int = 10    # Maximum time per move in seconds
     output_dir: str = "simulation_results"
     parallel_ranges: List[ParallelRange] = None  # For parallel execution
     parallel_games: int = None  # Number of parallel games to run per process
@@ -63,11 +64,16 @@ class MCTSTournamentConfig:
                                 config = {
                                     'algorithm': 'mcts',
                                     'rollout_policy': policy,
-                                    'iterations': iteration,
                                     'rollout_depth': depth,
                                     'exploration_weight': exploration_weight,
-                                    'guided_strictness': guided_strictness
+                                    'guided_strictness': guided_strictness,
+                                    'max_time_seconds': self.max_time_per_move
                                 }
+                                
+                                # Only add iterations if specified
+                                if iteration is not None:
+                                    config['iterations'] = iteration
+                                
                                 all_configs.append(config)
         
         return all_configs
@@ -208,6 +214,9 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
                 ))
             mcts_dict['parallel_ranges'] = ranges
         
+        # Extract max_time_per_move
+        max_time_per_move = mcts_dict.get('max_time_per_move', 10)  # Default to 10 seconds
+        
         # Handle configuration groups
         if 'configurations' in mcts_dict:
             config_groups = []
@@ -225,16 +234,27 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
                     guided_strictness = group.get('guided_strictness', 0.5)
                     guided_strictness_values = [guided_strictness]
                 
+                # Handle iterations - default to None (time-based) if not specified
+                iterations = group.get('iterations', [None])
+                
                 config_groups.append(MCTSConfigGroup(
                     rollout_policies=group.get('rollout_policies', ["lightweight"]),
-                    iterations=group.get('iterations', [10000]),
+                    iterations=iterations,
                     rollout_depths=group.get('rollout_depths', [6]),
                     exploration_weights=exploration_weights,
                     guided_strictness_values=guided_strictness_values
                 ))
             mcts_dict['configurations'] = config_groups
             
-        mcts_config = MCTSTournamentConfig(**mcts_dict)
+        # Create tournament config with max_time_per_move
+        mcts_config = MCTSTournamentConfig(
+            configurations=mcts_dict.get('configurations', []),
+            max_simulation_time=mcts_dict.get('max_simulation_time'),
+            max_time_per_move=max_time_per_move,
+            output_dir=mcts_dict.get('output_dir', 'simulation_results'),
+            parallel_ranges=mcts_dict.get('parallel_ranges'),
+            parallel_games=mcts_dict.get('parallel_games')
+        )
         
     if 'main_competition' in config_dict:
         main_config = MainCompetitionConfig(**config_dict['main_competition'])

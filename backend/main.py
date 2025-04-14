@@ -155,7 +155,7 @@ async def get_best_move(request: MoveRequest):
                     custom_max_time = request.settings.max_time_seconds if request.settings.max_time_seconds is not None else default_settings["mcts"]["max_time_seconds"]
                     custom_strictness = request.settings.guided_strictness if request.settings.guided_strictness is not None else default_settings["mcts"]["guided_strictness"]
                     
-                    logger.info(f"Using custom MCTS settings: iterations={custom_iterations}, rollout={custom_rollout}, max_depth={custom_max_depth}, max_time={custom_max_time}")
+                    logger.info(f"Using custom MCTS settings: iterations={custom_iterations}, rollout={custom_rollout}, max_depth={custom_max_depth}, max_time_seconds={custom_max_time}")
                     custom_agent = MCTSAgent(
                         iterations=custom_iterations,
                         exploration_weight=custom_exploration,

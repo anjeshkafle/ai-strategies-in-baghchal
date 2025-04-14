@@ -10,9 +10,9 @@ class MinimaxAgent:
     
     INF = 1000000
     
-    def __init__(self, max_depth: int = 5, max_time: Optional[float] = None, randomize_equal_moves: bool = False):
+    def __init__(self, max_depth: int = 5, max_time_seconds: Optional[float] = None, randomize_equal_moves: bool = False):
         self.max_depth = max_depth
-        self.max_time = max_time  # Not used but kept for compatibility
+        self.max_time_seconds = max_time_seconds  # Not used but kept for compatibility
         self.best_move = None
         self.best_score = None
         self.randomize_equal_moves = randomize_equal_moves  # Flag to control move randomization

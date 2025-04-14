@@ -35,7 +35,7 @@ TIGER_CONFIG = {
     'rollout_depth': 6,            # Maximum depth for rollouts
     'exploration_weight': 1.0,     # Exploration weight for UCB formula
     'guided_strictness': 0.8,      # Strictness for guided rollouts (0.0-1.0)
-    'max_time': 60,                # Maximum time in seconds
+    'max_time_seconds': 60,        # Maximum time in seconds
     
     # Minimax specific settings (only used if algorithm is 'minimax')
     'depth': 5,                    # Search depth for Minimax
@@ -52,7 +52,7 @@ GOAT_CONFIG = {
     'rollout_depth': 4,            # Maximum depth for rollouts
     'exploration_weight': 1.0,     # Exploration weight for UCB formula
     'guided_strictness': 0.8,      # Strictness for guided rollouts (0.0-1.0)
-    'max_time': 60,                # Maximum time in seconds
+    'max_time_seconds': 60,        # Maximum time in seconds
     
     # Minimax specific settings (only used if algorithm is 'minimax')
     'depth': 5,                    # Search depth for Minimax

@@ -48,12 +48,12 @@ class GameRunner:
             )
         elif config['algorithm'] == 'mcts':
             return MCTSAgent(
-                iterations=config.get('iterations', 1000),
+                iterations=config.get('iterations'),
                 exploration_weight=config.get('exploration_weight', 1.0),
                 rollout_policy=config.get('rollout_policy', 'random'),
                 max_rollout_depth=config.get('rollout_depth', 6),
                 guided_strictness=config.get('guided_strictness', 0.8),
-                max_time_seconds=config.get('max_time', 30)
+                max_time_seconds=config.get('max_time_seconds', config.get('max_time', 30))
             )
         else:
             raise ValueError(f"Unknown algorithm: {config['algorithm']}")

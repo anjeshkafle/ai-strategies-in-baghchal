@@ -91,18 +91,21 @@ def run_mcts_tournament(config_path: str):
     # Extract unique values for reporting
     for config_item in all_configs:
         policies.add(config_item['rollout_policy'])
-        iterations.add(config_item['iterations'])
+        if 'iterations' in config_item:
+            iterations.add(config_item['iterations'])
         depths.add(config_item['rollout_depth'])
         exploration_weights.add(config_item['exploration_weight'])
         guided_strictness_values.add(config_item['guided_strictness'])
     
     print(f"  Configuration groups: {len(mcts_config.configurations)}")
     print(f"  Unique policies: {sorted(policies)}")
-    print(f"  Unique iterations: {sorted(iterations)}")
+    if iterations:
+        print(f"  Unique iterations: {sorted(iterations)}")
     print(f"  Unique depths: {sorted(depths)}")
     print(f"  Unique exploration weights: {sorted(exploration_weights)}")
     print(f"  Unique guided strictness values: {sorted(guided_strictness_values)}")
     print(f"  Total unique configurations: {len(all_configs)}")
+    print(f"  Max time per move: {mcts_config.max_time_per_move} seconds")
     print(f"  Max simulation time: {mcts_config.max_simulation_time} minutes")
     print(f"  Output directory: {mcts_config.output_dir}")
     print(f"  Parallel games: {mcts_config.parallel_games if mcts_config.parallel_games else 'auto'}")
