@@ -202,47 +202,5 @@ def main():
         sys.exit(1)
 
 
-def test_tuned_parameters(params, logger, config=None):
-    """
-    Test tuned parameters with a sample game.
-    
-    Args:
-        params: Parameter dictionary
-        logger: Logger instance
-        config: Configuration dictionary (optional)
-    """
-    try:
-        # Get search depth from config or use default
-        search_depth = 5
-        if config and "search_depth" in config:
-            search_depth = config.get("search_depth")
-            
-        # Create agents with tuned and default parameters
-        tuned_agent = MinimaxAgent(max_depth=search_depth)
-        from genetic.params_manager import apply_tuned_parameters
-        apply_tuned_parameters(tuned_agent, params)
-        
-        default_agent = MinimaxAgent(max_depth=search_depth)
-        
-        # Compare the evaluation function outputs
-        from models.game_state import GameState
-        test_state = GameState()
-        
-        # Apply a few random moves to get a non-starting position
-        for _ in range(5):
-            moves = test_state.get_valid_moves()
-            if moves:
-                test_state.apply_move(moves[0])
-        
-        # Get evaluations
-        tuned_eval = tuned_agent.evaluate(test_state)
-        default_eval = default_agent.evaluate(test_state)
-        
-        logger.info(f"Sample evaluation - Tuned: {tuned_eval}, Default: {default_eval}")
-            
-    except Exception as e:
-        logger.error(f"Error testing tuned parameters: {e}")
-
-
 if __name__ == "__main__":
     main() 
