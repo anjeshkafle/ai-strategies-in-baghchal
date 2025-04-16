@@ -10,7 +10,7 @@ class MinimaxAgent:
     
     INF = 1000000
     
-    def __init__(self, max_depth: int = 5, max_time_seconds: Optional[float] = None, randomize_equal_moves: bool = False):
+    def __init__(self, max_depth: int = 5, max_time_seconds: Optional[float] = None, randomize_equal_moves: bool = False, useTunedParams: bool = False):
         self.max_depth = max_depth
         self.max_time_seconds = max_time_seconds  # Not used but kept for compatibility
         self.best_move = None
@@ -33,6 +33,21 @@ class MinimaxAgent:
         
         # Debug mode flag
         self.debug_mode = False
+        
+        # Flag for using tuned parameters
+        self._using_tuned_params = False
+        self.tuned_factors = {}
+        self.tuned_equilibrium = {}
+        
+        # Apply tuned parameters if requested
+        if useTunedParams:
+            try:
+                from genetic.params_manager import apply_tuned_parameters
+                apply_tuned_parameters(self)
+            except ImportError:
+                print("Warning: genetic.params_manager not found. Using default parameters.")
+            except Exception as e:
+                print(f"Warning: Error applying tuned parameters: {e}. Using defaults.")
     
     def evaluate(self, state: GameState, move_sequence: List[Dict] = None) -> float:
         """
@@ -104,7 +119,11 @@ class MinimaxAgent:
         
         # Make closed spaces weight dynamic - more important in late game
         # Closed spaces become increasingly important as more goats are placed
-        closed_space_weight_factor = 1.0 + (1.5 * late_game_ratio)  # Ranges from 1.0 to 2.5
+        if self._using_tuned_params and 'closed_space_weight_factor' in self.tuned_factors:
+            closed_space_weight_factor = self.tuned_factors['closed_space_weight_factor']
+        else:
+            closed_space_weight_factor = 1.0 + (1.5 * late_game_ratio)  # Ranges from 1.0 to 2.5
+        
         dynamic_closed_space_weight = self.closed_spaces_weight * closed_space_weight_factor
         
         closed_score = -dynamic_closed_space_weight * total_closed_spaces
@@ -121,46 +140,74 @@ class MinimaxAgent:
         
         # Calculate dynamic equilibrium points for each heuristic based on game stage
         
-        # Tiger position score equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
-        if goats_placed < 10:
-            position_equilibrium = 0.5
-        elif goats_placed < 15:
-            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
-            position_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
+        # Use tuned equilibrium points if available
+        if self._using_tuned_params:
+            # Tiger position score equilibrium
+            if goats_placed < 10:
+                position_equilibrium = self.tuned_equilibrium.get('position_equilibrium_early', 0.5)
+            else:
+                position_equilibrium = self.tuned_equilibrium.get('position_equilibrium_late', 0.33)
+                
+            # Tiger optimal spacing equilibrium
+            if goats_placed < 10:
+                spacing_equilibrium = self.tuned_equilibrium.get('spacing_equilibrium_early', 0.5)
+            else:
+                spacing_equilibrium = self.tuned_equilibrium.get('spacing_equilibrium_late', 0.33)
+                
+            # Goat edge preference equilibrium
+            if goats_placed < 5:
+                edge_equilibrium = self.tuned_equilibrium.get('edge_equilibrium_early', 1.0)
+            elif goats_placed < 12:
+                edge_equilibrium = self.tuned_equilibrium.get('edge_equilibrium_mid', 0.8)
+            else:
+                edge_equilibrium = self.tuned_equilibrium.get('edge_equilibrium_late', 0.1)
         else:
-            position_equilibrium = 0.33
-            
-        # Tiger optimal spacing equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
-        if goats_placed < 10:
-            spacing_equilibrium = 0.5
-        elif goats_placed < 15:
-            # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
-            spacing_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
-        else:
-            spacing_equilibrium = 0.33
-            
-        # Goat edge preference equilibrium: 1.0 before 5 goats placed, 0.8 until 12 goats placed, decreases to 0.1 by 20 goats placed
-        if goats_placed < 5:
-            edge_equilibrium = 1.0
-        elif goats_placed < 12:
-            edge_equilibrium = 0.8
-        elif goats_placed <= 20:
-            # Linear interpolation from 0.8 to 0.1 between 12 and 20 goats placed
-            edge_equilibrium = 0.8 - (0.7 * (goats_placed - 12) / 8)
-        else:
-            edge_equilibrium = 0.1
+            # Tiger position score equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
+            if goats_placed < 10:
+                position_equilibrium = 0.5
+            elif goats_placed < 15:
+                # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+                position_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
+            else:
+                position_equilibrium = 0.33
+                
+            # Tiger optimal spacing equilibrium: 0.5 before 10 goats placed, decreases to 0.33 by 15 goats placed
+            if goats_placed < 10:
+                spacing_equilibrium = 0.5
+            elif goats_placed < 15:
+                # Linear interpolation from 0.5 to 0.33 between 10 and 15 goats placed
+                spacing_equilibrium = 0.5 - (0.17 * (goats_placed - 10) / 5)
+            else:
+                spacing_equilibrium = 0.33
+                
+            # Goat edge preference equilibrium: 1.0 before 5 goats placed, 0.8 until 12 goats placed, decreases to 0.1 by 20 goats placed
+            if goats_placed < 5:
+                edge_equilibrium = 1.0
+            elif goats_placed < 12:
+                edge_equilibrium = 0.8
+            elif goats_placed <= 20:
+                # Linear interpolation from 0.8 to 0.1 between 12 and 20 goats placed
+                edge_equilibrium = 0.8 - (0.7 * (goats_placed - 12) / 8)
+            else:
+                edge_equilibrium = 0.1
         
         # Calculate factor values based on equilibrium points
         position_factor = position_score - position_equilibrium
         spacing_factor = optimal_spacing_score - spacing_equilibrium
         edge_factor = edge_equilibrium - edge_score  # Note the inverted formula because higher edge score favors goats
         
-        # Position weight is more important in early game
-        position_weight_factor = 1.0 + (0.5 * early_game_ratio)  # Ranges from 1.0 to 1.5
-        # Edge weight is more important in early game
-        edge_weight_factor = 1.0 + (1.0 * early_game_ratio)      # Ranges from 1.0 to 2.0
-        # Spacing weight increases in mid-to-late game
-        spacing_weight_factor = 1.0 + (0.7 * late_game_ratio)    # Ranges from 1.0 to 1.7
+        # Use tuned factors if available
+        if self._using_tuned_params:
+            position_weight_factor = self.tuned_factors.get('position_weight_factor', 1.0 + (0.5 * early_game_ratio))
+            edge_weight_factor = self.tuned_factors.get('edge_weight_factor', 1.0 + (1.0 * early_game_ratio))
+            spacing_weight_factor = self.tuned_factors.get('spacing_weight_factor', 1.0 + (0.7 * late_game_ratio))
+        else:
+            # Position weight is more important in early game
+            position_weight_factor = 1.0 + (0.5 * early_game_ratio)  # Ranges from 1.0 to 1.5
+            # Edge weight is more important in early game
+            edge_weight_factor = 1.0 + (1.0 * early_game_ratio)      # Ranges from 1.0 to 2.0
+            # Spacing weight increases in mid-to-late game
+            spacing_weight_factor = 1.0 + (0.7 * late_game_ratio)    # Ranges from 1.0 to 1.7
         
         # Apply dynamic position weight
         position_weight = self.dispersion_weight * position_weight_factor
