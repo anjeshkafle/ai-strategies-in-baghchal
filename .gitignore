@@ -23,6 +23,7 @@ backend/data/
 backend/simulation/simulation_results/
 backend/simulation_results/
 backend/simulation/simulation_config.json
+backend/tuned_params/
 
 # Editor directories and files
 .vscode/

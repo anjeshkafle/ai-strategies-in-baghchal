@@ -98,38 +98,71 @@ def play_game_worker(args):
 
 
 class FitnessEvaluator:
-    """Evaluates chromosome fitness through self-play tournaments."""
+    """
+    Evaluates the fitness of chromosomes in the genetic algorithm.
+    Uses tournament-based approach and multiprocessing.
+    """
     
-    def __init__(self, config: Dict, baseline_agent: MinimaxAgent = None):
+    def __init__(self, games_per_evaluation: int = 4, search_depth: int = 3, num_processes: int = None):
         """
         Initialize the fitness evaluator.
         
         Args:
-            config: GA configuration dictionary
-            baseline_agent: Optional baseline agent for comparison
+            games_per_evaluation: Number of games to play for each evaluation
+            search_depth: Search depth for minimax agent
+            num_processes: Number of parallel processes to use (default: CPU count - 1)
         """
-        self.config = config
-        self.games_per_evaluation = config.get("games_per_evaluation", 10)
-        self.search_depth = config.get("search_depth", 5)
+        self.games_per_evaluation = games_per_evaluation
+        self.search_depth = search_depth
         
-        # Use cpu_count-1 cores by default, but allow configuration
-        parallel_setting = config.get("parallel_processes", None)
-        if parallel_setting is None or parallel_setting <= 0:
-            # Default to cpu_count-1 if not provided or set to 0 or negative
-            self.parallel_processes = max(1, multiprocessing.cpu_count() - 1)
+        # Set up multiprocessing
+        if num_processes is None:
+            import multiprocessing
+            self.num_processes = max(1, multiprocessing.cpu_count() - 1)
         else:
-            # Use the provided positive value
-            self.parallel_processes = parallel_setting
+            self.num_processes = num_processes
         
-        # Cache for fitness evaluations
-        self.evaluation_cache = {}
+        self.logger = logging.getLogger('fitness_evaluator')
+    
+    def evaluate_chromosome(self, genes: Dict[str, Any]) -> float:
+        """
+        Evaluate a single chromosome by playing games against the baseline agent.
         
-        # Track the last win rates for reporting
-        self.last_tiger_win_rate = 0.0
-        self.last_goat_win_rate = 0.0
+        Args:
+            genes: Parameters to evaluate
+            
+        Returns:
+            Fitness score
+        """
+        # Create a partial function for the worker with the search depth
+        worker_fn = partial(play_game_worker, 
+                           agent_params=genes, 
+                           agent_side="TIGER", 
+                           seed=None, 
+                           search_depth=self.search_depth)
         
-        # Cache for detailed performance metrics
-        self.performance_cache = {}
+        # Play as tiger
+        tiger_results = [worker_fn() for _ in range(self.games_per_evaluation // 2)]
+        
+        # Play as goat
+        worker_fn = partial(play_game_worker, 
+                           agent_params=genes, 
+                           agent_side="GOAT", 
+                           seed=None, 
+                           search_depth=self.search_depth)
+        goat_results = [worker_fn() for _ in range(self.games_per_evaluation // 2)]
+        
+        # Calculate win rates
+        tiger_win_count = sum(1 for res in tiger_results if res[0] == "TIGER")
+        goat_win_count = sum(1 for res in goat_results if res[0] == "GOAT")
+        
+        tiger_win_rate = tiger_win_count / (self.games_per_evaluation // 2) if self.games_per_evaluation > 0 else 0
+        goat_win_rate = goat_win_count / (self.games_per_evaluation // 2) if self.games_per_evaluation > 0 else 0
+        
+        # The fitness is the average of tiger and goat win rates
+        fitness = (tiger_win_rate + goat_win_rate) / 2
+        
+        return fitness
     
     def evaluate_population(self, population: List[Chromosome]) -> List[float]:
         """
@@ -141,111 +174,7 @@ class FitnessEvaluator:
         Returns:
             List of fitness scores in the same order as the population
         """
-        return [self.evaluate_chromosome(chromosome) for chromosome in population]
-    
-    def evaluate_chromosome(self, chromosome: Chromosome) -> float:
-        """
-        Evaluate a single chromosome using self-play tournaments.
-        
-        Args:
-            chromosome: Chromosome to evaluate
-            
-        Returns:
-            Fitness score (normalized win rate)
-        """
-        # Check cache first using chromosome hash
-        chromosome_hash = hash(json.dumps(chromosome.genes, sort_keys=True))
-        if chromosome_hash in self.evaluation_cache:
-            # Retrieve cached performance metrics too
-            if chromosome_hash in self.performance_cache:
-                metrics = self.performance_cache[chromosome_hash]
-                self.last_tiger_win_rate = metrics.get('tiger_win_rate', 0.0)
-                self.last_goat_win_rate = metrics.get('goat_win_rate', 0.0)
-            
-            return self.evaluation_cache[chromosome_hash]
-        
-        # Create a list of all games that need to be played
-        # Each game is defined by a tuple of (params, agent_side, seed, search_depth)
-        games_to_play = []
-        
-        # Add games playing as Tiger
-        for i in range(self.games_per_evaluation):
-            games_to_play.append((chromosome.genes, "TIGER", i, self.search_depth))
-        
-        # Add games playing as Goat
-        for i in range(self.games_per_evaluation):
-            games_to_play.append((chromosome.genes, "GOAT", i + self.games_per_evaluation, self.search_depth))
-        
-        # Play all games in parallel
-        results = []
-        
-        # Use a process pool for parallel game execution
-        # Windows requires the code to be in a if __name__ == '__main__' block
-        # So we need a more careful approach with initialization
-        try:
-            # Create a multiprocessing pool and play games in parallel
-            with multiprocessing.Pool(processes=self.parallel_processes) as pool:
-                results = pool.map(play_game_worker, games_to_play)
-        
-        except Exception as e:
-            # Fallback to sequential if multiprocessing fails
-            print(f"Multiprocessing failed: {e}. Falling back to sequential.")
-            results = [play_game_worker(game) for game in games_to_play]
-        
-        # Process the results
-        tiger_results = [r for r in results if r[2] == "TIGER"]
-        goat_results = [r for r in results if r[2] == "GOAT"]
-        
-        # Count wins and track game lengths
-        tiger_wins = sum(1 for r in tiger_results if r[0] == "TIGER")
-        goat_wins = sum(1 for r in goat_results if r[0] == "GOAT")
-        
-        tiger_game_lengths = [r[1] for r in tiger_results]
-        goat_game_lengths = [r[1] for r in goat_results]
-        
-        # Calculate fitness components
-        tiger_win_rate = tiger_wins / len(tiger_results) if tiger_results else 0
-        goat_win_rate = goat_wins / len(goat_results) if goat_results else 0
-        
-        # Save win rates for reporting
-        self.last_tiger_win_rate = tiger_win_rate
-        self.last_goat_win_rate = goat_win_rate
-        
-        # Tiger win lengths - only consider winning games for average
-        winning_tiger_lengths = [r[1] for r in tiger_results if r[0] == "TIGER"]
-        winning_goat_lengths = [r[1] for r in goat_results if r[0] == "GOAT"]
-        
-        # Adjust for game length (prefer shorter wins and longer losses)
-        avg_tiger_win_length = sum(winning_tiger_lengths) / len(winning_tiger_lengths) if winning_tiger_lengths else 0
-        avg_goat_win_length = sum(winning_goat_lengths) / len(winning_goat_lengths) if winning_goat_lengths else 0
-        
-        # Normalize game lengths (0-1 where 1 is better)
-        norm_tiger_length = min(1.0, max(0.0, 1.0 - (avg_tiger_win_length / 100))) if avg_tiger_win_length > 0 else 0
-        norm_goat_length = min(1.0, max(0.0, avg_goat_win_length / 100)) if avg_goat_win_length > 0 else 0
-        
-        # Calculate overall fitness (50% win rate, 50% game length efficiency)
-        tiger_fitness = 0.5 * tiger_win_rate + 0.1 * norm_tiger_length
-        goat_fitness = 0.5 * goat_win_rate + 0.1 * norm_goat_length
-        
-        # Combined fitness (playing both sides equally)
-        fitness = tiger_fitness + goat_fitness
-        
-        # Cache the result
-        self.evaluation_cache[chromosome_hash] = fitness
-        
-        # Cache performance metrics
-        self.performance_cache[chromosome_hash] = {
-            'tiger_win_rate': tiger_win_rate,
-            'goat_win_rate': goat_win_rate,
-            'avg_tiger_win_length': avg_tiger_win_length,
-            'avg_goat_win_length': avg_goat_win_length,
-            'tiger_wins': tiger_wins,
-            'goat_wins': goat_wins,
-            'tiger_game_lengths': tiger_game_lengths,
-            'goat_game_lengths': goat_game_lengths
-        }
-        
-        return fitness
+        return [self.evaluate_chromosome(chromosome.genes) for chromosome in population]
     
     def get_performance_metrics(self, chromosome: Chromosome) -> Dict[str, Any]:
         """
@@ -258,7 +187,7 @@ class FitnessEvaluator:
             Dictionary of performance metrics
         """
         # First ensure the chromosome has been evaluated
-        self.evaluate_chromosome(chromosome)
+        self.evaluate_chromosome(chromosome.genes)
         
         # Get chromosome hash
         chromosome_hash = hash(json.dumps(chromosome.genes, sort_keys=True))

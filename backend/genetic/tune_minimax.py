@@ -36,19 +36,16 @@ from genetic.params_manager import save_tuned_parameters
 
 def main():
     """
-    Main entry point for minimax tuning.
+    Main entry point for MinimaxAgent genetic tuning.
     
-    This function:
-    1. Loads the GA configuration
-    2. Sets up the output directory and logging
-    3. Initializes and runs the genetic optimizer
-    4. Saves the results and generates reports
-    5. Tests the tuned parameters
+    This sets up the optimization process based on the configuration file,
+    runs the genetic algorithm, and generates reports.
     """
     start_time = time.time()
     
     # Get the directory of this script
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend directory
     
     # Path to configuration file
     config_path = os.path.join(script_dir, "ga_config.json")
@@ -57,17 +54,24 @@ def main():
     print(f"Loading configuration from {config_path}...")
     config = load_config(config_path)
     
-    # Set up output directory
-    output_dir = config.get("output_dir", "../tuned_params")
-    output_dir = ensure_output_directory(output_dir)
-    print(f"Results will be saved to {output_dir}")
+    # Set up output directory - ALWAYS use "tuned_params", ignore any config setting
+    output_dir = "tuned_params"  # Hard-coded to always use "tuned_params", completely ignoring config
+    
+    # Make sure output_dir is resolved consistently relative to backend directory
+    # It's a relative path, resolve it relative to the backend directory
+    output_dir = os.path.normpath(os.path.join(base_dir, output_dir))
+    
+    # Ensure the directory exists - create with robust error handling
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Results will be saved to {output_dir}")
+    except Exception as e:
+        print(f"Error creating output directory {output_dir}: {e}")
+        sys.exit(1)  # Exit if we can't create the directory
     
     # Set up logging
     logger = setup_logging(output_dir)
     logger.info(f"Starting MinimaxAgent tuning with configuration from {config_path}")
-    
-    # Create output directory for tuned parameters if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
     
     # Log configuration
     logger.info(f"Configuration: {json.dumps(config, indent=2)}")

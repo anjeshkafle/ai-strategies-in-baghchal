@@ -5,6 +5,7 @@ This module exposes tuned parameters to the main codebase.
 import os
 import json
 from typing import Dict, Any, Optional
+import logging
 
 
 # Default path for the best parameters file
@@ -115,8 +116,17 @@ def save_tuned_parameters(params: Dict[str, Any], output_path: str = DEFAULT_PAR
         params: Parameter dictionary
         output_path: Path to save the parameters
     """
-    # Create directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # Create directory if it doesn't exist - with error handling
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    except Exception as e:
+        logging.error(f"Error creating directory for tuned parameters: {e}")
+        raise
     
-    with open(output_path, 'w') as f:
-        json.dump(params, f, indent=2) 
+    # Save parameters with error handling
+    try:
+        with open(output_path, 'w') as f:
+            json.dump(params, f, indent=2)
+    except Exception as e:
+        logging.error(f"Error saving tuned parameters to {output_path}: {e}")
+        raise 
