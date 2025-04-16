@@ -202,6 +202,11 @@ class GeneticOptimizer:
             if hasattr(self.evaluator, "last_tiger_win_rate") and hasattr(self.evaluator, "last_goat_win_rate"):
                 gen_data['best_tiger_win_rate'] = self.evaluator.last_tiger_win_rate
                 gen_data['best_goat_win_rate'] = self.evaluator.last_goat_win_rate
+            else:
+                # Try to get win rates from the best chromosome
+                tiger_rate, goat_rate = self._get_win_rates(population[0])
+                gen_data['best_tiger_win_rate'] = tiger_rate
+                gen_data['best_goat_win_rate'] = goat_rate
             
             # Save generation data to CSV for plotting
             log_generation_to_csv(self.output_dir, gen_data)
@@ -323,6 +328,11 @@ class GeneticOptimizer:
             if hasattr(self.evaluator, "last_tiger_win_rate") and hasattr(self.evaluator, "last_goat_win_rate"):
                 gen_data['best_tiger_win_rate'] = self.evaluator.last_tiger_win_rate
                 gen_data['best_goat_win_rate'] = self.evaluator.last_goat_win_rate
+            else:
+                # Try to get win rates from the best chromosome
+                tiger_rate, goat_rate = self._get_win_rates(population[0])
+                gen_data['best_tiger_win_rate'] = tiger_rate
+                gen_data['best_goat_win_rate'] = goat_rate
             
             # Save generation data to CSV for plotting
             log_generation_to_csv(self.output_dir, gen_data)
@@ -611,6 +621,10 @@ class GeneticOptimizer:
             Tuple of (tiger_win_rate, goat_win_rate)
         """
         try:
+            if not hasattr(chromosome, 'genes'):
+                self.logger.error("Invalid chromosome - missing 'genes' attribute")
+                return 0.0, 0.0
+            
             # The fitness evaluator caches results by chromosome hash
             # Use the chromosome's genes to evaluate, not the chromosome itself
             fitness = self.evaluator.evaluate_chromosome(chromosome.genes)
@@ -626,6 +640,12 @@ class GeneticOptimizer:
             goat_estimate = min(1.0, max(0.0, fitness * 0.5))
             
             return tiger_estimate, goat_estimate
+        except AttributeError as e:
+            self.logger.error(f"AttributeError in _get_win_rates: {e}")
+            return 0.0, 0.0
+        except TypeError as e:
+            self.logger.error(f"TypeError in _get_win_rates: {e}")
+            return 0.0, 0.0
         except Exception as e:
             self.logger.error(f"Error getting win rates: {e}")
             return 0.0, 0.0

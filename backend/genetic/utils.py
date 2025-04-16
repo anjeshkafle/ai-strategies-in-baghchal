@@ -91,6 +91,19 @@ def log_generation_to_csv(output_dir: str, generation_data: Dict, csv_path: str 
     # Check if file exists to determine if header needs to be written
     file_exists = os.path.isfile(csv_path)
     
+    # Map some known fields that might have different names in generation_data
+    mapped_data = generation_data.copy()
+    
+    # Map diversity to population_diversity if it exists
+    if 'diversity' in mapped_data and 'population_diversity' not in mapped_data:
+        mapped_data['population_diversity'] = mapped_data['diversity']
+    
+    # Calculate std_dev if missing but we have min, max, and avg fitness
+    if 'std_dev' not in mapped_data and all(k in mapped_data for k in ['best_fitness', 'min_fitness', 'avg_fitness']):
+        # Simple approximation of std dev based on range
+        fitness_range = mapped_data['best_fitness'] - mapped_data['min_fitness']
+        mapped_data['std_dev'] = fitness_range / 4.0  # Rough approximation
+    
     with open(csv_path, 'a', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         
@@ -99,7 +112,7 @@ def log_generation_to_csv(output_dir: str, generation_data: Dict, csv_path: str 
             writer.writeheader()
         
         # Write data row, handling missing fields
-        row_data = {field: generation_data.get(field, '') for field in fields}
+        row_data = {field: mapped_data.get(field, '') for field in fields}
         writer.writerow(row_data)
 
 
@@ -158,35 +171,67 @@ def plot_parameter_evolution(csv_path: str, output_path: str = None):
     # Read CSV data
     df = pd.read_csv(csv_path)
     
-    # Create figure with subplots
-    fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
+    # Check what columns are available
+    available_columns = df.columns.tolist()
+    
+    # Ensure required 'generation' column exists
+    if 'generation' not in available_columns:
+        print("Error: CSV must contain 'generation' column")
+        return
+    
+    # Create figure with subplots - only use subplots for columns we have
+    plot_count = 1
+    if any(col in available_columns for col in ['best_fitness', 'avg_fitness', 'min_fitness']):
+        plot_count += 1
+    if 'best_tiger_win_rate' in available_columns or 'best_goat_win_rate' in available_columns:
+        plot_count += 1
+    if 'population_diversity' in available_columns:
+        plot_count += 1
+    
+    fig, axs = plt.subplots(plot_count, 1, figsize=(12, 5*plot_count), sharex=True)
+    
+    # If only one plot, axs might not be array, so convert to list for indexing
+    if plot_count == 1:
+        axs = [axs]
+    
+    current_plot = 0
     
     # Plot fitness metrics
-    axs[0].plot(df['generation'], df['best_fitness'], 'b-', label='Best Fitness')
-    axs[0].plot(df['generation'], df['avg_fitness'], 'r-', label='Average Fitness')
-    if 'min_fitness' in df.columns:
-        axs[0].plot(df['generation'], df['min_fitness'], 'g-', label='Min Fitness')
-    axs[0].set_ylabel('Fitness')
-    axs[0].set_title('Fitness Metrics Over Generations')
-    axs[0].legend()
-    axs[0].grid(True)
+    if any(col in available_columns for col in ['best_fitness', 'avg_fitness', 'min_fitness']):
+        if 'best_fitness' in available_columns:
+            axs[current_plot].plot(df['generation'], df['best_fitness'], 'b-', label='Best Fitness')
+        if 'avg_fitness' in available_columns:
+            axs[current_plot].plot(df['generation'], df['avg_fitness'], 'r-', label='Average Fitness')
+        if 'min_fitness' in available_columns:
+            axs[current_plot].plot(df['generation'], df['min_fitness'], 'g-', label='Min Fitness')
+        axs[current_plot].set_ylabel('Fitness')
+        axs[current_plot].set_title('Fitness Metrics Over Generations')
+        axs[current_plot].legend()
+        axs[current_plot].grid(True)
+        current_plot += 1
     
     # Plot win rates
-    if 'best_tiger_win_rate' in df.columns and 'best_goat_win_rate' in df.columns:
-        axs[1].plot(df['generation'], df['best_tiger_win_rate'], 'orange', label='Tiger Win Rate')
-        axs[1].plot(df['generation'], df['best_goat_win_rate'], 'purple', label='Goat Win Rate')
-        axs[1].set_ylabel('Win Rate')
-        axs[1].set_title('Win Rates for Best Chromosome')
-        axs[1].legend()
-        axs[1].grid(True)
+    if 'best_tiger_win_rate' in available_columns or 'best_goat_win_rate' in available_columns:
+        if 'best_tiger_win_rate' in available_columns:
+            axs[current_plot].plot(df['generation'], df['best_tiger_win_rate'], 'orange', label='Tiger Win Rate')
+        if 'best_goat_win_rate' in available_columns:
+            axs[current_plot].plot(df['generation'], df['best_goat_win_rate'], 'purple', label='Goat Win Rate')
+        axs[current_plot].set_ylabel('Win Rate')
+        axs[current_plot].set_title('Win Rates for Best Chromosome')
+        axs[current_plot].legend()
+        axs[current_plot].grid(True)
+        current_plot += 1
     
     # Plot diversity
-    if 'population_diversity' in df.columns:
-        axs[2].plot(df['generation'], df['population_diversity'], 'k-')
-        axs[2].set_ylabel('Diversity')
-        axs[2].set_title('Population Diversity')
-        axs[2].set_xlabel('Generation')
-        axs[2].grid(True)
+    if 'population_diversity' in available_columns:
+        axs[current_plot].plot(df['generation'], df['population_diversity'], 'k-')
+        axs[current_plot].set_ylabel('Diversity')
+        axs[current_plot].set_title('Population Diversity')
+        axs[current_plot].set_xlabel('Generation')
+        axs[current_plot].grid(True)
+    else:
+        # Set xlabel on the last plot if diversity isn't available
+        axs[current_plot-1].set_xlabel('Generation')
     
     plt.tight_layout()
     
