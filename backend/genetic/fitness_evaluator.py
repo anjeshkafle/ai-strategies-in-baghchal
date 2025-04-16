@@ -35,6 +35,36 @@ SYMBOLS = {
 }
 
 
+def get_state_hash(state: GameState) -> str:
+    """
+    Create a hash representation of the game state for repetition detection.
+    
+    Args:
+        state: Current game state
+        
+    Returns:
+        String hash of the board state
+    """
+    # Only track repetition during movement phase
+    if state.phase == "MOVEMENT":
+        # Convert board to a string representation
+        board_str = ""
+        for row in state.board:
+            for cell in row:
+                if cell is None:
+                    board_str += "_"
+                elif cell["type"] == "TIGER":
+                    board_str += "T"
+                else:
+                    board_str += "G"
+        
+        # Include turn in the hash
+        return f"{board_str}_{state.turn}"
+    else:
+        # During placement phase, include goats_placed to ensure uniqueness
+        return f"PLACEMENT_{state.goats_placed}_{state.turn}"
+
+
 def play_game_worker(args) -> Tuple[str, int, str, Dict]:
     """
     Worker function to play a game between agents.
@@ -77,8 +107,22 @@ def play_game_worker(args) -> Tuple[str, int, str, Dict]:
         move_count = 0
         start_time = time.time()
         
+        # Track visited states for threefold repetition
+        visited_states = {}  # Format: {state_hash: count}
+        
         # Main game loop
         while not game_state.is_terminal() and move_count < max_moves:
+            # Check for threefold repetition in movement phase
+            if game_state.phase == "MOVEMENT":
+                state_hash = get_state_hash(game_state)
+                visited_states[state_hash] = visited_states.get(state_hash, 0) + 1
+                if visited_states[state_hash] >= 3:
+                    # Game ends in a draw due to threefold repetition
+                    print(f"Threefold repetition detected in game {game_id} after {move_count} moves")
+                    winner = "DRAW"
+                    reason = "THREEFOLD_REPETITION"
+                    break
+            
             # Get current player
             current_player = game_state.turn  # Use turn attribute directly
             
@@ -97,18 +141,21 @@ def play_game_worker(args) -> Tuple[str, int, str, Dict]:
         
         if game_state.is_terminal():
             winner = game_state.get_winner()
+            reason = "STANDARD"
+        elif 'winner' in locals():  # Threefold repetition already set the winner
+            pass  # Keep the previously set winner and reason
         elif move_count >= max_moves:
             # Check if tigers are close to winning
             if game_state.goats_captured >= 3:
                 winner = PLAYER_TIGER
+                reason = "MOVE_LIMIT_TIGERS_AHEAD"
             # Check if goats are in a strong position
             elif game_state.goats_placed == game_state.TOTAL_GOATS and game_state.goats_captured <= 1:
                 winner = PLAYER_GOAT
+                reason = "MOVE_LIMIT_GOATS_AHEAD"
             else:
                 winner = "DRAW"
-        else:
-            # Game ended due to threefold repetition
-            winner = "DRAW"
+                reason = "MOVE_LIMIT"
         
         # Create result symbol
         if winner == "DRAW":
@@ -122,6 +169,7 @@ def play_game_worker(args) -> Tuple[str, int, str, Dict]:
         game_info = {
             "matchup": matchup,
             "winner": winner,
+            "reason": reason if 'reason' in locals() else "UNKNOWN",
             "moves": move_count,
             "time": game_time,
             "goats_captured": game_state.goats_captured,
@@ -129,7 +177,7 @@ def play_game_worker(args) -> Tuple[str, int, str, Dict]:
         }
         
         # Print completion info
-        print(f"Game {game_id} complete: {matchup} {result_symbol} Winner: {winner} ({move_count} moves, {game_time:.1f}s)")
+        print(f"Game {game_id} complete: {matchup} {result_symbol} Winner: {winner} ({move_count} moves, {game_time:.1f}s, {game_info['reason']})")
         
         return (winner, move_count, play_as, game_info)
         
@@ -244,23 +292,36 @@ class FitnessEvaluator:
         # The fitness is the average of tiger and goat win rates
         fitness = (tiger_win_rate + goat_win_rate) / 2
         
+        # Analyze game results for debugging and transparency
+        repetition_count = sum(1 for res in tiger_results + goat_results if res[3].get("reason") == "THREEFOLD_REPETITION")
+        move_limit_count = sum(1 for res in tiger_results + goat_results if "MOVE_LIMIT" in res[3].get("reason", ""))
+        
         # Store performance metrics
         chromosome_hash = hash(json.dumps(genes, sort_keys=True))
         self.performance_cache[chromosome_hash] = {
             'tiger_win_rate': tiger_win_rate,
             'goat_win_rate': goat_win_rate,
             'total_games': self.games_per_evaluation,
-            'evaluation_time': time.time() - eval_start
+            'evaluation_time': time.time() - eval_start,
+            'repetition_draws': repetition_count,
+            'move_limit_games': move_limit_count
         }
         
         # Pretty console output summary
         tiger_stats = f"{SYMBOLS['tiger']} Win rate: {tiger_win_rate:.2f} ({tiger_win_count}/{self.games_per_evaluation//2})"
         goat_stats = f"{SYMBOLS['goat']} Win rate: {goat_win_rate:.2f} ({goat_win_count}/{self.games_per_evaluation//2})"
         time_stats = f"⏱️ {time.time() - eval_start:.1f}s"
-        print(f"\n{tiger_stats} | {goat_stats} | Fitness: {fitness:.2f} | {time_stats}")
+        
+        # Include repetition info
+        if repetition_count > 0:
+            rep_info = f"| 🔄 Repetitions: {repetition_count}"
+        else:
+            rep_info = ""
+            
+        print(f"\n{tiger_stats} | {goat_stats} | Fitness: {fitness:.2f} | {time_stats} {rep_info}")
         print("-" * 60)
         
-        logger.info(f"Chromosome evaluated with fitness {fitness:.2f} (Tiger: {tiger_win_rate:.2f}, Goat: {goat_win_rate:.2f})")
+        logger.info(f"Chromosome evaluated with fitness {fitness:.2f} (Tiger: {tiger_win_rate:.2f}, Goat: {goat_win_rate:.2f}, Repetitions: {repetition_count})")
         
         return fitness
     
