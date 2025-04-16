@@ -24,6 +24,7 @@ backend/simulation/simulation_results/
 backend/simulation_results/
 backend/simulation/simulation_config.json
 backend/tuned_params/
+backend/genetic/ga_config.json
 
 # Editor directories and files
 .vscode/
