@@ -44,8 +44,8 @@ class GeneticOptimizer:
         self.save_interval = config.get("save_interval", 1)
         self.max_time = config.get("max_execution_time", float('inf'))
         
-        # Hard-coded to always use "tuned_params", completely ignoring config
-        self.output_dir = "tuned_params"
+        # ALWAYS use backend/tuned_params regardless of config
+        self.output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tuned_params")
         
         # File to store population for resuming
         self.population_file = os.path.join(self.output_dir, "population.pkl")
@@ -141,19 +141,25 @@ class GeneticOptimizer:
         if loaded_population and loaded_generation > 0:
             population = loaded_population
             self.starting_generation = loaded_generation
+            target_generation = loaded_generation + self.max_generations
             self.logger.info(f"Resuming optimization from generation {self.starting_generation}")
+            self.logger.info(f"Will run for {self.max_generations} more generations (up to generation {target_generation})")
         else:
             # Initialize fresh population
             population = self._initialize_population()
             self.starting_generation = 0
+            target_generation = self.max_generations
             self.logger.info("Starting new optimization run with fresh population")
         
         self.start_time = time.time()
         self.logger.info(f"Starting genetic optimization with {self.population_size} chromosomes "
                          f"for up to {self.max_time} seconds")
         
+        # Clear fitness history for new run
+        self.fitness_history = []
+        
         # Run for specified number of generations
-        for generation in range(self.starting_generation, self.max_generations):
+        for generation in range(self.starting_generation, target_generation):
             gen_start_time = time.time()
             
             # Evaluate population
@@ -161,8 +167,13 @@ class GeneticOptimizer:
                 if chromosome.fitness is None:  # Only evaluate if not already evaluated
                     chromosome.fitness = self.evaluator.evaluate_chromosome(chromosome.genes)
             
+            # Set a default value for chromosomes with None fitness
+            for chromosome in population:
+                if chromosome.fitness is None:
+                    chromosome.fitness = 0.0
+            
             # Sort by fitness (higher is better)
-            population.sort(key=lambda x: x.fitness, reverse=True)
+            self._safe_sort_population(population)
             
             # Update best chromosome
             if self.best_chromosome is None or population[0].fitness > self.best_chromosome.fitness:
@@ -176,50 +187,69 @@ class GeneticOptimizer:
             diversity = self._calculate_diversity(population)
             
             # Store history
-            self.fitness_history.append({
+            gen_data = {
                 'generation': generation + 1,
                 'best_fitness': population[0].fitness,
                 'avg_fitness': avg_fitness,
                 'min_fitness': min_fitness,
-                'diversity': diversity
-            })
+                'diversity': diversity,
+                'timestamp': time.time(),
+                'elapsed_time': time.time() - gen_start_time,
+                'total_time': time.time() - self.start_time
+            }
+            
+            # Add tiger and goat win rates from the evaluator
+            if hasattr(self.evaluator, "last_tiger_win_rate") and hasattr(self.evaluator, "last_goat_win_rate"):
+                gen_data['best_tiger_win_rate'] = self.evaluator.last_tiger_win_rate
+                gen_data['best_goat_win_rate'] = self.evaluator.last_goat_win_rate
+            
+            # Save generation data to CSV for plotting
+            log_generation_to_csv(self.output_dir, gen_data)
+            
+            # Also save detailed generation data
+            self._save_generation_results(population, generation + 1)
+            
+            # Append to history list
+            self.fitness_history.append(gen_data)
+            
+            # Save fitness history after each generation
+            history_path = os.path.join(self.output_dir, "fitness_history.json")
+            try:
+                with open(history_path, 'w') as f:
+                    json.dump(self.fitness_history, f, indent=2)
+                self.logger.debug(f"Saved fitness history to {history_path} with {len(self.fitness_history)} generations")
+            except Exception as e:
+                self.logger.error(f"Error saving fitness history: {e}")
             
             # Log progress
-            self.logger.info(f"Generation {generation + 1}/{self.max_generations}: "
+            self.logger.info(f"Generation {generation + 1}/{target_generation}: "
                              f"Best={population[0].fitness:.4f}, Avg={avg_fitness:.4f}, "
                              f"Min={min_fitness:.4f}, Diversity={diversity:.4f}, "
                              f"Time={time.time() - gen_start_time:.2f}s, "
                              f"Total={time.time() - self.start_time:.2f}s")
             
             # Save best chromosome at intervals
-            if (generation + 1) % self.save_interval == 0 or generation + 1 == self.max_generations:
+            if (generation + 1) % self.save_interval == 0 or generation + 1 == target_generation:
                 self._save_best_chromosome(population[0], generation + 1)
-                
+            
             # Save current population for potential resumption
             self._save_population(population, generation + 1)
             
-            # Create next generation (except for the last iteration)
-            if generation < self.max_generations - 1:
+            # Create next generation if not the last one
+            if generation + 1 < target_generation:
                 population = self._create_next_generation(population)
-                
-            # Check time limit
-            if time.time() - self.start_time >= self.max_time:
-                self.logger.info(f"Time limit approaching after {generation - self.starting_generation + 1} generations, stopping.")
-                break
-        
-        # Sort final population by fitness
-        population.sort(key=lambda x: x.fitness, reverse=True)
         
         # Save final best chromosome
         self._save_best_chromosome(population[0])
         
-        # Save entire population for potential resumption
-        self._save_population(population, generation + 1)
+        # Ensure fitness history is saved again at the end
+        if self.fitness_history:
+            history_path = os.path.join(self.output_dir, "fitness_history.json")
+            with open(history_path, 'w') as f:
+                json.dump(self.fitness_history, f, indent=2)
+            self.logger.info(f"Saved final fitness history with {len(self.fitness_history)} generations")
         
-        self.logger.info(f"Optimization complete. Best fitness: {population[0].fitness:.4f}, "
-                         f"Total time: {time.time() - self.start_time:.2f}s, "
-                         f"Generations: {generation - self.starting_generation + 2}")
-        
+        # Return best chromosome
         return population[0]
     
     def run_with_time_limit(self, max_time_seconds: float) -> Chromosome:
@@ -231,20 +261,26 @@ class GeneticOptimizer:
         if loaded_population and loaded_generation > 0:
             population = loaded_population
             self.starting_generation = loaded_generation
+            target_generation = loaded_generation + self.max_generations
             self.logger.info(f"Resuming optimization from generation {self.starting_generation}")
+            self.logger.info(f"Will run for up to {self.max_generations} more generations (up to generation {target_generation})")
         else:
             # Initialize fresh population
             population = self._initialize_population()
             self.starting_generation = 0
+            target_generation = self.max_generations
             self.logger.info("Starting new optimization run with fresh population")
         
         self.start_time = time.time()
         self.logger.info(f"Starting genetic optimization with {self.population_size} chromosomes "
                          f"for up to {max_time_seconds} seconds")
         
+        # Clear fitness history for new run
+        self.fitness_history = []
+        
         # Run generations until time limit is reached
         generation = self.starting_generation
-        while time.time() - self.start_time < max_time_seconds and generation < self.max_generations:
+        while time.time() - self.start_time < max_time_seconds and generation < target_generation:
             gen_start_time = time.time()
             
             # Evaluate population
@@ -252,8 +288,13 @@ class GeneticOptimizer:
                 if chromosome.fitness is None:  # Only evaluate if not already evaluated
                     chromosome.fitness = self.evaluator.evaluate_chromosome(chromosome.genes)
             
+            # Set a default value for chromosomes with None fitness
+            for chromosome in population:
+                if chromosome.fitness is None:
+                    chromosome.fitness = 0.0
+            
             # Sort by fitness (higher is better)
-            population.sort(key=lambda x: x.fitness, reverse=True)
+            self._safe_sort_population(population)
             
             # Update best chromosome
             if self.best_chromosome is None or population[0].fitness > self.best_chromosome.fitness:
@@ -267,16 +308,39 @@ class GeneticOptimizer:
             diversity = self._calculate_diversity(population)
             
             # Store history
-            self.fitness_history.append({
+            gen_data = {
                 'generation': generation + 1,
                 'best_fitness': population[0].fitness,
                 'avg_fitness': avg_fitness,
                 'min_fitness': min_fitness,
-                'diversity': diversity
-            })
+                'diversity': diversity,
+                'timestamp': time.time(),
+                'elapsed_time': time.time() - gen_start_time,
+                'total_time': time.time() - self.start_time
+            }
+            
+            # Add tiger and goat win rates from the evaluator
+            if hasattr(self.evaluator, "last_tiger_win_rate") and hasattr(self.evaluator, "last_goat_win_rate"):
+                gen_data['best_tiger_win_rate'] = self.evaluator.last_tiger_win_rate
+                gen_data['best_goat_win_rate'] = self.evaluator.last_goat_win_rate
+            
+            # Save generation data to CSV for plotting
+            log_generation_to_csv(self.output_dir, gen_data)
+            
+            # Also save detailed generation data
+            self._save_generation_results(population, generation + 1)
+            
+            # Append to history list
+            self.fitness_history.append(gen_data)
+            
+            # Save fitness history after each generation
+            history_path = os.path.join(self.output_dir, "fitness_history.json")
+            with open(history_path, 'w') as f:
+                json.dump(self.fitness_history, f, indent=2)
+            self.logger.debug(f"Saved fitness history to {history_path} with {len(self.fitness_history)} generations")
             
             # Log progress
-            self.logger.info(f"Generation {generation + 1}/{self.max_generations}: "
+            self.logger.info(f"Generation {generation + 1}/{target_generation}: "
                              f"Best={population[0].fitness:.4f}, Avg={avg_fitness:.4f}, "
                              f"Min={min_fitness:.4f}, Diversity={diversity:.4f}, "
                              f"Time={time.time() - gen_start_time:.2f}s, "
@@ -299,13 +363,20 @@ class GeneticOptimizer:
             generation += 1
         
         # Sort final population by fitness
-        population.sort(key=lambda x: x.fitness, reverse=True)
+        self._safe_sort_population(population)
         
         # Save final best chromosome
         self._save_best_chromosome(population[0])
         
         # Save entire population for potential resumption
         self._save_population(population, generation + 1)
+        
+        # Ensure fitness history is saved again at the end
+        if self.fitness_history:
+            history_path = os.path.join(self.output_dir, "fitness_history.json")
+            with open(history_path, 'w') as f:
+                json.dump(self.fitness_history, f, indent=2)
+            self.logger.info(f"Saved final fitness history with {len(self.fitness_history)} generations")
         
         self.logger.info(f"Optimization complete. Best fitness: {population[0].fitness:.4f}, "
                          f"Total time: {time.time() - self.start_time:.2f}s, "
@@ -315,12 +386,44 @@ class GeneticOptimizer:
     
     def _initialize_population(self) -> List[Chromosome]:
         """
-        Initialize a population of random chromosomes.
+        Initialize the population with random chromosomes.
         
         Returns:
-            List of chromosomes
+            List of initialized chromosomes
         """
-        return [Chromosome(config=self.config) for _ in range(self.population_size)]
+        import random
+        import time
+        from .chromosome import Chromosome
+        
+        debug_logger = logging.getLogger('ga_debug')
+        debug_logger.info(f"Initializing population with {self.population_size} chromosomes")
+        
+        population = []
+        for i in range(self.population_size):
+            # Use different random seeds for each chromosome
+            # This ensures diversity even with small populations
+            random.seed(time.time() + i)
+            
+            # Create a new chromosome with random genes
+            chromosome = Chromosome.create_random(self.config)
+            
+            # Ensure fitness is None initially
+            chromosome.fitness = None
+            
+            # Add to population
+            population.append(chromosome)
+            
+            # Debug log the chromosome to verify initialization
+            debug_logger.debug(f"Initialized chromosome {i+1}/{self.population_size}: {chromosome.genes}")
+        
+        # Verify population has the correct size
+        assert len(population) == self.population_size, f"Population size mismatch: {len(population)} != {self.population_size}"
+        
+        # Log diversity metric
+        diversity = self._calculate_diversity(population)
+        debug_logger.info(f"Initial population diversity: {diversity:.4f}")
+        
+        return population
     
     def _create_next_generation(self, current_population: List[Chromosome]) -> List[Chromosome]:
         """
@@ -400,16 +503,63 @@ class GeneticOptimizer:
     
     def _calculate_diversity(self, population: List[Chromosome]) -> float:
         """
-        Calculate population diversity.
+        Calculate population diversity based on gene values.
         
         Args:
             population: List of chromosomes
             
         Returns:
-            Diversity score
+            Diversity score (0.0-1.0)
         """
-        # Implement diversity calculation logic here
-        return calculate_population_diversity(population)
+        try:
+            import numpy as np
+            
+            # If population is too small, return a default value
+            if len(population) <= 1:
+                return 0.0
+                
+            # Get all gene values in a matrix
+            # First, get a list of all gene keys
+            first_chrom = population[0]
+            gene_keys = list(first_chrom.genes.keys())
+            
+            # Create a matrix of gene values
+            gene_matrix = []
+            for chromosome in population:
+                gene_values = [chromosome.genes.get(key, 0) for key in gene_keys]
+                gene_matrix.append(gene_values)
+            
+            # Convert to numpy array for efficient computation
+            gene_matrix = np.array(gene_matrix)
+            
+            # Calculate standard deviation for each gene across population
+            std_devs = np.std(gene_matrix, axis=0)
+            
+            # Calculate average standard deviation as diversity measure
+            avg_std_dev = np.mean(std_devs)
+            
+            # Normalize by the maximum possible value for these genes
+            # This is a simplification - using average range from parameter_ranges
+            # For a more accurate normalization, you would need to use actual ranges
+            # from config for each specific gene
+            average_range = 0.1  # A default normalization factor
+            
+            # Normalize to 0-1 range
+            diversity = min(1.0, avg_std_dev / average_range)
+            
+            return diversity
+            
+        except Exception as e:
+            # If there's any error in calculation, use a fallback method
+            self.logger.warning(f"Error calculating diversity: {e}, using fallback method")
+            
+            # Fallback: use a simpler method - just count unique chromosomes
+            unique_chroms = set()
+            for chrom in population:
+                unique_chroms.add(str(chrom.genes))
+            
+            # Normalize by population size
+            return len(unique_chroms) / len(population)
     
     def _save_generation_results(self, population: List[Chromosome], generation: int):
         """
@@ -462,7 +612,7 @@ class GeneticOptimizer:
         """
         try:
             # The fitness evaluator caches results by chromosome hash
-            fitness = self.evaluator.evaluate_chromosome(chromosome)
+            fitness = self.evaluator.evaluate_chromosome(chromosome.genes)
             
             # If we can access the raw win rates from evaluator, use them
             if hasattr(self.evaluator, "last_tiger_win_rate") and hasattr(self.evaluator, "last_goat_win_rate"):
@@ -477,4 +627,20 @@ class GeneticOptimizer:
             return tiger_estimate, goat_estimate
         except Exception as e:
             self.logger.error(f"Error getting win rates: {e}")
-            return 0.0, 0.0 
+            return 0.0, 0.0
+    
+    def _safe_sort_population(self, population: List[Chromosome]):
+        """
+        Safely sort population by fitness, handling None values.
+        
+        Args:
+            population: Population to sort
+        """
+        # First ensure all chromosomes have a valid fitness value
+        for chromosome in population:
+            if chromosome.fitness is None:
+                self.logger.warning(f"Found chromosome with None fitness, setting to 0.0")
+                chromosome.fitness = 0.0
+        
+        # Now sort by fitness (higher is better)
+        population.sort(key=lambda x: x.fitness, reverse=True) 

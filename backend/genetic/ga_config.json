@@ -1,9 +1,9 @@
 {
   "population_size": 6,
   "generations": 10,
-  "max_execution_time": 20,
+  "max_execution_time": 120,
   "elitism_count": 2,
-  "tournament_size": 3,
+  "tournament_size": 2,
   "mutation_rate": 0.1,
   "mutation_magnitude": 0.15,
   "crossover_rate": 0.7,
@@ -11,7 +11,7 @@
   "parallel_processes": 0,
   "parallel_processes_info": "When set to 0, automatically uses CPU count - 1 for optimal performance",
   "save_interval": 1,
-  "search_depth": 2,
+  "search_depth": 3,
   "output_dir": "tuned_params",
   "parameter_ranges": {
     "mobility_weight_placement": [150, 350],

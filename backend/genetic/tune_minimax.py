@@ -18,135 +18,188 @@ import sys
 import json
 import logging
 import time
+import traceback
 from pathlib import Path
 
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Get the base directory for backend (parent of genetic)
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# Set up absolute paths relative to backend
+output_dir = os.path.join(base_dir, "tuned_params")
+
+# Ensure output directory exists
+os.makedirs(output_dir, exist_ok=True)
+
+# Setup minimal logging - only core functionality
+logger = logging.getLogger('tune_minimax')
+logger.setLevel(logging.INFO)
+
+# Check if handlers already exist to avoid duplicate handlers
+if not logger.handlers:
+    # Use file handler for comprehensive logging to a single file
+    file_handler = logging.FileHandler(os.path.join(output_dir, 'tuning.log'))
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(file_handler)
+    
+    # Use console handler for minimal output to terminal
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+    logger.addHandler(console_handler)
+
+# Configure other subsystem loggers - keep only essential information
+for logger_name in ['genetic_optimizer', 'fitness_evaluator']:
+    sublogger = logging.getLogger(logger_name)
+    sublogger.setLevel(logging.WARNING)  # Only warnings and errors
+    
+    # Remove any existing handlers
+    for handler in sublogger.handlers[:]:
+        sublogger.removeHandler(handler)
+    
+    # Add handlers from main logger
+    for handler in logger.handlers:
+        sublogger.addHandler(handler)
+
+# Disable debug logger that was creating too many files
+debug_logger = logging.getLogger('ga_debug')
+debug_logger.setLevel(logging.ERROR)  # Only serious errors
+debug_logger.handlers = []  # Remove all handlers
+debug_logger.addHandler(logging.NullHandler())  # Add null handler
+
+# Import modules after setting up logging
 from models.minimax_agent import MinimaxAgent
 from genetic.genetic_optimizer import GeneticOptimizer
 from genetic.utils import (
     load_config, 
     ensure_output_directory, 
-    setup_logging,
-    generate_report
+    generate_report,
+    plot_fitness_history
 )
-from genetic.params_manager import save_tuned_parameters
 
 
 def main():
     """
-    Main entry point for MinimaxAgent genetic tuning.
-    
-    This sets up the optimization process based on the configuration file,
-    runs the genetic algorithm, and generates reports.
+    Main entry point for the minimax tuning process.
     """
-    start_time = time.time()
-    
-    # Get the directory of this script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend directory
-    
-    # Path to configuration file
-    config_path = os.path.join(script_dir, "ga_config.json")
-    
-    # Load configuration
-    print(f"Loading configuration from {config_path}...")
-    config = load_config(config_path)
-    
-    # Set up output directory - ALWAYS use "tuned_params", ignore any config setting
-    output_dir = "tuned_params"  # Hard-coded to always use "tuned_params", completely ignoring config
-    
-    # Make sure output_dir is resolved consistently relative to backend directory
-    # It's a relative path, resolve it relative to the backend directory
-    output_dir = os.path.normpath(os.path.join(base_dir, output_dir))
-    
-    # Ensure the directory exists - create with robust error handling
     try:
-        os.makedirs(output_dir, exist_ok=True)
-        print(f"Results will be saved to {output_dir}")
-    except Exception as e:
-        print(f"Error creating output directory {output_dir}: {e}")
-        sys.exit(1)  # Exit if we can't create the directory
-    
-    # Set up logging
-    logger = setup_logging(output_dir)
-    logger.info(f"Starting MinimaxAgent tuning with configuration from {config_path}")
-    
-    # Log configuration
-    logger.info(f"Configuration: {json.dumps(config, indent=2)}")
-    
-    # Create and run the genetic optimizer
-    print("Initializing genetic optimizer...")
-    optimizer = GeneticOptimizer(config)
-    
-    # Get execution time limit if specified
-    max_execution_time = config.get("max_execution_time", None)
-    if max_execution_time:
-        print(f"Optimization will run for up to {max_execution_time} seconds or "
-              f"{config.get('generations', 20)} generations, whichever comes first.")
-    else:
-        print(f"Starting optimization with {config.get('population_size', 30)} chromosomes "
-              f"for {config.get('generations', 20)} generations...")
-    
-    print("This may take a while. Progress is being logged to the output directory.")
-    print("Press Ctrl+C to interrupt (best results so far will be saved).")
-    
-    try:
-        # Run the optimization with time limit if specified
-        if max_execution_time:
-            best_chromosome = optimizer.run_with_time_limit(max_execution_time)
-        else:
-            best_chromosome = optimizer.run()
+        logger.info("=== Starting MinimaxAgent parameter tuning ===")
         
-        # Save the best parameters
-        best_path = os.path.join(output_dir, "best_params.json")
-        best_chromosome.save_to_file(best_path)
-        logger.info(f"Best parameters saved to {best_path}")
+        # Get the path to the configuration file
+        config_path = os.path.join(os.path.dirname(__file__), "ga_config.json")
+        logger.info(f"Loading configuration from {config_path}")
         
-        # Save summary in a more accessible format
-        summary_path = os.path.join(output_dir, "parameters_summary.json")
-        with open(summary_path, 'w') as f:
-            summary = {
-                "fitness": best_chromosome.fitness,
-                "parameters": best_chromosome.genes
-            }
-            json.dump(summary, f, indent=2)
-        logger.info(f"Parameters summary saved to {summary_path}")
+        # Load the configuration
+        config = load_config(config_path)
         
-        # Generate a report
-        logger.info("Generating final report...")
-        report_path = generate_report(output_dir, config)
-        logger.info(f"Generated report at {report_path}")
+        # Set up output directory - ALWAYS use "tuned_params" in backend directory
+        global output_dir
         
-        # Log total time
-        total_time = time.time() - start_time
-        logger.info(f"Optimization completed in {total_time:.2f} seconds")
-        
-        # Test the tuned parameters
-        logger.info("Testing tuned parameters with a sample game...")
-        test_tuned_parameters(best_chromosome.genes, logger, config)
-        
-        print(f"\nOptimization complete! Best fitness: {best_chromosome.fitness:.4f}")
-        print(f"Results saved in: {output_dir}")
-        print(f"Check {report_path} for a summary report.")
-        
-    except KeyboardInterrupt:
-        # Handle graceful interruption
-        print("\nOptimization interrupted by user.")
-        logger.warning("Optimization interrupted by user.")
-        print("Best parameters found so far have been saved.")
-        
-        # Generate report with partial data
+        # Ensure the directory exists
         try:
-            report_path = generate_report(output_dir, config)
-            print(f"Partial report generated at {report_path}")
+            os.makedirs(output_dir, exist_ok=True)
+            print(f"Results will be saved to {output_dir}")
         except Exception as e:
-            logger.error(f"Error generating report after interruption: {e}")
+            logger.error(f"Error creating output directory {output_dir}: {e}")
+            sys.exit(1)  # Exit if we can't create the directory
         
-        # Calculate duration
-        total_time = time.time() - start_time
-        logger.info(f"Optimization interrupted after {total_time:.2f} seconds")
+        # Setup main execution parameters
+        population_size = config.get("population_size", 10)
+        generations = config.get("generations", 20) 
+        max_execution_time = config.get("max_execution_time", float('inf'))
+        search_depth = config.get("search_depth", 3)
+        
+        # Print execution parameters - cleaner output
+        print("\n=== Genetic Algorithm Tuning ===")
+        print(f"Population: {population_size} | Generations: {generations} | Search Depth: {search_depth}")
+        
+        if max_execution_time < float('inf'):
+            print(f"Running for up to {max_execution_time} seconds or {generations} generations")
+        else:
+            print(f"Running for {generations} generations")
+            
+        print("Press Ctrl+C to interrupt (best results so far will be saved)")
+        print("...")
+        
+        # Create the genetic optimizer
+        logger.info("Creating genetic optimizer")
+        start_time = time.time()
+        
+        # Create the optimizer
+        optimizer = GeneticOptimizer(config)
+        
+        # Check if we're resuming from a previous run
+        population_file = os.path.join(output_dir, "population.pkl")
+        generation_file = os.path.join(output_dir, "generation_count.txt")
+        
+        if os.path.exists(population_file) and os.path.exists(generation_file):
+            with open(generation_file, 'r') as f:
+                generation = int(f.read().strip())
+            print(f"Resuming from generation {generation}")
+        
+        # Run the optimization
+        try:
+            logger.info("Running optimization")
+            if max_execution_time < float('inf'):
+                best_chromosome = optimizer.run_with_time_limit(max_execution_time)
+            else:
+                best_chromosome = optimizer.run()
+                
+            logger.info(f"Optimization completed successfully in {time.time() - start_time:.2f}s")
+        except KeyboardInterrupt:
+            logger.warning("Optimization interrupted by user.")
+            print("\nOptimization interrupted by user.")
+            print("Best parameters found so far have been saved.")
+            
+            # Get the best chromosome found so far
+            best_chromosome = optimizer.best_chromosome
+        except Exception as e:
+            logger.error(f"Error during optimization: {e}")
+            logger.error(traceback.format_exc())
+            print(f"Error during optimization: {e}")
+            # Try to get the best chromosome if available
+            best_chromosome = optimizer.best_chromosome if hasattr(optimizer, 'best_chromosome') else None
+        
+        # Check if we have a best chromosome
+        if best_chromosome:
+            logger.info(f"Best chromosome found with fitness: {best_chromosome.fitness}")
+            
+            # Generate report
+            logger.info("Generating final report")
+            report_path = generate_report(output_dir, config)
+            
+            # Generate fitness plot directly
+            history_path = os.path.join(output_dir, "fitness_history.json")
+            plot_path = os.path.join(output_dir, "fitness_plot.png")
+            if os.path.exists(history_path):
+                try:
+                    logger.info("Generating fitness plot")
+                    plot_fitness_history(history_path, plot_path)
+                    logger.info(f"Fitness plot saved to {plot_path}")
+                except Exception as e:
+                    logger.error(f"Error generating fitness plot: {e}")
+            
+            # Final message - clean output
+            print("\n=== Optimization Complete ===")
+            print(f"Best fitness: {best_chromosome.fitness:.4f}")
+            print(f"Results saved in: {output_dir}")
+            print(f"Check {output_dir}/optimization_report.txt for a summary report.")
+            print(f"Fitness plot: {plot_path}")
+            print(f"Total time: {time.time() - start_time:.2f} seconds")
+        else:
+            logger.warning("No best parameters found to generate report")
+            print("No best parameters found to generate report")
+        
+        logger.info(f"Optimization completed in {time.time() - start_time:.2f} seconds")
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in main: {e}")
+        logger.error(traceback.format_exc())
+        print(f"Unexpected error: {e}")
+        sys.exit(1)
 
 
 def test_tuned_parameters(params, logger, config=None):
@@ -171,9 +224,6 @@ def test_tuned_parameters(params, logger, config=None):
         
         default_agent = MinimaxAgent(max_depth=search_depth)
         
-        # Log the search depth being used
-        logger.info(f"Testing with search depth: {search_depth}")
-        
         # Compare the evaluation function outputs
         from models.game_state import GameState
         test_state = GameState()
@@ -189,23 +239,6 @@ def test_tuned_parameters(params, logger, config=None):
         default_eval = default_agent.evaluate(test_state)
         
         logger.info(f"Sample evaluation - Tuned: {tuned_eval}, Default: {default_eval}")
-        logger.info("Tuned parameters testing complete")
-        
-        # Log parameter comparison
-        logger.info("\nParameter comparison - Default vs Tuned:")
-        for param in [
-            'mobility_weight_placement',
-            'mobility_weight_movement',
-            'base_capture_value',
-            'capture_speed_weight',
-            'dispersion_weight',
-            'edge_weight',
-            'closed_spaces_weight'
-        ]:
-            default_value = getattr(default_agent, param)
-            tuned_value = getattr(tuned_agent, param)
-            diff_pct = ((tuned_value - default_value) / default_value) * 100 if default_value != 0 else float('inf')
-            logger.info(f"  {param}: {default_value} -> {tuned_value} ({diff_pct:.1f}% change)")
             
     except Exception as e:
         logger.error(f"Error testing tuned parameters: {e}")

@@ -8,8 +8,9 @@ from typing import Dict, Any, Optional
 import logging
 
 
-# Default path for the best parameters file
-DEFAULT_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "..", "tuned_params", "best_params.json")
+# Default path for the best parameters file - use absolute path
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DEFAULT_PARAMS_PATH = os.path.join(base_dir, "tuned_params", "best_params.json")
 
 
 def get_tuned_parameters(
