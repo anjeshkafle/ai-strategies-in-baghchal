@@ -80,25 +80,32 @@ def play_game_worker(args) -> Tuple[str, int, str, Dict]:
         # Extract arguments
         genes, play_as, seed, depth, game_id = args
         
+        # Seed the random number generator for this game
+        random.seed(seed)
+        
+        # Create derived seeds for the agents
+        tiger_seed = seed + 1
+        goat_seed = seed + 2
+        
         # Create game state
         game_state = GameState()
         
-        # Create agents
+        # Create agents with randomization enabled
         if play_as == PLAYER_TIGER:
             # Tuned agent plays as tiger
-            tiger_agent = MinimaxAgent(max_depth=depth)
+            tiger_agent = MinimaxAgent(max_depth=depth, randomize_equal_moves=True, seed=tiger_seed)
             apply_tuned_parameters(tiger_agent, genes)
-            goat_agent = MinimaxAgent(max_depth=depth)  # Default agent as goat
+            goat_agent = MinimaxAgent(max_depth=depth, randomize_equal_moves=True, seed=goat_seed)  # Default agent as goat
             matchup = f"{SYMBOLS['tiger']} Tuned vs Default {SYMBOLS['goat']}"
         else:
             # Tuned agent plays as goat
-            tiger_agent = MinimaxAgent(max_depth=depth)  # Default agent as tiger
-            goat_agent = MinimaxAgent(max_depth=depth)
+            tiger_agent = MinimaxAgent(max_depth=depth, randomize_equal_moves=True, seed=tiger_seed)  # Default agent as tiger
+            goat_agent = MinimaxAgent(max_depth=depth, randomize_equal_moves=True, seed=goat_seed)
             apply_tuned_parameters(goat_agent, genes)
             matchup = f"{SYMBOLS['tiger']} Default vs Tuned {SYMBOLS['goat']}"
         
         # Print matchup info
-        print(f"Game {game_id} starting: {matchup}")
+        print(f"Game {game_id} starting: {matchup} (seed: {seed})")
         
         # Play the game
         max_moves = 200  # Avoid infinite games
@@ -173,7 +180,8 @@ def play_game_worker(args) -> Tuple[str, int, str, Dict]:
             "moves": move_count,
             "time": game_time,
             "goats_captured": game_state.goats_captured,
-            "result_symbol": result_symbol
+            "result_symbol": result_symbol,
+            "seed": seed
         }
         
         # Print completion info
@@ -236,11 +244,25 @@ class FitnessEvaluator:
         eval_start = time.time()
         print(f"\n--- Evaluating Chromosome #{hash(json.dumps(genes, sort_keys=True)) % 1000:03d} ---")
         
-        # Create lists of games to play
-        tiger_games = [(genes, "TIGER", i, self.search_depth, f"{self.game_counter + i + 1}") 
-                      for i in range(self.games_per_evaluation // 2)]
-        goat_games = [(genes, "GOAT", i + 100, self.search_depth, f"{self.game_counter + i + (self.games_per_evaluation // 2) + 1}")
-                     for i in range(self.games_per_evaluation // 2)]
+        # Generate unique base seed from chromosome hash and current time
+        base_seed = hash(json.dumps(genes, sort_keys=True)) + int(time.time())
+        
+        # Create lists of games to play with unique seeds
+        tiger_games = []
+        goat_games = []
+        
+        # Half the games as tiger, half as goat
+        for i in range(self.games_per_evaluation // 2):
+            # Create unique seeds that are far apart to maximize randomness
+            tiger_seed = base_seed + (i * 10000)
+            goat_seed = base_seed + (i * 10000) + 5000
+            
+            # Create game configurations
+            tiger_game = (genes, "TIGER", tiger_seed, self.search_depth, f"{self.game_counter + i + 1}")
+            goat_game = (genes, "GOAT", goat_seed, self.search_depth, f"{self.game_counter + i + (self.games_per_evaluation // 2) + 1}")
+            
+            tiger_games.append(tiger_game)
+            goat_games.append(goat_game)
         
         # Update game counter
         self.game_counter += self.games_per_evaluation
@@ -296,6 +318,13 @@ class FitnessEvaluator:
         repetition_count = sum(1 for res in tiger_results + goat_results if res[3].get("reason") == "THREEFOLD_REPETITION")
         move_limit_count = sum(1 for res in tiger_results + goat_results if "MOVE_LIMIT" in res[3].get("reason", ""))
         
+        # Check if we're getting varied results (not just identical games)
+        unique_outcomes = set()
+        for res in tiger_results + goat_results:
+            # Create a signature of the game outcome
+            outcome_sig = f"{res[0]}_{res[1]}_{res[3].get('reason')}"
+            unique_outcomes.add(outcome_sig)
+            
         # Store performance metrics
         chromosome_hash = hash(json.dumps(genes, sort_keys=True))
         self.performance_cache[chromosome_hash] = {
@@ -304,7 +333,8 @@ class FitnessEvaluator:
             'total_games': self.games_per_evaluation,
             'evaluation_time': time.time() - eval_start,
             'repetition_draws': repetition_count,
-            'move_limit_games': move_limit_count
+            'move_limit_games': move_limit_count,
+            'unique_outcomes': len(unique_outcomes)
         }
         
         # Pretty console output summary
@@ -312,16 +342,21 @@ class FitnessEvaluator:
         goat_stats = f"{SYMBOLS['goat']} Win rate: {goat_win_rate:.2f} ({goat_win_count}/{self.games_per_evaluation//2})"
         time_stats = f"⏱️ {time.time() - eval_start:.1f}s"
         
-        # Include repetition info
+        # Status output with useful metrics
+        status_parts = []
         if repetition_count > 0:
-            rep_info = f"| 🔄 Repetitions: {repetition_count}"
-        else:
-            rep_info = ""
+            status_parts.append(f"🔄 Repetitions: {repetition_count}")
+        
+        status_parts.append(f"🎲 Unique games: {len(unique_outcomes)}/{len(all_games)}")
             
-        print(f"\n{tiger_stats} | {goat_stats} | Fitness: {fitness:.2f} | {time_stats} {rep_info}")
+        status_str = " | ".join(status_parts)
+        if status_str:
+            status_str = f"| {status_str}"
+            
+        print(f"\n{tiger_stats} | {goat_stats} | Fitness: {fitness:.2f} | {time_stats} {status_str}")
         print("-" * 60)
         
-        logger.info(f"Chromosome evaluated with fitness {fitness:.2f} (Tiger: {tiger_win_rate:.2f}, Goat: {goat_win_rate:.2f}, Repetitions: {repetition_count})")
+        logger.info(f"Chromosome evaluated with fitness {fitness:.2f} (Tiger: {tiger_win_rate:.2f}, Goat: {goat_win_rate:.2f}, Unique games: {len(unique_outcomes)}/{len(all_games)})")
         
         return fitness
     

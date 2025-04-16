@@ -10,12 +10,16 @@ class MinimaxAgent:
     
     INF = 1000000
     
-    def __init__(self, max_depth: int = 5, max_time_seconds: Optional[float] = None, randomize_equal_moves: bool = False, useTunedParams: bool = False):
+    def __init__(self, max_depth: int = 5, max_time_seconds: Optional[float] = None, randomize_equal_moves: bool = False, useTunedParams: bool = False, seed: Optional[int] = None):
         self.max_depth = max_depth
         self.max_time_seconds = max_time_seconds  # Not used but kept for compatibility
         self.best_move = None
         self.best_score = None
         self.randomize_equal_moves = randomize_equal_moves  # Flag to control move randomization
+        
+        # Set up random instance for consistent randomization
+        import random
+        self.rng = random.Random(seed)  # Initialize with seed if provided
         
         # Define all evaluation weights in one place for easy tuning
         # Mobility and space control
@@ -497,8 +501,7 @@ class MinimaxAgent:
         
         # Select a random move from the best moves if randomization is enabled and we have multiple options
         if self.randomize_equal_moves and len(best_moves) > 1:
-            import random
-            best_move = random.choice(best_moves)
+            best_move = self.rng.choice(best_moves)
         else:
             # Just take the first (highest scored according to move ordering) move
             best_move = best_moves[0]
