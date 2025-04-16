@@ -318,8 +318,8 @@ def generate_report(output_dir: str, config: Dict[str, Any]):
         f.write("\nComparison with Default Parameters:\n")
         f.write("  Default parameters represent the manually tuned values.\n")
         f.write("  The genetic algorithm found parameters with fitness improvement of ")
-        if hasattr(best_params, "fitness"):
-            f.write(f"{best_params.fitness:.4f} over baseline.\n")
+        if isinstance(best_params, dict) and "fitness" in best_params:
+            f.write(f"{best_params['fitness']:.4f} over baseline.\n")
         else:
             f.write("an unknown amount over baseline.\n")
         

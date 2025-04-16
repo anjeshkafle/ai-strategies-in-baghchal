@@ -612,6 +612,7 @@ class GeneticOptimizer:
         """
         try:
             # The fitness evaluator caches results by chromosome hash
+            # Use the chromosome's genes to evaluate, not the chromosome itself
             fitness = self.evaluator.evaluate_chromosome(chromosome.genes)
             
             # If we can access the raw win rates from evaluator, use them
