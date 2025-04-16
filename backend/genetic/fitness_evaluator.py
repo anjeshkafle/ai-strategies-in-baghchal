@@ -113,7 +113,13 @@ class FitnessEvaluator:
         self.search_depth = config.get("search_depth", 5)
         
         # Use cpu_count-1 cores by default, but allow configuration
-        self.parallel_processes = config.get("parallel_processes", max(1, multiprocessing.cpu_count() - 1))
+        parallel_setting = config.get("parallel_processes", None)
+        if parallel_setting is None or parallel_setting <= 0:
+            # Default to cpu_count-1 if not provided or set to 0 or negative
+            self.parallel_processes = max(1, multiprocessing.cpu_count() - 1)
+        else:
+            # Use the provided positive value
+            self.parallel_processes = parallel_setting
         
         # Cache for fitness evaluations
         self.evaluation_cache = {}
