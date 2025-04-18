@@ -27,8 +27,8 @@ from datetime import datetime
 # Make sure we can import from the parent directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from backend.simulation.simulation_controller import SimulationController
-from backend.simulation.config import load_config
+from backend.simulation.mcts_simulation_controller import MCTSSimulationController
+from backend.simulation.mcts_config import load_config
 
 def parse_args():
     """Parse command line arguments."""
@@ -55,8 +55,8 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=None,
                        help="Batch size for Google Sheets sync (default: from config)")
     
-    parser.add_argument("--config", type=str, default="simulation_config.json",
-                       help="Path to configuration file (default: simulation_config.json)")
+    parser.add_argument("--config", type=str, default="mcts_simulation_config.json",
+                       help="Path to configuration file (default: mcts_simulation_config.json)")
 
     parser.add_argument("--max_time", type=int, default=None,
                        help="Maximum simulation time in minutes (default: from config)")
@@ -119,7 +119,7 @@ def main():
         print(f"  Google Sheets sync: Disabled")
     print()
     
-    controller = SimulationController(
+    controller = MCTSSimulationController(
         output_dir=output_dir,
         google_sheets_url=sheets_url,
         batch_size=batch_size

@@ -6,6 +6,6 @@ between different AI agent configurations for the Bagh Chal game.
 """
 
 from .game_runner import GameRunner
-from .simulation_controller import SimulationController
+from .mcts_simulation_controller import MCTSSimulationController
 
-__all__ = ["GameRunner", "SimulationController"] 
+__all__ = ["GameRunner", "MCTSSimulationController"] 

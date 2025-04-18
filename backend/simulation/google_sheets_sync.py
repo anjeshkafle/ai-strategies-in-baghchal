@@ -28,7 +28,10 @@ class GoogleSheetsSync:
         self.webapp_url = webapp_url
         self.batch_size = batch_size
         self.output_dir = output_dir
-        self.buffer_file = os.path.join(output_dir, "sheets_sync_buffer.json")
+        
+        # Set buffer file path using absolute path to ensure correct location
+        self.buffer_file = os.path.abspath(os.path.join(output_dir, "sheets_sync_buffer.json"))
+        
         self.row_buffer = []
         self.enabled = bool(webapp_url)  # Enable only if URL is provided
         
@@ -57,10 +60,15 @@ class GoogleSheetsSync:
         """Save the current row buffer to the persistent file."""
         if self.enabled and self.row_buffer:
             try:
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(self.buffer_file), exist_ok=True)
+                
                 with open(self.buffer_file, 'w') as f:
                     json.dump(self.row_buffer, f)
             except Exception as e:
                 print(f"Error saving sync buffer file: {e}")
+                import traceback
+                traceback.print_exc()
     
     def _clear_buffer_file(self):
         """Delete the buffer file after successful sync."""
@@ -93,6 +101,7 @@ class GoogleSheetsSync:
         
         # Sync if batch size is reached
         if len(self.row_buffer) >= self.batch_size:
+            print(f"Buffer reached batch size ({self.batch_size}). Triggering sync...")
             return self.sync()
             
         return False

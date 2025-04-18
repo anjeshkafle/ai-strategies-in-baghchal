@@ -11,9 +11,9 @@ import multiprocessing as mp
 from .game_runner import GameRunner
 from .google_sheets_sync import GoogleSheetsSync
 
-class SimulationController:
+class MCTSSimulationController:
     """
-    Manages running multiple games between agent configurations and saving results.
+    Manages running multiple games between MCTS agent configurations and saving results.
     """
     
     def __init__(self, output_dir: str = "simulation_results", google_sheets_url: str = None, batch_size: int = 100):

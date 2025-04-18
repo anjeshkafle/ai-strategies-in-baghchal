@@ -132,7 +132,7 @@ class SimulationConfig:
         if self.mcts_tournament is None:
             self.mcts_tournament = MCTSTournamentConfig()
 
-def get_config_path(config_path: str = "simulation_config.json") -> str:
+def get_config_path(config_path: str = "mcts_simulation_config.json") -> str:
     """
     Get the absolute path to the configuration file.
     
@@ -159,7 +159,7 @@ def get_config_path(config_path: str = "simulation_config.json") -> str:
     # Default to simulation directory
     return sim_path
 
-def load_config(config_path: str = "simulation_config.json") -> SimulationConfig:
+def load_config(config_path: str = "mcts_simulation_config.json") -> SimulationConfig:
     """
     Load configuration from a JSON file.
     
@@ -251,7 +251,7 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
         mcts_tournament=mcts_config
     )
 
-def save_config(config: SimulationConfig, config_path: str = "simulation_config.json"):
+def save_config(config: SimulationConfig, config_path: str = "mcts_simulation_config.json"):
     """
     Save configuration to a JSON file.
     
