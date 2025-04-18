@@ -10,6 +10,7 @@ const DEFAULT_AGENT_SETTINGS = {
   minimax: {
     max_depth: 6,
     randomize_equal_moves: true,
+    useTunedParams: false,
   },
   mcts: {
     iterations: 20000,
@@ -296,8 +297,8 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                   onChange={(e) => initializeSettings("goat", e.target.value)}
                   options={[
                     { value: "minimax", label: "Minimax" },
-                    { value: "mcts", label: "MCTS Agent" },
-                    { value: "random", label: "Random AI" },
+                    { value: "mcts", label: "MCTS" },
+                    { value: "random", label: "Random" },
                   ]}
                   disabled={!isPaused}
                 />
@@ -351,7 +352,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                       <div className="h-[26px] flex items-center">
                         <input
                           type="checkbox"
-                          id="randomize-goat"
+                          id="goat-randomize"
                           checked={
                             settings.players.goat.settings
                               ?.randomize_equal_moves ||
@@ -372,7 +373,41 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                           disabled={!isPaused}
                         />
                         <label
-                          htmlFor="randomize-goat"
+                          htmlFor="goat-randomize"
+                          className="text-gray-300 text-sm ml-2"
+                        >
+                          Enabled
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-gray-300 block text-sm mb-1">
+                        Use Tuned Parameters
+                      </label>
+                      <div className="h-[26px] flex items-center">
+                        <input
+                          type="checkbox"
+                          id="goat-tuned-params"
+                          checked={
+                            settings.players.goat.settings?.useTunedParams ||
+                            DEFAULT_AGENT_SETTINGS.minimax.useTunedParams
+                          }
+                          onChange={(e) =>
+                            updateAgentSettings(
+                              "goat",
+                              "useTunedParams",
+                              e.target.checked
+                            )
+                          }
+                          className={`w-4 h-4 ${
+                            isPaused
+                              ? "bg-gray-700"
+                              : "bg-gray-800 cursor-not-allowed"
+                          }`}
+                          disabled={!isPaused}
+                        />
+                        <label
+                          htmlFor="goat-tuned-params"
                           className="text-gray-300 text-sm ml-2"
                         >
                           Enabled
@@ -543,8 +578,8 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                   onChange={(e) => initializeSettings("tiger", e.target.value)}
                   options={[
                     { value: "minimax", label: "Minimax" },
-                    { value: "mcts", label: "MCTS Agent" },
-                    { value: "random", label: "Random AI" },
+                    { value: "mcts", label: "MCTS" },
+                    { value: "random", label: "Random" },
                   ]}
                   disabled={!isPaused}
                 />
@@ -598,7 +633,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                       <div className="h-[26px] flex items-center">
                         <input
                           type="checkbox"
-                          id="randomize-tiger"
+                          id="tiger-randomize"
                           checked={
                             settings.players.tiger.settings
                               ?.randomize_equal_moves ||
@@ -619,7 +654,41 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                           disabled={!isPaused}
                         />
                         <label
-                          htmlFor="randomize-tiger"
+                          htmlFor="tiger-randomize"
+                          className="text-gray-300 text-sm ml-2"
+                        >
+                          Enabled
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-gray-300 block text-sm mb-1">
+                        Use Tuned Parameters
+                      </label>
+                      <div className="h-[26px] flex items-center">
+                        <input
+                          type="checkbox"
+                          id="tiger-tuned-params"
+                          checked={
+                            settings.players.tiger.settings?.useTunedParams ||
+                            DEFAULT_AGENT_SETTINGS.minimax.useTunedParams
+                          }
+                          onChange={(e) =>
+                            updateAgentSettings(
+                              "tiger",
+                              "useTunedParams",
+                              e.target.checked
+                            )
+                          }
+                          className={`w-4 h-4 ${
+                            isPaused
+                              ? "bg-gray-700"
+                              : "bg-gray-800 cursor-not-allowed"
+                          }`}
+                          disabled={!isPaused}
+                        />
+                        <label
+                          htmlFor="tiger-tuned-params"
                           className="text-gray-300 text-sm ml-2"
                         >
                           Enabled

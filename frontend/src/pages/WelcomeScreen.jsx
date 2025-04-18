@@ -22,6 +22,7 @@ const DEFAULT_AGENT_SETTINGS = {
   minimax: {
     max_depth: 6,
     randomize_equal_moves: true,
+    useTunedParams: false,
   },
   mcts: {
     iterations: 20000,
@@ -225,8 +226,8 @@ const WelcomeScreen = () => {
                       }
                       options={[
                         { value: "minimax", label: "Minimax" },
-                        { value: "mcts", label: "MCTS Agent" },
-                        { value: "random", label: "Random AI" },
+                        { value: "mcts", label: "MCTS" },
+                        { value: "random", label: "Random" },
                       ]}
                     />
                   )}
@@ -291,6 +292,36 @@ const WelcomeScreen = () => {
                             />
                             <label
                               htmlFor="randomize-goat"
+                              className="text-gray-300 text-sm ml-2"
+                            >
+                              Enabled
+                            </label>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Use Tuned Parameters
+                          </label>
+                          <div className="h-[26px] flex items-center">
+                            <input
+                              type="checkbox"
+                              id="tuned-params-goat"
+                              checked={
+                                settings.players.goat.settings
+                                  ?.useTunedParams ||
+                                DEFAULT_AGENT_SETTINGS.minimax.useTunedParams
+                              }
+                              onChange={(e) =>
+                                updateAgentSettings(
+                                  "goat",
+                                  "useTunedParams",
+                                  e.target.checked
+                                )
+                              }
+                              className="bg-gray-700 w-4 h-4"
+                            />
+                            <label
+                              htmlFor="tuned-params-goat"
                               className="text-gray-300 text-sm ml-2"
                             >
                               Enabled
@@ -450,8 +481,8 @@ const WelcomeScreen = () => {
                       }
                       options={[
                         { value: "minimax", label: "Minimax" },
-                        { value: "mcts", label: "MCTS Agent" },
-                        { value: "random", label: "Random AI" },
+                        { value: "mcts", label: "MCTS" },
+                        { value: "random", label: "Random" },
                       ]}
                     />
                   )}
@@ -516,6 +547,36 @@ const WelcomeScreen = () => {
                             />
                             <label
                               htmlFor="randomize-tiger"
+                              className="text-gray-300 text-sm ml-2"
+                            >
+                              Enabled
+                            </label>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-gray-300 block text-sm mb-1">
+                            Use Tuned Parameters
+                          </label>
+                          <div className="h-[26px] flex items-center">
+                            <input
+                              type="checkbox"
+                              id="tuned-params-tiger"
+                              checked={
+                                settings.players.tiger.settings
+                                  ?.useTunedParams ||
+                                DEFAULT_AGENT_SETTINGS.minimax.useTunedParams
+                              }
+                              onChange={(e) =>
+                                updateAgentSettings(
+                                  "tiger",
+                                  "useTunedParams",
+                                  e.target.checked
+                                )
+                              }
+                              className="bg-gray-700 w-4 h-4"
+                            />
+                            <label
+                              htmlFor="tuned-params-tiger"
                               className="text-gray-300 text-sm ml-2"
                             >
                               Enabled
