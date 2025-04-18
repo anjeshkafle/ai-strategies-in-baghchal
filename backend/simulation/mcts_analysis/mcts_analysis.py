@@ -24,29 +24,46 @@ def load_and_preprocess_data(filepath):
     # Load data
     df = pd.read_csv(filepath)
     
-    # Extract configuration parameters
-    df['tiger_config_parsed'] = df['tiger_config'].apply(lambda x: json.loads(x))
-    df['goat_config_parsed'] = df['goat_config'].apply(lambda x: json.loads(x))
+    # Extract configuration parameters with error handling
+    def safe_json_load(json_str):
+        try:
+            return json.loads(json_str)
+        except Exception as e:
+            print(f"ERROR parsing JSON: {e}")
+            print(f"Problematic JSON string: {json_str}")
+            return {}
     
-    # Extract parameters for tiger
-    df['tiger_rollout_policy'] = df['tiger_config_parsed'].apply(lambda x: x.get('rollout_policy'))
-    df['tiger_rollout_depth'] = df['tiger_config_parsed'].apply(lambda x: x.get('rollout_depth'))
-    df['tiger_exploration_weight'] = df['tiger_config_parsed'].apply(lambda x: x.get('exploration_weight'))
-    df['tiger_guided_strictness'] = df['tiger_config_parsed'].apply(lambda x: x.get('guided_strictness'))
+    df['tiger_config_parsed'] = df['tiger_config'].apply(safe_json_load)
+    df['goat_config_parsed'] = df['goat_config'].apply(safe_json_load)
+    
+    # Extract parameters for tiger with more detailed error trapping
+    def safe_get_param(config_dict, param_name, default_value=None):
+        try:
+            return config_dict.get(param_name, default_value)
+        except Exception as e:
+            print(f"ERROR extracting {param_name}: {e}")
+            return default_value
+    
+    df['tiger_rollout_policy'] = df['tiger_config_parsed'].apply(lambda x: safe_get_param(x, 'rollout_policy'))
+    df['tiger_rollout_depth'] = df['tiger_config_parsed'].apply(lambda x: safe_get_param(x, 'rollout_depth'))
+    df['tiger_exploration_weight'] = df['tiger_config_parsed'].apply(lambda x: safe_get_param(x, 'exploration_weight'))
+    df['tiger_guided_strictness'] = df['tiger_config_parsed'].apply(lambda x: safe_get_param(x, 'guided_strictness'))
     
     # Extract parameters for goat
-    df['goat_rollout_policy'] = df['goat_config_parsed'].apply(lambda x: x.get('rollout_policy'))
-    df['goat_rollout_depth'] = df['goat_config_parsed'].apply(lambda x: x.get('rollout_depth'))
-    df['goat_exploration_weight'] = df['goat_config_parsed'].apply(lambda x: x.get('exploration_weight'))
-    df['goat_guided_strictness'] = df['goat_config_parsed'].apply(lambda x: x.get('guided_strictness'))
+    df['goat_rollout_policy'] = df['goat_config_parsed'].apply(lambda x: safe_get_param(x, 'rollout_policy'))
+    df['goat_rollout_depth'] = df['goat_config_parsed'].apply(lambda x: safe_get_param(x, 'rollout_depth'))
+    df['goat_exploration_weight'] = df['goat_config_parsed'].apply(lambda x: safe_get_param(x, 'exploration_weight'))
+    df['goat_guided_strictness'] = df['goat_config_parsed'].apply(lambda x: safe_get_param(x, 'guided_strictness'))
     
     # Create identifier for each unique configuration
     df['tiger_config_id'] = df.apply(
-        lambda row: f"mcts_{row['tiger_rollout_policy']}_{row['tiger_rollout_depth']}_{row['tiger_exploration_weight']}",
+        lambda row: f"mcts_{row['tiger_rollout_policy']}_{row['tiger_rollout_depth']}_{row['tiger_exploration_weight']}" + 
+                   (f"_{row['tiger_guided_strictness']}" if row['tiger_rollout_policy'] == 'guided' and pd.notna(row['tiger_guided_strictness']) else ""),
         axis=1
     )
     df['goat_config_id'] = df.apply(
-        lambda row: f"mcts_{row['goat_rollout_policy']}_{row['goat_rollout_depth']}_{row['goat_exploration_weight']}",
+        lambda row: f"mcts_{row['goat_rollout_policy']}_{row['goat_rollout_depth']}_{row['goat_exploration_weight']}" + 
+                   (f"_{row['goat_guided_strictness']}" if row['goat_rollout_policy'] == 'guided' and pd.notna(row['goat_guided_strictness']) else ""),
         axis=1
     )
     
@@ -72,8 +89,12 @@ def calculate_win_rates(df):
     Returns:
         DataFrame with win rates for each configuration
     """
+    # Get all unique configurations
+    all_config_ids = set(df['tiger_config_id'].unique()) | set(df['goat_config_id'].unique())
+    
     # Calculate win rates when playing as tiger
     tiger_stats = []
+    
     for config in df['tiger_config_id'].unique():
         tiger_games = df[df['tiger_config_id'] == config]
         if len(tiger_games) == 0:
@@ -104,6 +125,7 @@ def calculate_win_rates(df):
     
     # Calculate win rates when playing as goat
     goat_stats = []
+    
     for config in df['goat_config_id'].unique():
         goat_games = df[df['goat_config_id'] == config]
         if len(goat_games) == 0:
@@ -131,34 +153,90 @@ def calculate_win_rates(df):
     
     goat_df = pd.DataFrame(goat_stats)
     
-    # Merge tiger and goat stats
-    merged_df = pd.merge(
-        tiger_df, 
-        goat_df, 
-        on=['config_id', 'rollout_policy', 'rollout_depth', 'exploration_weight', 'guided_strictness'],
-        how='outer'
-    ).fillna(0)
+    # First create a dataframe with all unique config_ids
+    all_configs_df = pd.DataFrame({'config_id': list(all_config_ids)})
     
-    # Calculate overall metrics
-    merged_df['total_games'] = merged_df['total_games_as_tiger'] + merged_df['total_games_as_goat']
-    merged_df['total_wins'] = merged_df['wins_as_tiger'] + merged_df['wins_as_goat']
-    merged_df['total_draws'] = merged_df['draws_as_tiger'] + merged_df['draws_as_goat']
-    merged_df['total_losses'] = merged_df['losses_as_tiger'] + merged_df['losses_as_goat']
+    # Merge tiger stats
+    merged_df = pd.merge(
+        all_configs_df,
+        tiger_df,
+        on='config_id',
+        how='left'
+    )
+    
+    # Merge goat stats
+    merged_df = pd.merge(
+        merged_df,
+        goat_df,
+        on='config_id',
+        how='left',
+        suffixes=('', '_goat')
+    )
+    
+    # Rename columns from goat dataframe that didn't get a suffix
+    rename_cols = {}
+    for col in goat_df.columns:
+        if col != 'config_id' and col in merged_df.columns and f"{col}_goat" in merged_df.columns:
+            continue  # Already has suffix
+        elif col != 'config_id':
+            rename_cols[col] = f"{col}_goat"
+    
+    if rename_cols:
+        merged_df = merged_df.rename(columns=rename_cols)
+    
+    # Fill missing values
+    merged_df = merged_df.fillna(0)
+    
+    # Handle parameter columns
+    for param in ['rollout_policy', 'rollout_depth', 'exploration_weight', 'guided_strictness']:
+        param_goat = f"{param}_goat"
+        if param_goat in merged_df.columns:
+            # Use tiger param if available, otherwise use goat param
+            merged_df[param] = merged_df.apply(
+                lambda row: row[param] if row[param] != 0 else row[param_goat], 
+                axis=1
+            )
+    
+    # Fix column names for calculations
+    column_mapping = {
+        'total_games_as_tiger': 'total_games_as_tiger',
+        'wins_as_tiger': 'wins_as_tiger',
+        'draws_as_tiger': 'draws_as_tiger',
+        'losses_as_tiger': 'losses_as_tiger',
+        'win_rate_as_tiger': 'win_rate_as_tiger',
+        'draw_rate_as_tiger': 'draw_rate_as_tiger',
+        'avg_game_length_as_tiger': 'avg_game_length_as_tiger',
+        'avg_goats_captured': 'avg_goats_captured',
+        
+        'total_games_as_goat': 'total_games_as_goat_goat' if 'total_games_as_goat_goat' in merged_df.columns else 'total_games_as_goat',
+        'wins_as_goat': 'wins_as_goat_goat' if 'wins_as_goat_goat' in merged_df.columns else 'wins_as_goat',
+        'draws_as_goat': 'draws_as_goat_goat' if 'draws_as_goat_goat' in merged_df.columns else 'draws_as_goat',
+        'losses_as_goat': 'losses_as_goat_goat' if 'losses_as_goat_goat' in merged_df.columns else 'losses_as_goat',
+        'win_rate_as_goat': 'win_rate_as_goat_goat' if 'win_rate_as_goat_goat' in merged_df.columns else 'win_rate_as_goat',
+        'draw_rate_as_goat': 'draw_rate_as_goat_goat' if 'draw_rate_as_goat_goat' in merged_df.columns else 'draw_rate_as_goat',
+        'avg_game_length_as_goat': 'avg_game_length_as_goat_goat' if 'avg_game_length_as_goat_goat' in merged_df.columns else 'avg_game_length_as_goat'
+    }
+    
+    # Calculate overall metrics using the corrected column names
+    merged_df['total_games'] = merged_df[column_mapping['total_games_as_tiger']] + merged_df[column_mapping['total_games_as_goat']]
+    merged_df['total_wins'] = merged_df[column_mapping['wins_as_tiger']] + merged_df[column_mapping['wins_as_goat']]
+    merged_df['total_draws'] = merged_df[column_mapping['draws_as_tiger']] + merged_df[column_mapping['draws_as_goat']]
+    merged_df['total_losses'] = merged_df[column_mapping['losses_as_tiger']] + merged_df[column_mapping['losses_as_goat']]
     
     # Calculate overall win rate (weighted average of tiger and goat performance)
-    tiger_weight = merged_df['total_games_as_tiger'] / merged_df['total_games']
-    goat_weight = merged_df['total_games_as_goat'] / merged_df['total_games']
+    tiger_weight = merged_df[column_mapping['total_games_as_tiger']] / merged_df['total_games']
+    goat_weight = merged_df[column_mapping['total_games_as_goat']] / merged_df['total_games']
     
     merged_df['overall_win_rate'] = (
-        merged_df['win_rate_as_tiger'] * tiger_weight + 
-        merged_df['win_rate_as_goat'] * goat_weight
+        merged_df[column_mapping['win_rate_as_tiger']] * tiger_weight + 
+        merged_df[column_mapping['win_rate_as_goat']] * goat_weight
     )
     
     merged_df['average_win_rate'] = merged_df['total_wins'] / merged_df['total_games']
     
     # Calculate adjusted win rates that count draws as 0.5 points
-    merged_df['adjusted_win_rate_as_tiger'] = (merged_df['wins_as_tiger'] + 0.5 * merged_df['draws_as_tiger']) / merged_df['total_games_as_tiger']
-    merged_df['adjusted_win_rate_as_goat'] = (merged_df['wins_as_goat'] + 0.5 * merged_df['draws_as_goat']) / merged_df['total_games_as_goat']
+    merged_df['adjusted_win_rate_as_tiger'] = (merged_df[column_mapping['wins_as_tiger']] + 0.5 * merged_df[column_mapping['draws_as_tiger']]) / merged_df[column_mapping['total_games_as_tiger']]
+    merged_df['adjusted_win_rate_as_goat'] = (merged_df[column_mapping['wins_as_goat']] + 0.5 * merged_df[column_mapping['draws_as_goat']]) / merged_df[column_mapping['total_games_as_goat']]
     
     # Calculate overall adjusted win rate that counts draws as 0.5 points
     merged_df['adjusted_win_rate'] = (merged_df['total_wins'] + 0.5 * merged_df['total_draws']) / merged_df['total_games']

@@ -58,10 +58,10 @@ def run_analysis(tournament_file, output_dir):
     
     # Save processed data
     print("\nSaving processed data...")
-    win_rates.to_csv(os.path.join(data_dir, "win_rates.csv"))
-    elo_ratings.to_csv(os.path.join(data_dir, "elo_ratings.csv"))
-    composite_scores.to_csv(os.path.join(data_dir, "composite_scores.csv"))
-    pd.DataFrame(top_configs).to_csv(os.path.join(data_dir, "top_configs.csv"))
+    win_rates.to_csv(os.path.join(data_dir, "win_rates.csv"), index=False)
+    elo_ratings.to_csv(os.path.join(data_dir, "elo_ratings.csv"), index=False)
+    composite_scores.to_csv(os.path.join(data_dir, "composite_scores.csv"), index=False)
+    pd.DataFrame(top_configs).to_csv(os.path.join(data_dir, "top_configs.csv"), index=False)
     
     # Print statistical results
     print("\nStatistical Results:")
