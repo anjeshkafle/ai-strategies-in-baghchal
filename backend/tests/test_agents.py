@@ -45,7 +45,7 @@ BOARD_STRING_3 = [
 BOARD_STRING_4 = [
     "T___T",
     "_____",
-    "_____",
+    "G____",
     "_____",
     "T___T"
 ]
@@ -55,17 +55,18 @@ BOARD_TO_USE = BOARD_STRING_4
 
 # Configure game state settings
 GAME_PHASE = "PLACEMENT"  # "PLACEMENT" or "MOVEMENT"
-TURN = "GOAT"            # "GOAT" or "TIGER"
-GOATS_PLACED = 0
+TURN = "TIGER"            # "GOAT" or "TIGER"
+GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
-RUN_MINIMAX = False
-RUN_MCTS = True
+RUN_MINIMAX = True
+RUN_MCTS = False
 
 # Agent parameters
 # Minimax parameters
-MINIMAX_MAX_DEPTH = 6
+MINIMAX_MAX_DEPTH = 7
+MINIMAX_USE_TUNED_PARAMS = True  # Set to False to use default parameters
 
 # MCTS parameters
 MCTS_ITERATIONS = 20000
@@ -170,7 +171,11 @@ def print_best_move_sequence(initial_state: GameState, max_depth: int) -> None:
     
     for i in range(max_depth):
         # Create a new agent with decreasing depth
-        agent = MinimaxAgent(max_depth=current_depth)
+        agent = MinimaxAgent(
+            max_depth=current_depth, 
+            randomize_equal_moves=True,
+            useTunedParams=MINIMAX_USE_TUNED_PARAMS
+        )
         
         # Get the best move
         best_move = agent.get_move(current_state)
@@ -193,7 +198,10 @@ def print_best_move_sequence(initial_state: GameState, max_depth: int) -> None:
         current_depth -= 1
     
     # Print the final position evaluation
-    final_eval_agent = MinimaxAgent(max_depth=1)
+    final_eval_agent = MinimaxAgent(
+        max_depth=1, 
+        useTunedParams=MINIMAX_USE_TUNED_PARAMS
+    )
     static_eval = final_eval_agent.evaluate(current_state)
     print(f"\nFinal position static evaluation: {static_eval:.1f}")
 
@@ -244,41 +252,33 @@ def run_minimax_test(game_state):
     max_depth = MINIMAX_MAX_DEPTH
     
     print(f"\nInitializing Minimax agent with max depth: {max_depth}")
+    print(f"Using tuned parameters: {MINIMAX_USE_TUNED_PARAMS}")
     
     # Create the minimax agent
-    agent = MinimaxAgent(max_depth=max_depth, randomize_equal_moves=True)
+    agent = MinimaxAgent(max_depth=max_depth, randomize_equal_moves=True, useTunedParams=MINIMAX_USE_TUNED_PARAMS)
     
-    # Measure time taken to get the best move
+    # If using tuned parameters, try to print some of them
+    if MINIMAX_USE_TUNED_PARAMS and hasattr(agent, 'tuned_factors') and agent.tuned_factors:
+        print("\nTuned parameters in use:")
+        print("Factors:")
+        for key, value in agent.tuned_factors.items():
+            print(f"  {key}: {value}")
+        print("Equilibrium points:")
+        for key, value in agent.tuned_equilibrium.items():
+            print(f"  {key}: {value}")
+    
+    # Time the agent
     start_time = time.time()
     best_move = agent.get_move(game_state)
-    elapsed_time = time.time() - start_time
-    print(f"Time taken to calculate the best move: {elapsed_time:.2f} seconds")
+    end_time = time.time()
     
-    # Print the best move
-    print("\nBest move according to Minimax agent:")
-    if best_move:
-        print(format_move(best_move))
-        print(f"Move score: {agent.best_score}")
-        
-        # Apply the move to see the result
-        new_state = game_state.clone()
-        new_state.apply_move(best_move)
-        print("\nBoard state after applying the best move:")
-        print_board(new_state)
-        
-        # Check if the move was a capture move
-        if best_move.get("capture"):
-            print("✓ The agent chose a capture move!")
-        else:
-            if capture_moves:
-                print("✗ The agent did NOT choose a capture move, even though captures are available.")
-            else:
-                print("(No capture moves were available)")
-                
-        # Print the best move sequence
-        #print_best_move_sequence(game_state, max_depth)
-    else:
-        print("No move was returned by the agent.")
+    # Print the results
+    print(f"\nMinimax search completed in {end_time - start_time:.3f} seconds")
+    print(f"Best move: {format_move(best_move)}")
+    print(f"Evaluation score: {agent.best_score:.2f}")
+    
+    # Print the sequence of best moves from the current position
+    print_best_move_sequence(game_state, min(3, max_depth))  # Show up to 3 moves ahead
 
 
 def run_mcts_test(game_state):

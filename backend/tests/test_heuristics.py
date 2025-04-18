@@ -9,6 +9,8 @@ from models.game_state import GameState
 from models.minimax_agent import MinimaxAgent
 from game_logic import get_all_possible_moves
 
+# Configuration
+USE_TUNED_PARAMS = True  # Set to False to use default parameters
 
 def string_board_to_game_state(string_board, phase="PLACEMENT", turn="TIGER", goats_placed=1, goats_captured=0):
     """Convert a string representation of a board to a GameState object."""
@@ -81,7 +83,20 @@ def main():
         "Board 2 (1 closed space working)": board_2,
     }
     
-    agent = MinimaxAgent(max_depth=3)
+    # Create agent with specified parameters
+    print(f"Using tuned parameters: {USE_TUNED_PARAMS}")
+    agent = MinimaxAgent(max_depth=3, useTunedParams=USE_TUNED_PARAMS)
+    
+    # If using tuned parameters, display information about them
+    if USE_TUNED_PARAMS and hasattr(agent, 'tuned_factors') and agent.tuned_factors:
+        print("\n=== TUNED PARAMETERS ===")
+        print("Factors:")
+        for key, value in agent.tuned_factors.items():
+            print(f"  {key}: {value}")
+        print("Equilibrium points:")
+        for key, value in agent.tuned_equilibrium.items():
+            print(f"  {key}: {value}")
+        print("="*35)
     
     for board_name, board in test_boards.items():
         print(f"\n===== Testing {board_name} =====")
@@ -137,11 +152,22 @@ def main():
         edge_weight = agent.edge_weight  # Same weight as in evaluate function
         weighted_edge = edge_weight * edge_score
         
+        # Calculate dynamic closed space weight factor if using tuned parameters
+        closed_space_weight = agent.closed_spaces_weight
+        if USE_TUNED_PARAMS and hasattr(agent, 'tuned_factors') and 'closed_space_weight_factor' in agent.tuned_factors:
+            closed_space_factor = agent.tuned_factors['closed_space_weight_factor']
+            dynamic_closed_space_weight = closed_space_weight * closed_space_factor
+        else:
+            closed_space_factor = 1.0
+            dynamic_closed_space_weight = closed_space_weight
+        
         print(f"\nHeuristic Results:")
         print(f"Movable Tigers: {movable_tigers}")
         print(f"Threatened Goats: {threatened_goats}")
         print(f"Closed Regions: {len(closed_regions)}")
         print(f"Total Closed Positions: {sum(len(region) for region in closed_regions)}")
+        print(f"Closed Space Weight: {closed_space_weight} (Factor: {closed_space_factor})")
+        print(f"Dynamic Closed Space Weight: {dynamic_closed_space_weight}")
         
         print(f"\nNew Heuristics:")
         print(f"1. Tiger Positional Score: {position_score:.3f} (normalized 0-1)")
