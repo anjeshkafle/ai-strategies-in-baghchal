@@ -34,6 +34,7 @@ class AgentSettings(BaseModel):
     
     # Minimax specific settings
     max_depth: Optional[int] = Field(None, ge=1, le=9, description="Maximum search depth for Minimax (1-9)")
+    useTunedParams: Optional[bool] = Field(None, description="Whether to use tuned parameters for Minimax")
     
     # MCTS specific settings
     iterations: Optional[int] = Field(None, ge=100, le=100000, description="Number of iterations for MCTS")
@@ -56,7 +57,8 @@ class MoveRequest(BaseModel):
 default_settings = {
     "minimax": {
         "max_depth": 6,
-        "randomize_equal_moves": True
+        "randomize_equal_moves": True,
+        "useTunedParams": False
     },
     "mcts": {
         "iterations": 20000,
@@ -72,7 +74,8 @@ default_settings = {
 agents = {
     "random": RandomAgent(),
     "minimax": MinimaxAgent(max_depth=default_settings["minimax"]["max_depth"], 
-                           randomize_equal_moves=default_settings["minimax"]["randomize_equal_moves"]),
+                           randomize_equal_moves=default_settings["minimax"]["randomize_equal_moves"],
+                           useTunedParams=default_settings["minimax"]["useTunedParams"]),
     "mcts": MCTSAgent(
         iterations=default_settings["mcts"]["iterations"], 
         exploration_weight=default_settings["mcts"]["exploration_weight"], 
@@ -141,9 +144,10 @@ async def get_best_move(request: MoveRequest):
                     # Only update provided settings
                     custom_max_depth = request.settings.max_depth if request.settings.max_depth is not None else default_settings["minimax"]["max_depth"]
                     custom_randomize = request.settings.randomize_equal_moves if request.settings.randomize_equal_moves is not None else default_settings["minimax"]["randomize_equal_moves"]
+                    custom_tuned_params = request.settings.useTunedParams if request.settings.useTunedParams is not None else default_settings["minimax"]["useTunedParams"]
                     
-                    logger.info(f"Using custom minimax settings: max_depth={custom_max_depth}, randomize={custom_randomize}")
-                    custom_agent = MinimaxAgent(max_depth=custom_max_depth, randomize_equal_moves=custom_randomize)
+                    logger.info(f"Using custom minimax settings: max_depth={custom_max_depth}, randomize={custom_randomize}, useTunedParams={custom_tuned_params}")
+                    custom_agent = MinimaxAgent(max_depth=custom_max_depth, randomize_equal_moves=custom_randomize, useTunedParams=custom_tuned_params)
                     move = custom_agent.get_move(state)
                 
                 elif request.model == "mcts":
