@@ -438,7 +438,7 @@ def create_parameter_performance_charts(df, stats_results, output_dir, config=No
             )
         
         plt.text(
-            0.02, 0.85,  # Position lower at 85% instead of 95% vertical position
+            0.02, 0.89,  # Position lower at 85% instead of 95% vertical position
             "\n".join(text_lines),
             transform=plt.gca().transAxes,
             ha='left',
@@ -720,7 +720,7 @@ def create_composite_score_chart(composite_df, top_configs, output_dir, config=N
     plt.figure(figsize=(14, 6))  # Increased width for better spacing
     
     # Plot composite scores with wider bars and spacing
-    width = 0.7  # Reduced bar width to create more space between them
+    width = 0.65  # Further reduced bar width to create even more space between them
     
     # Create numeric positions for the bars
     x_positions = np.arange(len(composite_df))
@@ -803,17 +803,17 @@ def create_composite_score_chart(composite_df, top_configs, output_dir, config=N
     plt.setp(plt.gca().get_xticklabels(), rotation_mode="anchor")
     plt.gca().set_xticks(x_positions, minor=False)
     
-    # Mark top configurations with a star or highlight
+    # Mark top configurations with a star at the center of the bar
     for i, is_top in enumerate(composite_df['is_top']):
         if is_top:
-            plt.plot(i, composite_df.iloc[i]['composite_score'] + 0.02, 'k*', markersize=10)
+            plt.plot(i, composite_df.iloc[i]['composite_score'] * 0.5, 'k*', markersize=10)
     
-    # Add data labels - positioned even more to the left for better visibility with confidence intervals
+    # Add data labels - positioned even more to the left and slightly lower for better visibility
     for i, bar in enumerate(bars):
         height = bar.get_height()
         plt.text(
-            bar.get_x() + bar.get_width()*0.1,  # Position at 10% of the bar width (even more to the left)
-            height + 0.02,  # Position above the bar
+            bar.get_x() + bar.get_width()*0.05,  # Position at 5% of the bar width (even further to the left)
+            height + 0.005,  # Position slightly above the bar (adjusted from -0.01 to +0.01)
             f'{height:.2f}',
             ha='center',
             va='bottom',
