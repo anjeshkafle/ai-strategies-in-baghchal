@@ -273,7 +273,7 @@ class MainCompetitionController:
                 # Log with emojis and better formatting
                 mcts_summary = self._get_config_summary(mcts_config)
                 minimax_summary = self._get_config_summary(minimax_config)
-                self.logger.info(f"🎭 Created matchup pair {pair_id}: 🐯🐐 {mcts_summary} vs {minimax_summary}")
+                self.logger.info(f"🎮 Created matchup pair {pair_id}: 🐯🐐 {mcts_summary} vs {minimax_summary}")
         
         total_matchups = len(all_matchups)
         if games_per_matchup == float('inf'):
