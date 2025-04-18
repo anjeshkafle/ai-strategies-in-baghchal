@@ -83,6 +83,42 @@ def display_board_and_info(game_state: GameState, move_number: int, total_moves:
             
         print(row)
         print("-" * 11)
+    
+    # Add concise configuration line below everything else
+    # Display different configurations based on algorithm type
+    tiger_algo = game_data['tiger_algorithm']
+    goat_algo = game_data['goat_algorithm']
+    
+    # Format Minimax configurations with key parameters
+    def format_minimax_config(config):
+        parts = []
+        if 'max_depth' in config:
+            parts.append(f"depth={config['max_depth']}")
+        if 'useTunedParams' in config:
+            parts.append(f"tuned={config['useTunedParams']}")
+        return '/'.join(parts)
+    
+    # Format MCTS configurations with key parameters
+    def format_mcts_config(config):
+        parts = []
+        if 'iterations' in config and config['iterations'] is not None:
+            parts.append(f"iter={config['iterations']}")
+        if 'max_time_seconds' in config and config['max_time_seconds'] is not None:
+            parts.append(f"time={config['max_time_seconds']}s")
+        if 'exploration_weight' in config:
+            parts.append(f"exp={config['exploration_weight']}")
+        if 'rollout_policy' in config:
+            parts.append(f"policy={config['rollout_policy']}")
+        if 'max_rollout_depth' in config:
+            parts.append(f"depth={config['max_rollout_depth']}")
+        return '/'.join(parts)
+    
+    # Format configurations based on algorithm type
+    tiger_config_str = format_minimax_config(game_data['tiger_config']) if tiger_algo.lower() == 'minimax' else format_mcts_config(game_data['tiger_config'])
+    goat_config_str = format_minimax_config(game_data['goat_config']) if goat_algo.lower() == 'minimax' else format_mcts_config(game_data['goat_config'])
+    
+    print(f"{RED}Tiger{RESET}: [{tiger_algo}] {tiger_config_str}")
+    print(f"{GREEN}Goat{RESET}: [{goat_algo}] {goat_config_str}")
 
 def find_game(game_id: str) -> Optional[str]:
     """Find a game by ID in either tournament or competition results."""
