@@ -295,7 +295,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                   value={settings.players.goat.model}
                   onChange={(e) => initializeSettings("goat", e.target.value)}
                   options={[
-                    { value: "minimax", label: "Minimax Base" },
+                    { value: "minimax", label: "Minimax" },
                     { value: "mcts", label: "MCTS Agent" },
                     { value: "random", label: "Random AI" },
                   ]}
@@ -542,7 +542,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                   value={settings.players.tiger.model}
                   onChange={(e) => initializeSettings("tiger", e.target.value)}
                   options={[
-                    { value: "minimax", label: "Minimax Base" },
+                    { value: "minimax", label: "Minimax" },
                     { value: "mcts", label: "MCTS Agent" },
                     { value: "random", label: "Random AI" },
                   ]}

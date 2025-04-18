@@ -224,7 +224,7 @@ const WelcomeScreen = () => {
                         initializeSettings("goat", e.target.value)
                       }
                       options={[
-                        { value: "minimax", label: "Minimax Base" },
+                        { value: "minimax", label: "Minimax" },
                         { value: "mcts", label: "MCTS Agent" },
                         { value: "random", label: "Random AI" },
                       ]}
@@ -449,7 +449,7 @@ const WelcomeScreen = () => {
                         initializeSettings("tiger", e.target.value)
                       }
                       options={[
-                        { value: "minimax", label: "Minimax Base" },
+                        { value: "minimax", label: "Minimax" },
                         { value: "mcts", label: "MCTS Agent" },
                         { value: "random", label: "Random AI" },
                       ]}
