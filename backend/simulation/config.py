@@ -122,26 +122,15 @@ class MCTSTournamentConfig:
         return validated_ranges
 
 @dataclass
-class MainCompetitionConfig:
-    """Configuration for main competition."""
-    minimax_depths: List[int] = field(default_factory=lambda: [4, 5, 6])
-    games_per_matchup: int = 1000
-    output_dir: str = "simulation_results"
-    mcts_tournament_results: str = None  # Path to MCTS tournament results
-
-@dataclass
 class SimulationConfig:
     """Main configuration for all simulations."""
     sheets_webapp_url: Optional[str] = None  # URL for Google Sheets web app
     sheets_batch_size: int = 100  # Batch size for Google Sheets sync
     mcts_tournament: MCTSTournamentConfig = None
-    main_competition: MainCompetitionConfig = None
     
     def __post_init__(self):
         if self.mcts_tournament is None:
             self.mcts_tournament = MCTSTournamentConfig()
-        if self.main_competition is None:
-            self.main_competition = MainCompetitionConfig()
 
 def get_config_path(config_path: str = "simulation_config.json") -> str:
     """
@@ -199,7 +188,6 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
     
     # Convert nested dictionaries to config objects
     mcts_config = None
-    main_config = None
     
     if 'mcts_tournament' in config_dict:
         mcts_dict = config_dict['mcts_tournament']
@@ -256,14 +244,11 @@ def load_config(config_path: str = "simulation_config.json") -> SimulationConfig
             parallel_games=mcts_dict.get('parallel_games')
         )
         
-    if 'main_competition' in config_dict:
-        main_config = MainCompetitionConfig(**config_dict['main_competition'])
-    
+    # Create the complete config
     return SimulationConfig(
         sheets_webapp_url=sheets_webapp_url,
         sheets_batch_size=sheets_batch_size,
-        mcts_tournament=mcts_config, 
-        main_competition=main_config
+        mcts_tournament=mcts_config
     )
 
 def save_config(config: SimulationConfig, config_path: str = "simulation_config.json"):
@@ -276,37 +261,24 @@ def save_config(config: SimulationConfig, config_path: str = "simulation_config.
     """
     config_path = get_config_path(config_path)
     
-    def convert_to_dict(obj):
-        if hasattr(obj, '__dataclass_fields__'):
-            result = {}
-            for k, v in asdict(obj).items():
-                if v is not None:
-                    result[k] = convert_to_dict(v)
-            return result
-        elif isinstance(obj, list):
-            return [convert_to_dict(item) for item in obj]
-        elif isinstance(obj, dict):
-            return {k: convert_to_dict(v) for k, v in obj.items() if v is not None}
-        else:
-            return obj
-    
-    # Convert to dict but preserve only non-None values
-    config_dict = {}
-    
-    # Add top-level fields
-    if config.sheets_webapp_url is not None:
-        config_dict['sheets_webapp_url'] = config.sheets_webapp_url
-    if config.sheets_batch_size is not None:
-        config_dict['sheets_batch_size'] = config.sheets_batch_size
-        
-    # Add nested objects
-    if config.mcts_tournament:
-        config_dict['mcts_tournament'] = convert_to_dict(config.mcts_tournament)
-    if config.main_competition:
-        config_dict['main_competition'] = convert_to_dict(config.main_competition)
+    config_dict = convert_to_dict(config)
     
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(os.path.abspath(config_path)), exist_ok=True)
     
     with open(config_path, 'w') as f:
-        json.dump(config_dict, f, indent=2) 
+        json.dump(config_dict, f, indent=2)
+
+def convert_to_dict(obj):
+    if hasattr(obj, '__dataclass_fields__'):
+        result = {}
+        for k, v in asdict(obj).items():
+            if v is not None:
+                result[k] = convert_to_dict(v)
+        return result
+    elif isinstance(obj, list):
+        return [convert_to_dict(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {k: convert_to_dict(v) for k, v in obj.items() if v is not None}
+    else:
+        return obj 

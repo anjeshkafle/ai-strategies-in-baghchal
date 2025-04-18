@@ -32,10 +32,8 @@ class SimulationController:
         
         # Create subdirectories for different simulation types
         self.mcts_tournament_dir = os.path.join(output_dir, "mcts_tournament")
-        self.main_competition_dir = os.path.join(output_dir, "main_competition")
         
         os.makedirs(self.mcts_tournament_dir, exist_ok=True)
-        os.makedirs(self.main_competition_dir, exist_ok=True)
         
         # CSV headers
         self.csv_headers = [
@@ -233,12 +231,12 @@ class SimulationController:
                 output_file = os.path.join(self.mcts_tournament_dir, f"mcts_tournament_{timestamp}_{start_idx}_{end_idx}.csv")
                 print(f"Creating new output file: {os.path.basename(output_file)}")
         else:
-            # If specific output file provided, check if it exists
-            full_path = os.path.join(self.mcts_tournament_dir, output_file)
-            if os.path.exists(full_path):
-                output_file = full_path
-                print(f"Resuming from specified file: {os.path.basename(output_file)}")
+            # If specific output file provided, check if it's already a full path
+            if os.path.isabs(output_file) or os.path.exists(output_file):
+                # Use output_file as is if it's an absolute path or exists
+                print(f"Using specified file: {os.path.basename(output_file)}")
             else:
+                # Otherwise, join with tournament directory
                 output_file = os.path.join(self.mcts_tournament_dir, output_file)
                 print(f"Creating specified output file: {os.path.basename(output_file)}")
         
@@ -657,203 +655,5 @@ class SimulationController:
             
             # Final sync to Google Sheets
             self.sheets_sync.sync(force=True)
-        
-        return output_file
-    
-    def run_main_competition(self, 
-                          best_mcts_config: Dict,
-                          minimax_depths: List[int] = [4, 5, 6],
-                          games_per_matchup: int = 1000,
-                          output_file: str = None) -> str:
-        """
-        Run the main competition between the best MCTS configuration and Minimax at different depths.
-        
-        Args:
-            best_mcts_config: The best MCTS configuration from the tournament
-            minimax_depths: Depths to test for Minimax
-            games_per_matchup: Number of games to play per matchup
-            output_file: Optional specific output file path (for resuming)
-            
-        Returns:
-            Path to the CSV file with results
-        """
-        # Create or find output file
-        if output_file is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = os.path.join(self.main_competition_dir, f"main_competition_{timestamp}.csv")
-        else:
-            # If specific output file provided, use it for resumption
-            output_file = os.path.join(self.main_competition_dir, output_file)
-        
-        # Get existing game IDs to avoid duplication
-        existing_game_ids = self._find_existing_results(output_file)
-        
-        # Get existing matchup counts to know how many games are already done
-        matchup_counts = self._find_existing_matchups(output_file)
-        
-        print(f"Found {len(existing_game_ids)} existing games in output file")
-        
-        # Setup CSV file - if it exists, open in append mode
-        file_exists = os.path.exists(output_file)
-        
-        with open(output_file, 'a' if file_exists else 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=self.csv_headers)
-            
-            # Only write header if creating a new file
-            if not file_exists:
-                writer.writeheader()
-            
-            # Convert MCTS config to string for matching
-            mcts_config_str = json.dumps(best_mcts_config)
-            
-            # Process each Minimax depth
-            for depth in minimax_depths:
-                minimax_config = {
-                    'algorithm': 'minimax',
-                    'depth': depth,
-                    'randomize': True
-                }
-                
-                minimax_config_str = json.dumps(minimax_config)
-                
-                # Calculate how many games we've already played for this matchup in each direction
-                minimax_tiger_played = matchup_counts.get((minimax_config_str, mcts_config_str), 0)
-                mcts_tiger_played = matchup_counts.get((mcts_config_str, minimax_config_str), 0)
-                
-                half_games = games_per_matchup // 2
-                
-                print(f"\n🔥 EPIC SHOWDOWN: Minimax depth {depth} vs Best MCTS 🔥")
-                print(f"  🎮 Already played: {minimax_tiger_played}/{half_games} (Minimax as Tiger) and "
-                      f"{mcts_tiger_played}/{half_games} (MCTS as Tiger)")
-                
-                # Track games completed in this session
-                games_played_this_session = 0
-                
-                # First half: Minimax as Tiger, MCTS as Goat
-                for game_num in range(half_games - minimax_tiger_played):
-                    if game_num % 10 == 0:
-                        print(f"  🐯 Progress: {game_num}/{half_games - minimax_tiger_played} games (Minimax as Tiger)")
-                    
-                    runner = GameRunner(minimax_config, best_mcts_config)
-                    game_result = runner.run_game()
-                    
-                    # Skip if we've already recorded this game
-                    if game_result["game_id"] in existing_game_ids:
-                        continue
-                    
-                    # Show the result in a fun way
-                    winner = game_result["winner"].upper()
-                    moves = game_result["moves"]
-                    goats_captured = game_result["goats_captured"]
-                    
-                    # Create victory message
-                    if winner == "TIGER":
-                        victory_emoji = "🐯"
-                        victory_msg = f"{victory_emoji} TIGER VICTORY! {victory_emoji} Minimax-d{depth} defeated MCTS in {moves} moves with {goats_captured} captures!"
-                    elif winner == "GOAT":
-                        victory_emoji = "🐐"
-                        victory_msg = f"{victory_emoji} GOAT VICTORY! {victory_emoji} MCTS outsmarted Minimax-d{depth} in {moves} moves!"
-                    else:
-                        victory_emoji = "🤝"
-                        victory_msg = f"{victory_emoji} DRAW! {victory_emoji} Minimax-d{depth} vs MCTS ended in a draw after {moves} moves!"
-                    
-                    if game_num % 10 == 0:
-                        print(f"    {victory_msg}")
-                    
-                    # Prepare row data
-                    row = {
-                        "game_id": game_result["game_id"],
-                        "winner": game_result["winner"],
-                        "reason": game_result["reason"],
-                        "moves": game_result["moves"],
-                        "game_duration": game_result["game_duration"],
-                        "avg_tiger_move_time": game_result["avg_tiger_move_time"],
-                        "avg_goat_move_time": game_result["avg_goat_move_time"],
-                        "first_capture_move": game_result["first_capture_move"],
-                        "goats_captured": game_result["goats_captured"],
-                        "phase_transition_move": game_result["phase_transition_move"],
-                        "move_history": game_result["move_history"],
-                        "tiger_algorithm": "minimax",
-                        "tiger_config": minimax_config_str,
-                        "goat_algorithm": "mcts",
-                        "goat_config": mcts_config_str
-                    }
-                    
-                    # Write to CSV and track
-                    writer.writerow(row)
-                    csvfile.flush()
-                    existing_game_ids.add(game_result["game_id"])
-                    games_played_this_session += 1
-                    
-                    # Sync to sheets
-                    self.sheets_sync.add_row(row, self.csv_headers)
-                
-                # Second half: MCTS as Tiger, Minimax as Goat
-                for game_num in range(half_games - mcts_tiger_played):
-                    if game_num % 10 == 0:
-                        print(f"  🐐 Progress: {game_num}/{half_games - mcts_tiger_played} games (MCTS as Tiger)")
-                    
-                    runner = GameRunner(best_mcts_config, minimax_config)
-                    game_result = runner.run_game()
-                    
-                    # Skip if we've already recorded this game
-                    if game_result["game_id"] in existing_game_ids:
-                        continue
-                    
-                    # Show the result in a fun way
-                    winner = game_result["winner"].upper()
-                    moves = game_result["moves"]
-                    goats_captured = game_result["goats_captured"]
-                    
-                    # Create victory message
-                    if winner == "TIGER":
-                        victory_emoji = "🐯"
-                        victory_msg = f"{victory_emoji} TIGER VICTORY! {victory_emoji} MCTS defeated Minimax-d{depth} in {moves} moves with {goats_captured} captures!"
-                    elif winner == "GOAT":
-                        victory_emoji = "🐐"
-                        victory_msg = f"{victory_emoji} GOAT VICTORY! {victory_emoji} Minimax-d{depth} outsmarted MCTS in {moves} moves!"
-                    else:
-                        victory_emoji = "🤝"
-                        victory_msg = f"{victory_emoji} DRAW! {victory_emoji} MCTS vs Minimax-d{depth} ended in a draw after {moves} moves!"
-                    
-                    if game_num % 10 == 0:
-                        print(f"    {victory_msg}")
-                    
-                    # Prepare row data
-                    row = {
-                        "game_id": game_result["game_id"],
-                        "winner": game_result["winner"],
-                        "reason": game_result["reason"],
-                        "moves": game_result["moves"],
-                        "game_duration": game_result["game_duration"],
-                        "avg_tiger_move_time": game_result["avg_tiger_move_time"],
-                        "avg_goat_move_time": game_result["avg_goat_move_time"],
-                        "first_capture_move": game_result["first_capture_move"],
-                        "goats_captured": game_result["goats_captured"],
-                        "phase_transition_move": game_result["phase_transition_move"],
-                        "move_history": game_result["move_history"],
-                        "tiger_algorithm": "mcts",
-                        "tiger_config": mcts_config_str,
-                        "goat_algorithm": "minimax",
-                        "goat_config": minimax_config_str
-                    }
-                    
-                    # Write to CSV and track
-                    writer.writerow(row)
-                    csvfile.flush()
-                    existing_game_ids.add(game_result["game_id"])
-                    games_played_this_session += 1
-                    
-                    # Sync to sheets
-                    self.sheets_sync.add_row(row, self.csv_headers)
-                
-                # Print completion for this depth
-                print(f"  ✅ Completed {games_played_this_session} games for Minimax depth {depth} vs MCTS")
-            
-            # Final sync
-            self.sheets_sync.sync(force=True)
-            
-            print(f"\n🏆 MAIN COMPETITION COMPLETE! 🏆")
-            print(f"📁 Results saved to: {output_file}")
         
         return output_file 
