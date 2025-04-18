@@ -156,8 +156,15 @@ def calculate_win_rates(df):
     
     merged_df['average_win_rate'] = merged_df['total_wins'] / merged_df['total_games']
     
-    # Sort by overall win rate
-    merged_df = merged_df.sort_values('average_win_rate', ascending=False)
+    # Calculate adjusted win rates that count draws as 0.5 points
+    merged_df['adjusted_win_rate_as_tiger'] = (merged_df['wins_as_tiger'] + 0.5 * merged_df['draws_as_tiger']) / merged_df['total_games_as_tiger']
+    merged_df['adjusted_win_rate_as_goat'] = (merged_df['wins_as_goat'] + 0.5 * merged_df['draws_as_goat']) / merged_df['total_games_as_goat']
+    
+    # Calculate overall adjusted win rate that counts draws as 0.5 points
+    merged_df['adjusted_win_rate'] = (merged_df['total_wins'] + 0.5 * merged_df['total_draws']) / merged_df['total_games']
+    
+    # Sort by adjusted win rate instead of average win rate to better reflect performance
+    merged_df = merged_df.sort_values('adjusted_win_rate', ascending=False)
     
     return merged_df
 
@@ -348,8 +355,8 @@ def generate_composite_scores(win_rates_df, elo_df):
     max_elo = merged_df['elo_rating'].max()
     merged_df['normalized_elo'] = (merged_df['elo_rating'] - min_elo) / (max_elo - min_elo) if max_elo > min_elo else 0.5
     
-    # Calculate composite score (50% win rate, 50% Elo)
-    merged_df['composite_score'] = 0.5 * merged_df['average_win_rate'] + 0.5 * merged_df['normalized_elo']
+    # Calculate composite score (50% adjusted win rate, 50% Elo)
+    merged_df['composite_score'] = 0.5 * merged_df['adjusted_win_rate'] + 0.5 * merged_df['normalized_elo']
     
     # Sort by composite score
     merged_df = merged_df.sort_values('composite_score', ascending=False)
@@ -388,6 +395,7 @@ def select_top_configurations(composite_scores_df, n=3):
             'rollout_depth': int(top_candidate['rollout_depth']),
             'exploration_weight': float(top_candidate['exploration_weight']),
             'composite_score': float(top_candidate['composite_score']),
+            'adjusted_win_rate': float(top_candidate['adjusted_win_rate']),
             'average_win_rate': float(top_candidate['average_win_rate']),
             'elo_rating': float(top_candidate['elo_rating'])
         }
@@ -419,6 +427,7 @@ def select_top_configurations(composite_scores_df, n=3):
             'rollout_depth': int(top_candidate['rollout_depth']),
             'exploration_weight': float(top_candidate['exploration_weight']),
             'composite_score': float(top_candidate['composite_score']),
+            'adjusted_win_rate': float(top_candidate['adjusted_win_rate']),
             'average_win_rate': float(top_candidate['average_win_rate']),
             'elo_rating': float(top_candidate['elo_rating'])
         }

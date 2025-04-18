@@ -114,7 +114,8 @@ def run_analysis(tournament_file, output_dir):
             f.write(f"   Rollout Depth: {config['rollout_depth']}\n")
             f.write(f"   Exploration Weight: {config['exploration_weight']}\n")
             f.write(f"   Composite Score: {config['composite_score']:.4f}\n")
-            f.write(f"   Win Rate: {config['average_win_rate']:.4f}\n")
+            f.write(f"   Adjusted Win Rate (draws=0.5): {config['adjusted_win_rate']:.4f}\n")
+            f.write(f"   Average Win Rate (wins only): {config['average_win_rate']:.4f}\n")
             f.write(f"   Elo Rating: {config['elo_rating']:.1f}\n\n")
         
         f.write("Analysis Outputs:\n")

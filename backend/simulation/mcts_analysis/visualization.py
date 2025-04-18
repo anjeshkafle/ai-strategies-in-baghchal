@@ -21,7 +21,7 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
     """
     ensure_directory(output_dir)
     
-    # Get top 10 configurations by win rate
+    # Get top 10 configurations by adjusted win rate
     top_10 = win_rates_df.head(10).copy()
     
     # Create a color mapping for policies
@@ -43,10 +43,10 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
     # Create the plot
     plt.figure(figsize=(12, 6))
     
-    # Plot overall win rate
+    # Plot overall adjusted win rate (includes draws as 0.5 points)
     bars = plt.bar(
         top_10['config_label'],
-        top_10['average_win_rate'],
+        top_10['adjusted_win_rate'],
         color=bar_colors,
         alpha=0.7
     )
@@ -55,7 +55,7 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
     for i, (_, row) in enumerate(top_10.iterrows()):
         plt.plot(
             [i, i],
-            [row['win_rate_as_tiger'], row['win_rate_as_goat']],
+            [row['adjusted_win_rate_as_tiger'], row['adjusted_win_rate_as_goat']],
             color='black',
             linestyle='-',
             linewidth=2,
@@ -63,16 +63,16 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
         )
         
         # Add markers for tiger and goat win rates
-        plt.plot(i, row['win_rate_as_tiger'], 'ro', markersize=5, label='Tiger' if i == 0 else "")
-        plt.plot(i, row['win_rate_as_goat'], 'bo', markersize=5, label='Goat' if i == 0 else "")
+        plt.plot(i, row['adjusted_win_rate_as_tiger'], 'ro', markersize=5, label='Tiger' if i == 0 else "")
+        plt.plot(i, row['adjusted_win_rate_as_goat'], 'bo', markersize=5, label='Goat' if i == 0 else "")
     
     # Add a horizontal line for 50% win rate
     plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
     
     # Add labels and title
     plt.xlabel('Configuration')
-    plt.ylabel('Win Rate')
-    plt.title('Top 10 MCTS Configurations by Win Rate')
+    plt.ylabel('Win Rate (draws = 0.5 points)')
+    plt.title('Top 10 MCTS Configurations by Win Rate (Time-Constrained: 20s per move, draws = 0.5 points)')
     plt.ylim(0, 1)
     
     # Add legend for the first iteration only to avoid duplicates
@@ -95,17 +95,18 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
     # Rotate x-axis labels for better readability
     plt.xticks(rotation=45, ha='right')
     
-    # Add data labels
+    # Add data labels - positioned to the left of each bar to avoid intersecting with vertical variance lines
     for bar in bars:
         height = bar.get_height()
         plt.text(
-            bar.get_x() + bar.get_width()/2.,
+            bar.get_x() + bar.get_width()*0.25,  # Position at 1/4 of the bar width (more to the left)
             height + 0.02,
             f'{height:.2f}',
             ha='center',
             va='bottom',
             rotation=0,
-            fontsize=8
+            fontsize=8,
+            color='black'
         )
     
     plt.tight_layout()
@@ -144,22 +145,29 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
         # Win rate when playing as tiger with this depth
         tiger_games = df[df['tiger_rollout_depth'] == depth]
         tiger_win_rate = tiger_games['tiger_won'].mean() if len(tiger_games) > 0 else 0
+        tiger_draw_rate = tiger_games['draw'].mean() if len(tiger_games) > 0 else 0
+        tiger_adjusted_win_rate = tiger_win_rate + 0.5 * tiger_draw_rate  # Count draws as 0.5 points
         
         # Win rate when playing as goat with this depth
         goat_games = df[df['goat_rollout_depth'] == depth]
         goat_win_rate = goat_games['goat_won'].mean() if len(goat_games) > 0 else 0
+        goat_draw_rate = goat_games['draw'].mean() if len(goat_games) > 0 else 0
+        goat_adjusted_win_rate = goat_win_rate + 0.5 * goat_draw_rate  # Count draws as 0.5 points
         
         # Overall win rate
         total_games = len(tiger_games) + len(goat_games)
-        overall_win_rate = (
-            (tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()) / total_games
-        ) if total_games > 0 else 0
+        if total_games > 0:
+            total_wins = tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()
+            total_draws = tiger_games['draw'].sum() + goat_games['draw'].sum()
+            overall_adjusted_win_rate = (total_wins + 0.5 * total_draws) / total_games
+        else:
+            overall_adjusted_win_rate = 0
         
         depth_win_rates.append({
             'depth': depth,
-            'tiger_win_rate': tiger_win_rate,
-            'goat_win_rate': goat_win_rate,
-            'overall_win_rate': overall_win_rate,
+            'tiger_adjusted_win_rate': tiger_adjusted_win_rate,
+            'goat_adjusted_win_rate': goat_adjusted_win_rate,
+            'overall_adjusted_win_rate': overall_adjusted_win_rate,
             'game_count': total_games
         })
     
@@ -172,14 +180,21 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     r1 = np.arange(len(depths))
     r2 = [x + width for x in r1]
     
-    # Make the plot
-    plt.bar(r1, depth_df['tiger_win_rate'], width=width, color='indianred', label='As Tiger')
-    plt.bar(r2, depth_df['goat_win_rate'], width=width, color='royalblue', label='As Goat')
+    # Make the plot for depth chart
+    plt.bar(r1, depth_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
+    plt.bar(r2, depth_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
+    
+    # Add value labels to the top of each bar
+    for i, value in enumerate(depth_df['tiger_adjusted_win_rate']):
+        plt.text(r1[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    
+    for i, value in enumerate(depth_df['goat_adjusted_win_rate']):
+        plt.text(r2[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
     
     # Add labels and title
     plt.xlabel('Rollout Depth')
-    plt.ylabel('Win Rate')
-    plt.title('Win Rate by Rollout Depth')
+    plt.ylabel('Win Rate (draws = 0.5 points)')
+    plt.title('Win Rate by Rollout Depth (Time-Constrained: 20s per move, draws = 0.5 points)')
     plt.xticks([r + width/2 for r in range(len(depths))], depths)
     plt.ylim(0, 1)
     
@@ -224,22 +239,29 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
         # Win rate when playing as tiger with this weight
         tiger_games = df[df['tiger_exploration_weight'] == weight]
         tiger_win_rate = tiger_games['tiger_won'].mean() if len(tiger_games) > 0 else 0
+        tiger_draw_rate = tiger_games['draw'].mean() if len(tiger_games) > 0 else 0
+        tiger_adjusted_win_rate = tiger_win_rate + 0.5 * tiger_draw_rate  # Count draws as 0.5 points
         
         # Win rate when playing as goat with this weight
         goat_games = df[df['goat_exploration_weight'] == weight]
         goat_win_rate = goat_games['goat_won'].mean() if len(goat_games) > 0 else 0
+        goat_draw_rate = goat_games['draw'].mean() if len(goat_games) > 0 else 0
+        goat_adjusted_win_rate = goat_win_rate + 0.5 * goat_draw_rate  # Count draws as 0.5 points
         
         # Overall win rate
         total_games = len(tiger_games) + len(goat_games)
-        overall_win_rate = (
-            (tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()) / total_games
-        ) if total_games > 0 else 0
+        if total_games > 0:
+            total_wins = tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()
+            total_draws = tiger_games['draw'].sum() + goat_games['draw'].sum()
+            overall_adjusted_win_rate = (total_wins + 0.5 * total_draws) / total_games
+        else:
+            overall_adjusted_win_rate = 0
         
         weight_win_rates.append({
             'weight': weight,
-            'tiger_win_rate': tiger_win_rate,
-            'goat_win_rate': goat_win_rate,
-            'overall_win_rate': overall_win_rate,
+            'tiger_adjusted_win_rate': tiger_adjusted_win_rate,
+            'goat_adjusted_win_rate': goat_adjusted_win_rate,
+            'overall_adjusted_win_rate': overall_adjusted_win_rate,
             'game_count': total_games
         })
     
@@ -252,14 +274,21 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     r1 = np.arange(len(weights))
     r2 = [x + width for x in r1]
     
-    # Make the plot
-    plt.bar(r1, weight_df['tiger_win_rate'], width=width, color='indianred', label='As Tiger')
-    plt.bar(r2, weight_df['goat_win_rate'], width=width, color='royalblue', label='As Goat')
+    # Make the plot for exploration weight chart
+    plt.bar(r1, weight_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
+    plt.bar(r2, weight_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
+    
+    # Add value labels to the top of each bar
+    for i, value in enumerate(weight_df['tiger_adjusted_win_rate']):
+        plt.text(r1[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    
+    for i, value in enumerate(weight_df['goat_adjusted_win_rate']):
+        plt.text(r2[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
     
     # Add labels and title
     plt.xlabel('Exploration Weight')
-    plt.ylabel('Win Rate')
-    plt.title('Win Rate by Exploration Weight')
+    plt.ylabel('Win Rate (draws = 0.5 points)')
+    plt.title('Win Rate by Exploration Weight (Time-Constrained: 20s per move, draws = 0.5 points)')
     plt.xticks([r + width/2 for r in range(len(weights))], weights)
     plt.ylim(0, 1)
     
@@ -277,11 +306,11 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
             )
         
         plt.text(
-            0, 0.9,
+            0.02, 0.95,  # Adjusted to match the padding of the legend
             "\n".join(text_lines),
             transform=plt.gca().transAxes,
             ha='left',
-            bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8)
+            bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8)  # Reduced padding to match legend style
         )
     
     plt.legend()
@@ -310,22 +339,29 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
         # Win rate when playing as tiger with this policy
         tiger_games = df[df['tiger_rollout_policy'] == policy]
         tiger_win_rate = tiger_games['tiger_won'].mean() if len(tiger_games) > 0 else 0
+        tiger_draw_rate = tiger_games['draw'].mean() if len(tiger_games) > 0 else 0
+        tiger_adjusted_win_rate = tiger_win_rate + 0.5 * tiger_draw_rate  # Count draws as 0.5 points
         
         # Win rate when playing as goat with this policy
         goat_games = df[df['goat_rollout_policy'] == policy]
         goat_win_rate = goat_games['goat_won'].mean() if len(goat_games) > 0 else 0
+        goat_draw_rate = goat_games['draw'].mean() if len(goat_games) > 0 else 0
+        goat_adjusted_win_rate = goat_win_rate + 0.5 * goat_draw_rate  # Count draws as 0.5 points
         
         # Overall win rate
         total_games = len(tiger_games) + len(goat_games)
-        overall_win_rate = (
-            (tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()) / total_games
-        ) if total_games > 0 else 0
+        if total_games > 0:
+            total_wins = tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()
+            total_draws = tiger_games['draw'].sum() + goat_games['draw'].sum()
+            overall_adjusted_win_rate = (total_wins + 0.5 * total_draws) / total_games
+        else:
+            overall_adjusted_win_rate = 0
         
         policy_win_rates.append({
             'policy': policy,
-            'tiger_win_rate': tiger_win_rate,
-            'goat_win_rate': goat_win_rate,
-            'overall_win_rate': overall_win_rate,
+            'tiger_adjusted_win_rate': tiger_adjusted_win_rate,
+            'goat_adjusted_win_rate': goat_adjusted_win_rate,
+            'overall_adjusted_win_rate': overall_adjusted_win_rate,
             'game_count': total_games
         })
     
@@ -338,14 +374,21 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     r1 = np.arange(len(policies))
     r2 = [x + width for x in r1]
     
-    # Make the plot
-    plt.bar(r1, policy_df['tiger_win_rate'], width=width, color='indianred', label='As Tiger')
-    plt.bar(r2, policy_df['goat_win_rate'], width=width, color='royalblue', label='As Goat')
+    # Make the plot for policy chart
+    plt.bar(r1, policy_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
+    plt.bar(r2, policy_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
+    
+    # Add value labels to the top of each bar
+    for i, value in enumerate(policy_df['tiger_adjusted_win_rate']):
+        plt.text(r1[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    
+    for i, value in enumerate(policy_df['goat_adjusted_win_rate']):
+        plt.text(r2[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
     
     # Add labels and title
     plt.xlabel('Rollout Policy')
-    plt.ylabel('Win Rate')
-    plt.title('Win Rate by Rollout Policy')
+    plt.ylabel('Win Rate (draws = 0.5 points)')
+    plt.title('Win Rate by Rollout Policy (Time-Constrained: 20s per move, draws = 0.5 points)')
     plt.xticks([r + width/2 for r in range(len(policies))], policies)
     plt.ylim(0, 1)
     
@@ -420,9 +463,14 @@ def create_elo_rating_chart(elo_df, output_dir):
     # Add labels and title
     plt.xlabel('Configuration')
     plt.ylabel('Elo Rating')
-    plt.title('Top 10 MCTS Configurations by Elo Rating')
+    plt.title('Top 10 MCTS Configurations by Elo Rating (Time-Constrained: 20s per move)')
     
-    # Add policy legend
+    # Get the current y-axis limits
+    y_min, y_max = plt.ylim()
+    # Add 20% more space at the top to make room for the legend
+    plt.ylim(y_min, y_max + (y_max - y_min) * 0.2)
+    
+    # Add policy legend with better positioning to avoid overlap
     policy_patches = [
         plt.Rectangle((0, 0), 1, 1, color=color, alpha=0.7)
         for policy, color in policy_colors.items()
@@ -430,23 +478,24 @@ def create_elo_rating_chart(elo_df, output_dir):
     plt.legend(
         policy_patches,
         list(policy_colors.keys()),
-        loc='upper right'
+        loc='upper right'  # Changed back to upper right with more vertical space
     )
     
     # Rotate x-axis labels for better readability
     plt.xticks(rotation=45, ha='right')
     
-    # Add data labels
+    # Add data labels - centered at the top of each bar for the Elo ratings chart
     for bar in bars:
         height = bar.get_height()
         plt.text(
-            bar.get_x() + bar.get_width()/2.,
+            bar.get_x() + bar.get_width()/2.,  # Centered position
             height + 10,
             f'{height:.0f}',
             ha='center',
             va='bottom',
             rotation=0,
-            fontsize=8
+            fontsize=8,
+            color='black'
         )
     
     plt.tight_layout()
@@ -509,7 +558,7 @@ def create_composite_score_chart(composite_df, top_configs, output_dir):
     # Add labels and title
     plt.xlabel('Configuration')
     plt.ylabel('Composite Score')
-    plt.title('Top 10 MCTS Configurations by Composite Score')
+    plt.title('Top 10 MCTS Configurations by Composite Score (Time-Constrained: 20s per move, draws = 0.5 points)')
     plt.ylim(0, 1)
     
     # Add policy legend
@@ -526,17 +575,18 @@ def create_composite_score_chart(composite_df, top_configs, output_dir):
     # Rotate x-axis labels for better readability
     plt.xticks(rotation=45, ha='right')
     
-    # Add data labels
+    # Add data labels - centered at the top of each bar for the composite scores chart
     for bar in bars:
         height = bar.get_height()
         plt.text(
-            bar.get_x() + bar.get_width()/2.,
+            bar.get_x() + bar.get_width()/2.,  # Centered position
             height + 0.02,
             f'{height:.2f}',
             ha='center',
             va='bottom',
             rotation=0,
-            fontsize=8
+            fontsize=8,
+            color='black'
         )
     
     plt.tight_layout()
@@ -567,8 +617,8 @@ def create_heatmap(df, output_dir):
     # Get unique exploration weights
     weights = sorted(set(df['tiger_exploration_weight'].unique()) | set(df['goat_exploration_weight'].unique()))
     
-    # Create the figure
-    fig, axes = plt.subplots(1, len(policies), figsize=(15, 5), sharey=True)
+    # Create the figure with extra bottom margin to prevent clipping
+    fig, axes = plt.subplots(1, len(policies), figsize=(15, 5.5), sharey=True)
     if len(policies) == 1:
         axes = [axes]
     
@@ -591,6 +641,7 @@ def create_heatmap(df, output_dir):
                     (policy_games_tiger['tiger_exploration_weight'] == weight)
                 ]
                 tiger_wins = tiger_games['tiger_won'].sum() if len(tiger_games) > 0 else 0
+                tiger_draws = tiger_games['draw'].sum() if len(tiger_games) > 0 else 0
                 
                 # Goat perspective
                 goat_games = policy_games_goat[
@@ -598,11 +649,13 @@ def create_heatmap(df, output_dir):
                     (policy_games_goat['goat_exploration_weight'] == weight)
                 ]
                 goat_wins = goat_games['goat_won'].sum() if len(goat_games) > 0 else 0
+                goat_draws = goat_games['draw'].sum() if len(goat_games) > 0 else 0
                 
                 # Total games for this configuration
                 total_games = len(tiger_games) + len(goat_games)
                 if total_games > 0:
-                    win_rate = (tiger_wins + goat_wins) / total_games
+                    # Count draws as 0.5 points for adjusted win rate
+                    win_rate = (tiger_wins + goat_wins + 0.5 * (tiger_draws + goat_draws)) / total_games
                     heatmap_data[d_idx, w_idx] = win_rate
                     game_counts[d_idx, w_idx] = total_games
         
@@ -642,12 +695,13 @@ def create_heatmap(df, output_dir):
                         fontsize=8
                     )
     
-    # Add colorbar
-    cbar = fig.colorbar(im, ax=axes, orientation='horizontal', pad=0.15)
-    cbar.set_label('Win Rate')
+    # Add colorbar with reduced height to avoid overlapping with the heatmap
+    cbar_ax = fig.add_axes([0.3, 0.08, 0.4, 0.03])  # Adjusted position to avoid overlap
+    cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal')
+    cbar.set_label('Win Rate (Time-Constrained: 20s per move, draws = 0.5 points)')
     
-    plt.suptitle('MCTS Configuration Performance Heatmap')
-    plt.tight_layout()
+    plt.suptitle('MCTS Configuration Performance Heatmap (draws = 0.5 points)')
+    plt.tight_layout(rect=[0, 0.15, 1, 0.97])  # Adjust the figure layout to make room for the colorbar
     
     # Save the figure
     output_path = os.path.join(output_dir, 'parameter_heatmap.png')
