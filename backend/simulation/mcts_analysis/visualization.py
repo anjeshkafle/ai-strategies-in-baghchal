@@ -1,0 +1,657 @@
+"""
+Visualization functions for MCTS tournament analysis.
+"""
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
+import os
+
+def ensure_directory(path):
+    """Ensure output directory exists."""
+    os.makedirs(path, exist_ok=True)
+
+def create_win_rate_bar_chart(win_rates_df, output_dir):
+    """
+    Create bar chart of win rates for top 10 configurations.
+    
+    Args:
+        win_rates_df: DataFrame with win rates
+        output_dir: Directory to save output figure
+    """
+    ensure_directory(output_dir)
+    
+    # Get top 10 configurations by win rate
+    top_10 = win_rates_df.head(10).copy()
+    
+    # Create a color mapping for policies
+    policy_colors = {
+        'random': 'skyblue',
+        'lightweight': 'lightgreen',
+        'guided': 'coral'
+    }
+    
+    # Create a simplified configuration label
+    top_10['config_label'] = top_10.apply(
+        lambda row: f"{row['rollout_policy']}\nd={row['rollout_depth']}\ne={row['exploration_weight']}",
+        axis=1
+    )
+    
+    # Create the bar colors based on policy
+    bar_colors = [policy_colors.get(policy, 'gray') for policy in top_10['rollout_policy']]
+    
+    # Create the plot
+    plt.figure(figsize=(12, 6))
+    
+    # Plot overall win rate
+    bars = plt.bar(
+        top_10['config_label'],
+        top_10['average_win_rate'],
+        color=bar_colors,
+        alpha=0.7
+    )
+    
+    # Add win rate as tiger and goat as error bars
+    for i, (_, row) in enumerate(top_10.iterrows()):
+        plt.plot(
+            [i, i],
+            [row['win_rate_as_tiger'], row['win_rate_as_goat']],
+            color='black',
+            linestyle='-',
+            linewidth=2,
+            alpha=0.6
+        )
+        
+        # Add markers for tiger and goat win rates
+        plt.plot(i, row['win_rate_as_tiger'], 'ro', markersize=5, label='Tiger' if i == 0 else "")
+        plt.plot(i, row['win_rate_as_goat'], 'bo', markersize=5, label='Goat' if i == 0 else "")
+    
+    # Add a horizontal line for 50% win rate
+    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Add labels and title
+    plt.xlabel('Configuration')
+    plt.ylabel('Win Rate')
+    plt.title('Top 10 MCTS Configurations by Win Rate')
+    plt.ylim(0, 1)
+    
+    # Add legend for the first iteration only to avoid duplicates
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
+    
+    # Add policy legend
+    policy_patches = [
+        plt.Rectangle((0, 0), 1, 1, color=color, alpha=0.7)
+        for policy, color in policy_colors.items()
+    ]
+    plt.legend(
+        policy_patches + [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='r', markersize=8),
+                         plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='b', markersize=8)],
+        list(policy_colors.keys()) + ['Tiger', 'Goat'],
+        loc='upper right'
+    )
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    
+    # Add data labels
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width()/2.,
+            height + 0.02,
+            f'{height:.2f}',
+            ha='center',
+            va='bottom',
+            rotation=0,
+            fontsize=8
+        )
+    
+    plt.tight_layout()
+    
+    # Save the figure
+    output_path = os.path.join(output_dir, 'win_rates.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    print(f"Win rate chart saved to {output_path}")
+
+def create_parameter_performance_charts(df, stats_results, output_dir):
+    """
+    Create bar charts for each parameter's performance.
+    
+    Args:
+        df: Preprocessed tournament data
+        stats_results: Dictionary with statistical test results
+        output_dir: Directory to save output figures
+    """
+    ensure_directory(output_dir)
+    
+    # 1. Rollout Depth Chart
+    plt.figure(figsize=(8, 6))
+    
+    # Extract unique depth values
+    depths = sorted(set(df['tiger_rollout_depth'].unique()) | set(df['goat_rollout_depth'].unique()))
+    
+    # Calculate win rates by depth
+    depth_win_rates = []
+    
+    for depth in depths:
+        # Games where either tiger or goat used this depth
+        depth_games = df[(df['tiger_rollout_depth'] == depth) | (df['goat_rollout_depth'] == depth)]
+        
+        # Win rate when playing as tiger with this depth
+        tiger_games = df[df['tiger_rollout_depth'] == depth]
+        tiger_win_rate = tiger_games['tiger_won'].mean() if len(tiger_games) > 0 else 0
+        
+        # Win rate when playing as goat with this depth
+        goat_games = df[df['goat_rollout_depth'] == depth]
+        goat_win_rate = goat_games['goat_won'].mean() if len(goat_games) > 0 else 0
+        
+        # Overall win rate
+        total_games = len(tiger_games) + len(goat_games)
+        overall_win_rate = (
+            (tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()) / total_games
+        ) if total_games > 0 else 0
+        
+        depth_win_rates.append({
+            'depth': depth,
+            'tiger_win_rate': tiger_win_rate,
+            'goat_win_rate': goat_win_rate,
+            'overall_win_rate': overall_win_rate,
+            'game_count': total_games
+        })
+    
+    depth_df = pd.DataFrame(depth_win_rates)
+    
+    # Width of the bars
+    width = 0.3
+    
+    # Set position of bar on X axis
+    r1 = np.arange(len(depths))
+    r2 = [x + width for x in r1]
+    
+    # Make the plot
+    plt.bar(r1, depth_df['tiger_win_rate'], width=width, color='indianred', label='As Tiger')
+    plt.bar(r2, depth_df['goat_win_rate'], width=width, color='royalblue', label='As Goat')
+    
+    # Add labels and title
+    plt.xlabel('Rollout Depth')
+    plt.ylabel('Win Rate')
+    plt.title('Win Rate by Rollout Depth')
+    plt.xticks([r + width/2 for r in range(len(depths))], depths)
+    plt.ylim(0, 1)
+    
+    # Add a horizontal line for 50% win rate
+    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Add text with t-test results if available
+    if 'depth_ttest' in stats_results:
+        p_value = stats_results['depth_ttest']['p_value']
+        plt.text(
+            0.5, 0.9,
+            f"T-test p-value: {p_value:.4f}" +
+            (" (significant)" if p_value < 0.05 else ""),
+            transform=plt.gca().transAxes,
+            ha='center',
+            bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8)
+        )
+    
+    plt.legend()
+    plt.tight_layout()
+    
+    # Save the figure
+    output_path = os.path.join(output_dir, 'depth_performance.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    print(f"Depth performance chart saved to {output_path}")
+    
+    # 2. Exploration Weight Chart
+    plt.figure(figsize=(10, 6))
+    
+    # Extract unique exploration weights
+    weights = sorted(set(df['tiger_exploration_weight'].unique()) | set(df['goat_exploration_weight'].unique()))
+    
+    # Calculate win rates by exploration weight
+    weight_win_rates = []
+    
+    for weight in weights:
+        # Games where either tiger or goat used this weight
+        weight_games = df[(df['tiger_exploration_weight'] == weight) | (df['goat_exploration_weight'] == weight)]
+        
+        # Win rate when playing as tiger with this weight
+        tiger_games = df[df['tiger_exploration_weight'] == weight]
+        tiger_win_rate = tiger_games['tiger_won'].mean() if len(tiger_games) > 0 else 0
+        
+        # Win rate when playing as goat with this weight
+        goat_games = df[df['goat_exploration_weight'] == weight]
+        goat_win_rate = goat_games['goat_won'].mean() if len(goat_games) > 0 else 0
+        
+        # Overall win rate
+        total_games = len(tiger_games) + len(goat_games)
+        overall_win_rate = (
+            (tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()) / total_games
+        ) if total_games > 0 else 0
+        
+        weight_win_rates.append({
+            'weight': weight,
+            'tiger_win_rate': tiger_win_rate,
+            'goat_win_rate': goat_win_rate,
+            'overall_win_rate': overall_win_rate,
+            'game_count': total_games
+        })
+    
+    weight_df = pd.DataFrame(weight_win_rates)
+    
+    # Width of the bars
+    width = 0.3
+    
+    # Set position of bar on X axis
+    r1 = np.arange(len(weights))
+    r2 = [x + width for x in r1]
+    
+    # Make the plot
+    plt.bar(r1, weight_df['tiger_win_rate'], width=width, color='indianred', label='As Tiger')
+    plt.bar(r2, weight_df['goat_win_rate'], width=width, color='royalblue', label='As Goat')
+    
+    # Add labels and title
+    plt.xlabel('Exploration Weight')
+    plt.ylabel('Win Rate')
+    plt.title('Win Rate by Exploration Weight')
+    plt.xticks([r + width/2 for r in range(len(weights))], weights)
+    plt.ylim(0, 1)
+    
+    # Add a horizontal line for 50% win rate
+    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Add text with t-test results if available
+    if 'exploration_weight_ttests' in stats_results and stats_results['exploration_weight_ttests']:
+        text_lines = []
+        for key, result in stats_results['exploration_weight_ttests'].items():
+            p_value = result['p_value']
+            text_lines.append(
+                f"{key}: p={p_value:.4f}" +
+                (" *" if p_value < 0.05 else "")
+            )
+        
+        plt.text(
+            0, 0.9,
+            "\n".join(text_lines),
+            transform=plt.gca().transAxes,
+            ha='left',
+            bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8)
+        )
+    
+    plt.legend()
+    plt.tight_layout()
+    
+    # Save the figure
+    output_path = os.path.join(output_dir, 'exploration_performance.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    print(f"Exploration weight performance chart saved to {output_path}")
+    
+    # 3. Rollout Policy Chart
+    plt.figure(figsize=(10, 6))
+    
+    # Extract unique policies
+    policies = sorted(set(df['tiger_rollout_policy'].unique()) | set(df['goat_rollout_policy'].unique()))
+    
+    # Calculate win rates by policy
+    policy_win_rates = []
+    
+    for policy in policies:
+        # Games where either tiger or goat used this policy
+        policy_games = df[(df['tiger_rollout_policy'] == policy) | (df['goat_rollout_policy'] == policy)]
+        
+        # Win rate when playing as tiger with this policy
+        tiger_games = df[df['tiger_rollout_policy'] == policy]
+        tiger_win_rate = tiger_games['tiger_won'].mean() if len(tiger_games) > 0 else 0
+        
+        # Win rate when playing as goat with this policy
+        goat_games = df[df['goat_rollout_policy'] == policy]
+        goat_win_rate = goat_games['goat_won'].mean() if len(goat_games) > 0 else 0
+        
+        # Overall win rate
+        total_games = len(tiger_games) + len(goat_games)
+        overall_win_rate = (
+            (tiger_games['tiger_won'].sum() + goat_games['goat_won'].sum()) / total_games
+        ) if total_games > 0 else 0
+        
+        policy_win_rates.append({
+            'policy': policy,
+            'tiger_win_rate': tiger_win_rate,
+            'goat_win_rate': goat_win_rate,
+            'overall_win_rate': overall_win_rate,
+            'game_count': total_games
+        })
+    
+    policy_df = pd.DataFrame(policy_win_rates)
+    
+    # Width of the bars
+    width = 0.3
+    
+    # Set position of bar on X axis
+    r1 = np.arange(len(policies))
+    r2 = [x + width for x in r1]
+    
+    # Make the plot
+    plt.bar(r1, policy_df['tiger_win_rate'], width=width, color='indianred', label='As Tiger')
+    plt.bar(r2, policy_df['goat_win_rate'], width=width, color='royalblue', label='As Goat')
+    
+    # Add labels and title
+    plt.xlabel('Rollout Policy')
+    plt.ylabel('Win Rate')
+    plt.title('Win Rate by Rollout Policy')
+    plt.xticks([r + width/2 for r in range(len(policies))], policies)
+    plt.ylim(0, 1)
+    
+    # Add a horizontal line for 50% win rate
+    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Add text with ANOVA results if available
+    if 'policy_anova' in stats_results:
+        p_value = stats_results['policy_anova']['p_value']
+        plt.text(
+            0.5, 0.9,
+            f"ANOVA p-value: {p_value:.4f}" +
+            (" (significant)" if p_value < 0.05 else ""),
+            transform=plt.gca().transAxes,
+            ha='center',
+            bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8)
+        )
+    
+    plt.legend()
+    plt.tight_layout()
+    
+    # Save the figure
+    output_path = os.path.join(output_dir, 'policy_performance.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    print(f"Policy performance chart saved to {output_path}")
+
+def create_elo_rating_chart(elo_df, output_dir):
+    """
+    Create bar chart of Elo ratings.
+    
+    Args:
+        elo_df: DataFrame with Elo ratings
+        output_dir: Directory to save output figure
+    """
+    ensure_directory(output_dir)
+    
+    # Get top 10 configurations by Elo rating
+    top_10 = elo_df.head(10).copy()
+    
+    # Create a color mapping for policies
+    policy_colors = {
+        'random': 'skyblue',
+        'lightweight': 'lightgreen',
+        'guided': 'coral'
+    }
+    
+    # Create a simplified configuration label
+    top_10['config_label'] = top_10.apply(
+        lambda row: f"{row['rollout_policy']}\nd={row['rollout_depth']}\ne={row['exploration_weight']}",
+        axis=1
+    )
+    
+    # Create the bar colors based on policy
+    bar_colors = [policy_colors.get(policy, 'gray') for policy in top_10['rollout_policy']]
+    
+    # Create the plot
+    plt.figure(figsize=(12, 6))
+    
+    # Plot Elo ratings
+    bars = plt.bar(
+        top_10['config_label'],
+        top_10['elo_rating'],
+        color=bar_colors,
+        alpha=0.7
+    )
+    
+    # Add a horizontal line for initial Elo rating (1500)
+    plt.axhline(y=1500, color='gray', linestyle='--', alpha=0.5)
+    
+    # Add labels and title
+    plt.xlabel('Configuration')
+    plt.ylabel('Elo Rating')
+    plt.title('Top 10 MCTS Configurations by Elo Rating')
+    
+    # Add policy legend
+    policy_patches = [
+        plt.Rectangle((0, 0), 1, 1, color=color, alpha=0.7)
+        for policy, color in policy_colors.items()
+    ]
+    plt.legend(
+        policy_patches,
+        list(policy_colors.keys()),
+        loc='upper right'
+    )
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    
+    # Add data labels
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width()/2.,
+            height + 10,
+            f'{height:.0f}',
+            ha='center',
+            va='bottom',
+            rotation=0,
+            fontsize=8
+        )
+    
+    plt.tight_layout()
+    
+    # Save the figure
+    output_path = os.path.join(output_dir, 'elo_ratings.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    print(f"Elo rating chart saved to {output_path}")
+
+def create_composite_score_chart(composite_df, top_configs, output_dir):
+    """
+    Create bar chart of composite scores highlighting top 3.
+    
+    Args:
+        composite_df: DataFrame with composite scores
+        top_configs: List of top configurations
+        output_dir: Directory to save output figure
+    """
+    ensure_directory(output_dir)
+    
+    # Get top 10 configurations by composite score
+    top_10 = composite_df.head(10).copy()
+    
+    # Create a color mapping for policies
+    policy_colors = {
+        'random': 'skyblue',
+        'lightweight': 'lightgreen',
+        'guided': 'coral'
+    }
+    
+    # Create a simplified configuration label
+    top_10['config_label'] = top_10.apply(
+        lambda row: f"{row['rollout_policy']}\nd={row['rollout_depth']}\ne={row['exploration_weight']}",
+        axis=1
+    )
+    
+    # Create the bar colors based on policy
+    bar_colors = [policy_colors.get(policy, 'gray') for policy in top_10['rollout_policy']]
+    
+    # Create the plot
+    plt.figure(figsize=(12, 6))
+    
+    # Create the bars
+    bars = plt.bar(
+        top_10['config_label'],
+        top_10['composite_score'],
+        color=bar_colors,
+        alpha=0.7
+    )
+    
+    # Highlight the top configurations with a border
+    top_config_ids = [config['config_id'] for config in top_configs]
+    for i, (_, row) in enumerate(top_10.iterrows()):
+        if row['config_id'] in top_config_ids:
+            bars[i].set_edgecolor('red')
+            bars[i].set_linewidth(2)
+    
+    # Add labels and title
+    plt.xlabel('Configuration')
+    plt.ylabel('Composite Score')
+    plt.title('Top 10 MCTS Configurations by Composite Score')
+    plt.ylim(0, 1)
+    
+    # Add policy legend
+    policy_patches = [
+        plt.Rectangle((0, 0), 1, 1, color=color, alpha=0.7)
+        for policy, color in policy_colors.items()
+    ]
+    plt.legend(
+        policy_patches + [plt.Rectangle((0, 0), 1, 1, fill=False, edgecolor='red', linewidth=2)],
+        list(policy_colors.keys()) + ['Top Selection'],
+        loc='upper right'
+    )
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    
+    # Add data labels
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width()/2.,
+            height + 0.02,
+            f'{height:.2f}',
+            ha='center',
+            va='bottom',
+            rotation=0,
+            fontsize=8
+        )
+    
+    plt.tight_layout()
+    
+    # Save the figure
+    output_path = os.path.join(output_dir, 'composite_scores.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    print(f"Composite score chart saved to {output_path}")
+
+def create_heatmap(df, output_dir):
+    """
+    Create heat map of parameter interactions.
+    
+    Args:
+        df: Preprocessed tournament data
+        output_dir: Directory to save output figure
+    """
+    ensure_directory(output_dir)
+    
+    # Get unique rollout policies
+    policies = sorted(set(df['tiger_rollout_policy'].unique()) | set(df['goat_rollout_policy'].unique()))
+    
+    # Get unique rollout depths
+    depths = sorted(set(df['tiger_rollout_depth'].unique()) | set(df['goat_rollout_depth'].unique()))
+    
+    # Get unique exploration weights
+    weights = sorted(set(df['tiger_exploration_weight'].unique()) | set(df['goat_exploration_weight'].unique()))
+    
+    # Create the figure
+    fig, axes = plt.subplots(1, len(policies), figsize=(15, 5), sharey=True)
+    if len(policies) == 1:
+        axes = [axes]
+    
+    # For each policy, create a heatmap
+    for i, policy in enumerate(policies):
+        # Initialize a matrix for the heatmap
+        heatmap_data = np.zeros((len(depths), len(weights)))
+        game_counts = np.zeros((len(depths), len(weights)))
+        
+        # Extract games for this policy
+        policy_games_tiger = df[df['tiger_rollout_policy'] == policy]
+        policy_games_goat = df[df['goat_rollout_policy'] == policy]
+        
+        # Calculate win rates for each depth-weight combination
+        for d_idx, depth in enumerate(depths):
+            for w_idx, weight in enumerate(weights):
+                # Tiger perspective
+                tiger_games = policy_games_tiger[
+                    (policy_games_tiger['tiger_rollout_depth'] == depth) &
+                    (policy_games_tiger['tiger_exploration_weight'] == weight)
+                ]
+                tiger_wins = tiger_games['tiger_won'].sum() if len(tiger_games) > 0 else 0
+                
+                # Goat perspective
+                goat_games = policy_games_goat[
+                    (policy_games_goat['goat_rollout_depth'] == depth) &
+                    (policy_games_goat['goat_exploration_weight'] == weight)
+                ]
+                goat_wins = goat_games['goat_won'].sum() if len(goat_games) > 0 else 0
+                
+                # Total games for this configuration
+                total_games = len(tiger_games) + len(goat_games)
+                if total_games > 0:
+                    win_rate = (tiger_wins + goat_wins) / total_games
+                    heatmap_data[d_idx, w_idx] = win_rate
+                    game_counts[d_idx, w_idx] = total_games
+        
+        # Create the heatmap
+        im = axes[i].imshow(
+            heatmap_data,
+            cmap='YlOrRd',
+            vmin=0,
+            vmax=1,
+            aspect='auto'
+        )
+        
+        # Add labels
+        axes[i].set_xticks(np.arange(len(weights)))
+        axes[i].set_yticks(np.arange(len(depths)))
+        axes[i].set_xticklabels(weights)
+        axes[i].set_yticklabels(depths)
+        
+        # Add title
+        axes[i].set_title(f"Policy: {policy}")
+        
+        # Set axis labels (only for the first subplot for y-axis)
+        if i == 0:
+            axes[i].set_ylabel("Rollout Depth")
+        axes[i].set_xlabel("Exploration Weight")
+        
+        # Add text annotations with win rates and game counts
+        for d_idx in range(len(depths)):
+            for w_idx in range(len(weights)):
+                if game_counts[d_idx, w_idx] > 0:
+                    win_rate = heatmap_data[d_idx, w_idx]
+                    axes[i].text(
+                        w_idx, d_idx,
+                        f"{win_rate:.2f}\n({int(game_counts[d_idx, w_idx])})",
+                        ha="center", va="center",
+                        color="black" if win_rate < 0.7 else "white",
+                        fontsize=8
+                    )
+    
+    # Add colorbar
+    cbar = fig.colorbar(im, ax=axes, orientation='horizontal', pad=0.15)
+    cbar.set_label('Win Rate')
+    
+    plt.suptitle('MCTS Configuration Performance Heatmap')
+    plt.tight_layout()
+    
+    # Save the figure
+    output_path = os.path.join(output_dir, 'parameter_heatmap.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
+    print(f"Parameter heatmap saved to {output_path}") 
