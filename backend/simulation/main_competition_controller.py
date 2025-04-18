@@ -273,7 +273,7 @@ class MainCompetitionController:
                 # Log with emojis and better formatting
                 mcts_summary = self._get_config_summary(mcts_config)
                 minimax_summary = self._get_config_summary(minimax_config)
-                self.logger.info(f"🎮 Created matchup pair {pair_id}: 🐯🐐 {mcts_summary} vs {minimax_summary}")
+                self.logger.info(f"[MATCHUP] Created matchup pair {pair_id}: Tiger/Goat {mcts_summary} vs {minimax_summary}")
         
         total_matchups = len(all_matchups)
         if games_per_matchup == float('inf'):
@@ -383,7 +383,7 @@ class MainCompetitionController:
         games_saved = len(existing_game_ids)   # Start from existing count
         
         self.logger.info("Starting competition with multiprocessing")
-        print(f"\n🎬 COMPETITION STARTING! Using {parallel_games} parallel processes")
+        print(f"\n⭐ COMPETITION STARTING! Using {parallel_games} parallel processes")
         print(f"⚔️ Let the games begin! ⚔️\n")
         
         try:
@@ -843,7 +843,7 @@ class MainCompetitionController:
         short_id = game_id[:8] if len(game_id) > 8 else game_id
         
         # Log the game start with emojis and readable agent descriptions
-        self.logger.info(f"🎮 Game {short_id} STARTING: 🐯 {tiger_summary} vs 🐐 {goat_summary} (seed: {seed})")
+        self.logger.info(f"[GAME] Game {short_id} STARTING: Tiger {tiger_summary} vs Goat {goat_summary} (seed: {seed})")
         
         # Create game runner with agent configurations
         # This approach uses the GameRunner class which handles threefold repetition detection
@@ -863,9 +863,11 @@ class MainCompetitionController:
         if winner == "TIGER":
             victory_emoji = "🐯"
             victory_msg = f"Game {short_id} COMPLETED: {victory_emoji} {tiger_summary} defeated {goat_summary} ({moves} moves, {goats_captured} captures)"
+            log_victory_msg = f"Game {short_id} COMPLETED: TIGER {tiger_summary} defeated {goat_summary} ({moves} moves, {goats_captured} captures)"
         elif winner == "GOAT":
             victory_emoji = "🐐"
             victory_msg = f"Game {short_id} COMPLETED: {victory_emoji} {goat_summary} defeated {tiger_summary} ({moves} moves)"
+            log_victory_msg = f"Game {short_id} COMPLETED: GOAT {goat_summary} defeated {tiger_summary} ({moves} moves)"
         else:
             victory_emoji = "🤝"
             reason = result['reason']
@@ -874,9 +876,10 @@ class MainCompetitionController:
             else:
                 reason_msg = reason.lower().replace('_', ' ')
             victory_msg = f"Game {short_id} COMPLETED: {victory_emoji} DRAW between {tiger_summary} and {goat_summary} ({moves} moves, {reason_msg})"
+            log_victory_msg = f"Game {short_id} COMPLETED: DRAW between {tiger_summary} and {goat_summary} ({moves} moves, {reason_msg})"
         
         # Log and print the result
-        self.logger.info(victory_msg)
+        self.logger.info(log_victory_msg)
         print(victory_msg)
         
         # Create result dictionary matching our expected format

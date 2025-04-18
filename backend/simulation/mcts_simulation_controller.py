@@ -515,7 +515,7 @@ class MCTSSimulationController:
                         elapsed_minutes = (current_time - simulation_start_time) / 60
                         remaining_minutes = (end_time - current_time) / 60
                         
-                        print(f"\n==== TOURNAMENT PROGRESS ====")
+                        print(f"\n⭐ TOURNAMENT PROGRESS ====")
                         print(f"🎮 Games completed: {games_played} games played, {games_saved} saved to records")
                         print(f"⏱️ Time: {elapsed_minutes:.1f} minutes elapsed, {remaining_minutes:.1f} minutes remaining")
                         
@@ -599,7 +599,7 @@ class MCTSSimulationController:
                 with mp.Pool(processes=parallel_games) as pool:
                     # Get initial tasks to schedule
                     initial_tasks = get_next_tasks(parallel_games)
-                    print(f"\n🎬 TOURNAMENT STARTING! Scheduling initial batch of {len(initial_tasks)} games...")
+                    print(f"\n⭐ TOURNAMENT STARTING! Scheduling initial batch of {len(initial_tasks)} games...")
                     print(f"⚔️ Let the games begin! ⚔️\n")
                     
                     # Schedule initial tasks
