@@ -138,7 +138,7 @@ def main():
     print(f"Output directory: {output_dir}")
     print(f"Minimax depths: {minimax_depths}")
     print(f"Max time per move: {max_time_per_move} seconds")
-    print(f"Games per matchup: {games_per_matchup if games_per_matchup is not None else '∞ (time-limited)'}")
+    print(f"Games per matchup: {games_per_matchup if games_per_matchup is not None else 'Infinity (time-limited)'}")
     print(f"Max simulation time: {max_simulation_time} minutes")
     print(f"Parallel games: {parallel_games if parallel_games > 0 else 'auto'}")
     

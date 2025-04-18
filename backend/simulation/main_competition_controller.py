@@ -242,7 +242,7 @@ class MainCompetitionController:
             # as we'll be limited by time instead
             self.logger.info(f"No games_per_matchup specified - will run until time limit of {max_simulation_time} minutes")
             games_per_matchup = float('inf')  # Use infinity to indicate time-limited run
-            display_games_per_matchup = "∞"  # Display infinity symbol for time-limited runs
+            display_games_per_matchup = "Infinity"  # Use "Infinity" instead of ∞ to avoid encoding issues on Windows
         else:
             display_games_per_matchup = str(games_per_matchup)
         
@@ -279,7 +279,7 @@ class MainCompetitionController:
         if games_per_matchup == float('inf'):
             # For time-limited runs, set a very large number for display
             total_games = 1000000  # Just a large number for progress percentage
-            display_total_games = "∞"  # Display infinity symbol
+            display_total_games = "Infinity"  # Use "Infinity" instead of ∞ to avoid encoding issues on Windows
         else:
             total_games = total_matchups * games_per_matchup
             display_total_games = str(total_games)
