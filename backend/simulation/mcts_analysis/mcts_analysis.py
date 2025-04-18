@@ -8,6 +8,85 @@ import json
 import os
 import random
 
+def load_config(config_path=None):
+    """
+    Load analysis configuration or use defaults
+    
+    Args:
+        config_path: Path to configuration JSON file
+        
+    Returns:
+        Dictionary with configuration parameters
+    """
+    default_config = {
+        "statistical": {
+            "significance_threshold": 0.05,
+            "confidence_level": 0.95
+        },
+        "elo": {
+            "initial_rating": 1500,
+            "base_k_factor": 32
+        },
+        "composite_score": {
+            "win_rate_weight": 0.5,
+            "elo_weight": 0.5
+        },
+        "top_configs": {
+            "count": 3,
+            "enforce_diversity": True
+        }
+    }
+    
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                
+            # Merge with defaults for any missing values
+            for section in default_config:
+                if section not in config:
+                    config[section] = default_config[section]
+                else:
+                    for key in default_config[section]:
+                        if key not in config[section]:
+                            config[section][key] = default_config[section][key]
+                            
+            return config
+        except Exception as e:
+            print(f"Error loading config: {e}")
+            return default_config
+    else:
+        return default_config
+
+def calculate_confidence_intervals(win_rate, n_games, confidence=0.95):
+    """
+    Calculate Wilson score interval for win rates
+    
+    Args:
+        win_rate: The win rate or adjusted win rate
+        n_games: Number of games played
+        confidence: Confidence level (default 0.95 for 95% CI)
+        
+    Returns:
+        Tuple with (lower_bound, upper_bound)
+    """
+    from scipy import stats
+    
+    if n_games == 0:
+        return (0, 0)
+        
+    z = stats.norm.ppf((1 + confidence) / 2)
+    
+    # Wilson score interval
+    denominator = 1 + z**2/n_games
+    center = (win_rate + z**2/(2*n_games)) / denominator
+    interval = z * np.sqrt(win_rate * (1 - win_rate) / n_games + z**2/(4*n_games**2)) / denominator
+    
+    lower_bound = max(0, center - interval)
+    upper_bound = min(1, center + interval)
+    
+    return (lower_bound, upper_bound)
+
 def load_and_preprocess_data(filepath):
     """
     Load tournament results and preprocess for analysis.
@@ -100,17 +179,26 @@ def calculate_win_rates(df):
         if len(tiger_games) == 0:
             continue
             
+        tiger_win_rate = tiger_games['tiger_won'].sum() / len(tiger_games)
+        tiger_draw_rate = tiger_games['draw'].sum() / len(tiger_games)
+        
         stats = {
             'config_id': config,
             'total_games_as_tiger': len(tiger_games),
             'wins_as_tiger': tiger_games['tiger_won'].sum(),
             'draws_as_tiger': tiger_games['draw'].sum(),
             'losses_as_tiger': tiger_games['goat_won'].sum(),
-            'win_rate_as_tiger': tiger_games['tiger_won'].sum() / len(tiger_games),
-            'draw_rate_as_tiger': tiger_games['draw'].sum() / len(tiger_games),
+            'win_rate_as_tiger': tiger_win_rate,
+            'draw_rate_as_tiger': tiger_draw_rate,
             'avg_game_length_as_tiger': tiger_games['game_length'].mean(),
             'avg_goats_captured': tiger_games['goats_captured'].mean()
         }
+        
+        # Add confidence intervals
+        stats['tiger_ci_lower'], stats['tiger_ci_upper'] = calculate_confidence_intervals(
+            tiger_win_rate, 
+            len(tiger_games)
+        )
         
         # Extract parameters
         params = tiger_games.iloc[0]
@@ -130,6 +218,9 @@ def calculate_win_rates(df):
         goat_games = df[df['goat_config_id'] == config]
         if len(goat_games) == 0:
             continue
+        
+        goat_win_rate = goat_games['goat_won'].sum() / len(goat_games)
+        goat_draw_rate = goat_games['draw'].sum() / len(goat_games)
             
         stats = {
             'config_id': config,
@@ -137,10 +228,16 @@ def calculate_win_rates(df):
             'wins_as_goat': goat_games['goat_won'].sum(),
             'draws_as_goat': goat_games['draw'].sum(),
             'losses_as_goat': goat_games['tiger_won'].sum(),
-            'win_rate_as_goat': goat_games['goat_won'].sum() / len(goat_games),
-            'draw_rate_as_goat': goat_games['draw'].sum() / len(goat_games),
+            'win_rate_as_goat': goat_win_rate,
+            'draw_rate_as_goat': goat_draw_rate,
             'avg_game_length_as_goat': goat_games['game_length'].mean()
         }
+        
+        # Add confidence intervals
+        stats['goat_ci_lower'], stats['goat_ci_upper'] = calculate_confidence_intervals(
+            goat_win_rate, 
+            len(goat_games)
+        )
         
         # Extract parameters
         params = goat_games.iloc[0]
@@ -207,6 +304,8 @@ def calculate_win_rates(df):
         'draw_rate_as_tiger': 'draw_rate_as_tiger',
         'avg_game_length_as_tiger': 'avg_game_length_as_tiger',
         'avg_goats_captured': 'avg_goats_captured',
+        'tiger_ci_lower': 'tiger_ci_lower',
+        'tiger_ci_upper': 'tiger_ci_upper',
         
         'total_games_as_goat': 'total_games_as_goat_goat' if 'total_games_as_goat_goat' in merged_df.columns else 'total_games_as_goat',
         'wins_as_goat': 'wins_as_goat_goat' if 'wins_as_goat_goat' in merged_df.columns else 'wins_as_goat',
@@ -214,7 +313,9 @@ def calculate_win_rates(df):
         'losses_as_goat': 'losses_as_goat_goat' if 'losses_as_goat_goat' in merged_df.columns else 'losses_as_goat',
         'win_rate_as_goat': 'win_rate_as_goat_goat' if 'win_rate_as_goat_goat' in merged_df.columns else 'win_rate_as_goat',
         'draw_rate_as_goat': 'draw_rate_as_goat_goat' if 'draw_rate_as_goat_goat' in merged_df.columns else 'draw_rate_as_goat',
-        'avg_game_length_as_goat': 'avg_game_length_as_goat_goat' if 'avg_game_length_as_goat_goat' in merged_df.columns else 'avg_game_length_as_goat'
+        'avg_game_length_as_goat': 'avg_game_length_as_goat_goat' if 'avg_game_length_as_goat_goat' in merged_df.columns else 'avg_game_length_as_goat',
+        'goat_ci_lower': 'goat_ci_lower_goat' if 'goat_ci_lower_goat' in merged_df.columns else 'goat_ci_lower',
+        'goat_ci_upper': 'goat_ci_upper_goat' if 'goat_ci_upper_goat' in merged_df.columns else 'goat_ci_upper'
     }
     
     # Calculate overall metrics using the corrected column names
@@ -241,6 +342,14 @@ def calculate_win_rates(df):
     # Calculate overall adjusted win rate that counts draws as 0.5 points
     merged_df['adjusted_win_rate'] = (merged_df['total_wins'] + 0.5 * merged_df['total_draws']) / merged_df['total_games']
     
+    # Calculate confidence intervals for adjusted win rates
+    merged_df['adjusted_win_rate_ci_lower'], merged_df['adjusted_win_rate_ci_upper'] = zip(
+        *merged_df.apply(
+            lambda row: calculate_confidence_intervals(row['adjusted_win_rate'], row['total_games']),
+            axis=1
+        )
+    )
+    
     # Sort by adjusted win rate instead of average win rate to better reflect performance
     merged_df = merged_df.sort_values('adjusted_win_rate', ascending=False)
     
@@ -265,18 +374,36 @@ def perform_statistical_tests(df):
     depth4_win_rate = depth4_games['tiger_won'].mean() if 'tiger_won' in depth4_games else 0
     depth6_win_rate = depth6_games['tiger_won'].mean() if 'tiger_won' in depth6_games else 0
     
-    depth_ttest = stats.ttest_ind(
-        depth4_games['game_length'].dropna(),
-        depth6_games['game_length'].dropna(),
-        equal_var=False
-    )
+    # Compare win rates instead of game lengths
+    depth4_win_scores = []
+    for _, game in depth4_games.iterrows():
+        if game['tiger_rollout_depth'] == 4:
+            score = 1 if game['tiger_won'] else 0.5 if game['draw'] else 0
+        elif game['goat_rollout_depth'] == 4:
+            score = 1 if game['goat_won'] else 0.5 if game['draw'] else 0
+        depth4_win_scores.append(score)
     
-    results['depth_ttest'] = {
-        'statistic': depth_ttest.statistic,
-        'p_value': depth_ttest.pvalue,
-        'depth4_win_rate': depth4_win_rate,
-        'depth6_win_rate': depth6_win_rate
-    }
+    depth6_win_scores = []
+    for _, game in depth6_games.iterrows():
+        if game['tiger_rollout_depth'] == 6:
+            score = 1 if game['tiger_won'] else 0.5 if game['draw'] else 0
+        elif game['goat_rollout_depth'] == 6:
+            score = 1 if game['goat_won'] else 0.5 if game['draw'] else 0
+        depth6_win_scores.append(score)
+    
+    if depth4_win_scores and depth6_win_scores:
+        depth_ttest = stats.ttest_ind(
+            depth4_win_scores,
+            depth6_win_scores,
+            equal_var=False
+        )
+        
+        results['depth_ttest'] = {
+            'statistic': depth_ttest.statistic,
+            'p_value': depth_ttest.pvalue,
+            'depth4_win_rate': np.mean(depth4_win_scores),
+            'depth6_win_rate': np.mean(depth6_win_scores)
+        }
     
     # T-tests for exploration weights
     weights = [1.0, 1.414, 2.0]
@@ -292,28 +419,58 @@ def perform_statistical_tests(df):
             
             if len(w1_games) == 0 or len(w2_games) == 0:
                 continue
+            
+            # Compare win rates instead of game lengths
+            w1_win_scores = []
+            for _, game in w1_games.iterrows():
+                if game['tiger_exploration_weight'] == w1:
+                    score = 1 if game['tiger_won'] else 0.5 if game['draw'] else 0
+                elif game['goat_exploration_weight'] == w1:
+                    score = 1 if game['goat_won'] else 0.5 if game['draw'] else 0
+                w1_win_scores.append(score)
+            
+            w2_win_scores = []
+            for _, game in w2_games.iterrows():
+                if game['tiger_exploration_weight'] == w2:
+                    score = 1 if game['tiger_won'] else 0.5 if game['draw'] else 0
+                elif game['goat_exploration_weight'] == w2:
+                    score = 1 if game['goat_won'] else 0.5 if game['draw'] else 0
+                w2_win_scores.append(score)
                 
             weight_ttest = stats.ttest_ind(
-                w1_games['game_length'].dropna(),
-                w2_games['game_length'].dropna(),
+                w1_win_scores,
+                w2_win_scores,
                 equal_var=False
             )
             
             weight_results[f'{w1}_vs_{w2}'] = {
                 'statistic': weight_ttest.statistic,
-                'p_value': weight_ttest.pvalue
+                'p_value': weight_ttest.pvalue,
+                'w1_win_rate': np.mean(w1_win_scores),
+                'w2_win_rate': np.mean(w2_win_scores)
             }
     
     results['exploration_weight_ttests'] = weight_results
     
     # ANOVA for rollout policies
     policy_groups = []
+    policy_win_rates = []
     policy_names = []
     
     for policy in ['random', 'lightweight', 'guided']:
         policy_games = df[(df['tiger_rollout_policy'] == policy) | (df['goat_rollout_policy'] == policy)]
         if len(policy_games) > 0:
-            policy_groups.append(policy_games['game_length'].dropna())
+            # Compare win rates instead of game lengths
+            policy_scores = []
+            for _, game in policy_games.iterrows():
+                if game['tiger_rollout_policy'] == policy:
+                    score = 1 if game['tiger_won'] else 0.5 if game['draw'] else 0
+                elif game['goat_rollout_policy'] == policy:
+                    score = 1 if game['goat_won'] else 0.5 if game['draw'] else 0
+                policy_scores.append(score)
+                
+            policy_groups.append(policy_scores)
+            policy_win_rates.append(np.mean(policy_scores))
             policy_names.append(policy)
     
     if len(policy_groups) > 1:
@@ -322,7 +479,8 @@ def perform_statistical_tests(df):
         results['policy_anova'] = {
             'statistic': policy_anova.statistic,
             'p_value': policy_anova.pvalue,
-            'policies': policy_names
+            'policies': policy_names,
+            'policy_win_rates': policy_win_rates
         }
     
     return results
@@ -345,6 +503,9 @@ def calculate_elo_ratings(df, K=32, initial_rating=1500):
     # Initialize ratings
     ratings = {config: initial_rating for config in all_configs}
     
+    # Count games per configuration
+    games_played = {config: 0 for config in all_configs}
+    
     # Function to calculate expected score
     def expected_score(rating_a, rating_b):
         return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
@@ -352,6 +513,23 @@ def calculate_elo_ratings(df, K=32, initial_rating=1500):
     # Function to update ratings
     def update_rating(rating, expected, actual, k_factor):
         return rating + k_factor * (actual - expected)
+    
+    # Function to calculate dynamic K-factor based on rating difference and games played
+    def calculate_k_factor(rating_a, rating_b, games_played_a, games_played_b):
+        """Calculate adaptive K-factor based on rating difference and experience"""
+        # Base K-factor
+        k_base = K
+        
+        # Reduce K slightly for configurations with more games (experience factor)
+        experience_factor_a = max(0.8, 10 / (games_played_a + 5))
+        experience_factor_b = max(0.8, 10 / (games_played_b + 5))
+        experience_factor = (experience_factor_a + experience_factor_b) / 2
+        
+        # Reduce K for large rating differences (prevent volatility)
+        rating_diff = abs(rating_a - rating_b)
+        rating_factor = 1.0 if rating_diff < 100 else (1.0 - min(0.3, (rating_diff - 100) / 400))
+        
+        return k_base * experience_factor * rating_factor
     
     # Process each game
     for _, game in df.iterrows():
@@ -361,6 +539,10 @@ def calculate_elo_ratings(df, K=32, initial_rating=1500):
         # Skip if configurations are not tracked
         if tiger_config not in ratings or goat_config not in ratings:
             continue
+        
+        # Update games played count
+        games_played[tiger_config] += 1
+        games_played[goat_config] += 1
         
         tiger_rating = ratings[tiger_config]
         goat_rating = ratings[goat_config]
@@ -379,10 +561,18 @@ def calculate_elo_ratings(df, K=32, initial_rating=1500):
         else:  # Draw
             tiger_actual = 0.5
             goat_actual = 0.5
+            
+        # Calculate dynamic k-factor
+        k_factor = calculate_k_factor(
+            tiger_rating, 
+            goat_rating,
+            games_played[tiger_config],
+            games_played[goat_config]
+        )
         
         # Update ratings
-        ratings[tiger_config] = update_rating(tiger_rating, tiger_expected, tiger_actual, K)
-        ratings[goat_config] = update_rating(goat_rating, goat_expected, goat_actual, K)
+        ratings[tiger_config] = update_rating(tiger_rating, tiger_expected, tiger_actual, k_factor)
+        ratings[goat_config] = update_rating(goat_rating, goat_expected, goat_actual, k_factor)
     
     # Prepare results DataFrame
     elo_results = []
@@ -396,9 +586,16 @@ def calculate_elo_ratings(df, K=32, initial_rating=1500):
                 rollout_depth = int(parts[2]) if parts[2].isdigit() else None
                 exploration_weight = float(parts[3]) if parts[3] and parts[3] != 'None' else None
                 
+                # Calculate confidence interval for ELO using standard error approximation
+                # More games = narrower confidence interval
+                confidence_range = 100 / (0.5 + 0.1 * games_played[config])
+                
                 elo_results.append({
                     'config_id': config,
                     'elo_rating': ratings[config],
+                    'games_played': games_played[config],
+                    'elo_ci_lower': ratings[config] - confidence_range,
+                    'elo_ci_upper': ratings[config] + confidence_range,
                     'rollout_policy': rollout_policy,
                     'rollout_depth': rollout_depth,
                     'exploration_weight': exploration_weight
@@ -409,13 +606,15 @@ def calculate_elo_ratings(df, K=32, initial_rating=1500):
     
     return elo_df
 
-def generate_composite_scores(win_rates_df, elo_df):
+def generate_composite_scores(win_rates_df, elo_df, win_rate_weight=0.5, elo_weight=0.5):
     """
     Generate composite scores from win rates and Elo ratings.
     
     Args:
         win_rates_df: DataFrame with win rates
         elo_df: DataFrame with Elo ratings
+        win_rate_weight: Weight for win rate in composite score (default 0.5)
+        elo_weight: Weight for Elo rating in composite score (default 0.5)
         
     Returns:
         DataFrame with composite scores
@@ -423,7 +622,7 @@ def generate_composite_scores(win_rates_df, elo_df):
     # Merge win rates and Elo ratings
     merged_df = pd.merge(
         win_rates_df,
-        elo_df[['config_id', 'elo_rating']],
+        elo_df[['config_id', 'elo_rating', 'elo_ci_lower', 'elo_ci_upper']],
         on='config_id',
         how='inner'
     )
@@ -433,21 +632,25 @@ def generate_composite_scores(win_rates_df, elo_df):
     max_elo = merged_df['elo_rating'].max()
     merged_df['normalized_elo'] = (merged_df['elo_rating'] - min_elo) / (max_elo - min_elo) if max_elo > min_elo else 0.5
     
-    # Calculate composite score (50% adjusted win rate, 50% Elo)
-    merged_df['composite_score'] = 0.5 * merged_df['adjusted_win_rate'] + 0.5 * merged_df['normalized_elo']
+    # Calculate composite score (weighted average of adjusted win rate and normalized Elo)
+    merged_df['composite_score'] = (
+        win_rate_weight * merged_df['adjusted_win_rate'] + 
+        elo_weight * merged_df['normalized_elo']
+    )
     
     # Sort by composite score
     merged_df = merged_df.sort_values('composite_score', ascending=False)
     
     return merged_df
 
-def select_top_configurations(composite_scores_df, n=3):
+def select_top_configurations(composite_scores_df, n=3, enforce_diversity=True):
     """
     Select top n configurations considering diversity.
     
     Args:
         composite_scores_df: DataFrame with composite scores
         n: Number of configurations to select
+        enforce_diversity: Whether to promote diversity in selection
         
     Returns:
         List of dictionaries representing top configurations
@@ -478,13 +681,22 @@ def select_top_configurations(composite_scores_df, n=3):
             'elo_rating': float(top_candidate['elo_rating'])
         }
         
+        # Add confidence intervals if available
+        if 'adjusted_win_rate_ci_lower' in top_candidate:
+            config['win_rate_ci_lower'] = float(top_candidate['adjusted_win_rate_ci_lower'])
+            config['win_rate_ci_upper'] = float(top_candidate['adjusted_win_rate_ci_upper'])
+            
+        if 'elo_ci_lower' in top_candidate:
+            config['elo_ci_lower'] = float(top_candidate['elo_ci_lower'])
+            config['elo_ci_upper'] = float(top_candidate['elo_ci_upper'])
+        
         # If we already have n-1 configurations, just add the best remaining one
         if len(top_configs) == n - 1:
             top_configs.append(config)
             break
             
-        # Otherwise, check for diversity
-        if (top_candidate['rollout_policy'] not in selected_policies or 
+        # Otherwise, check for diversity if required
+        if not enforce_diversity or (top_candidate['rollout_policy'] not in selected_policies or 
             top_candidate['rollout_depth'] not in selected_depths or
             len(top_configs) < 2):  # Always include the top 2 regardless of diversity
             
@@ -509,6 +721,15 @@ def select_top_configurations(composite_scores_df, n=3):
             'average_win_rate': float(top_candidate['average_win_rate']),
             'elo_rating': float(top_candidate['elo_rating'])
         }
+        
+        # Add confidence intervals if available
+        if 'adjusted_win_rate_ci_lower' in top_candidate:
+            config['win_rate_ci_lower'] = float(top_candidate['adjusted_win_rate_ci_lower'])
+            config['win_rate_ci_upper'] = float(top_candidate['adjusted_win_rate_ci_upper'])
+            
+        if 'elo_ci_lower' in top_candidate:
+            config['elo_ci_lower'] = float(top_candidate['elo_ci_lower'])
+            config['elo_ci_upper'] = float(top_candidate['elo_ci_upper'])
         
         top_configs.append(config)
         candidates = candidates.iloc[1:]

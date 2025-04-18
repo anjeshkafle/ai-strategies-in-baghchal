@@ -6,17 +6,21 @@ import pandas as pd
 from . import mcts_analysis
 from . import visualization
 
-def run_analysis(tournament_file, output_dir):
+def run_analysis(tournament_file, output_dir, config_file=None):
     """
     Run complete analysis pipeline on tournament results.
     
     Args:
         tournament_file: Path to tournament CSV file
         output_dir: Directory for output files
+        config_file: Path to configuration JSON file
     
     Returns:
         Dictionary with analysis results including top configurations
     """
+    # Load configuration
+    config = mcts_analysis.load_config(config_file)
+    
     # Create output directories
     data_dir = os.path.join(output_dir, 'data')
     figures_dir = os.path.join(output_dir, 'figures')
@@ -37,23 +41,35 @@ def run_analysis(tournament_file, output_dir):
     statistical_results = mcts_analysis.perform_statistical_tests(tournament_data)
     print("Statistical tests completed")
     
-    elo_ratings = mcts_analysis.calculate_elo_ratings(tournament_data)
+    elo_ratings = mcts_analysis.calculate_elo_ratings(
+        tournament_data, 
+        K=config['elo']['base_k_factor'], 
+        initial_rating=config['elo']['initial_rating']
+    )
     print("Elo ratings calculated")
     
     # Generate composite scores
-    composite_scores = mcts_analysis.generate_composite_scores(win_rates, elo_ratings)
+    composite_scores = mcts_analysis.generate_composite_scores(
+        win_rates, 
+        elo_ratings,
+        win_rate_weight=config['composite_score']['win_rate_weight'],
+        elo_weight=config['composite_score']['elo_weight']
+    )
     print("Composite scores generated")
     
     # Select top configurations
-    top_configs = mcts_analysis.select_top_configurations(composite_scores)
+    top_configs = mcts_analysis.select_top_configurations(
+        composite_scores, 
+        n=config['top_configs']['count']
+    )
     print(f"Selected top {len(top_configs)} configurations")
     
     # Generate visualizations
     print("\nGenerating visualizations...")
-    visualization.create_win_rate_bar_chart(win_rates, figures_dir)
-    visualization.create_parameter_performance_charts(tournament_data, statistical_results, figures_dir)
-    visualization.create_elo_rating_chart(elo_ratings, figures_dir)
-    visualization.create_composite_score_chart(composite_scores, top_configs, figures_dir)
+    visualization.create_win_rate_bar_chart(win_rates, figures_dir, config)
+    visualization.create_parameter_performance_charts(tournament_data, statistical_results, figures_dir, config)
+    visualization.create_elo_rating_chart(elo_ratings, figures_dir, config)
+    visualization.create_composite_score_chart(composite_scores, top_configs, figures_dir, config)
     visualization.create_heatmap(tournament_data, figures_dir)
     
     # Save processed data
@@ -64,19 +80,26 @@ def run_analysis(tournament_file, output_dir):
     pd.DataFrame(top_configs).to_csv(os.path.join(data_dir, "top_configs.csv"), index=False)
     
     # Print statistical results
+    significance_threshold = config['statistical']['significance_threshold']
     print("\nStatistical Results:")
     if 'depth_ttest' in statistical_results:
         depth_ttest = statistical_results['depth_ttest']
-        print(f"Rollout Depth T-Test: t={depth_ttest['statistic']:.4f}, p={depth_ttest['p_value']:.4f}")
+        is_significant = depth_ttest['p_value'] < significance_threshold
+        significance_marker = "* SIGNIFICANT *" if is_significant else "not significant"
+        print(f"Rollout Depth T-Test: t={depth_ttest['statistic']:.4f}, p={depth_ttest['p_value']:.4f} ({significance_marker})")
         
     if 'policy_anova' in statistical_results:
         policy_anova = statistical_results['policy_anova']
-        print(f"Rollout Policy ANOVA: F={policy_anova['statistic']:.4f}, p={policy_anova['p_value']:.4f}")
+        is_significant = policy_anova['p_value'] < significance_threshold
+        significance_marker = "* SIGNIFICANT *" if is_significant else "not significant"
+        print(f"Rollout Policy ANOVA: F={policy_anova['statistic']:.4f}, p={policy_anova['p_value']:.4f} ({significance_marker})")
         
     if 'exploration_weight_ttests' in statistical_results:
         print("Exploration Weight T-Tests:")
         for key, result in statistical_results['exploration_weight_ttests'].items():
-            print(f"  {key}: t={result['statistic']:.4f}, p={result['p_value']:.4f}")
+            is_significant = result['p_value'] < significance_threshold
+            significance_marker = "* SIGNIFICANT *" if is_significant else "not significant"
+            print(f"  {key}: t={result['statistic']:.4f}, p={result['p_value']:.4f} ({significance_marker})")
     
     # Generate a summary report
     with open(os.path.join(output_dir, "mcts_analysis_summary.txt"), "w") as f:
@@ -91,19 +114,38 @@ def run_analysis(tournament_file, output_dir):
         f.write("-----------------\n")
         if 'depth_ttest' in statistical_results:
             depth_ttest = statistical_results['depth_ttest']
-            f.write(f"Rollout Depth T-Test: t={depth_ttest['statistic']:.4f}, p={depth_ttest['p_value']:.4f}\n")
+            is_significant = depth_ttest['p_value'] < significance_threshold
+            significance = "SIGNIFICANT" if is_significant else "NOT significant"
+            f.write(f"Rollout Depth T-Test: t={depth_ttest['statistic']:.4f}, p={depth_ttest['p_value']:.4f} ({significance})\n")
+            f.write(f"  This means the difference in win rates between depth 4 and depth 6 is {significance.lower()}.\n")
             f.write(f"  Depth 4 win rate: {depth_ttest['depth4_win_rate']:.4f}\n")
             f.write(f"  Depth 6 win rate: {depth_ttest['depth6_win_rate']:.4f}\n\n")
             
         if 'policy_anova' in statistical_results:
             policy_anova = statistical_results['policy_anova']
-            f.write(f"Rollout Policy ANOVA: F={policy_anova['statistic']:.4f}, p={policy_anova['p_value']:.4f}\n")
-            f.write(f"  Policies tested: {', '.join(policy_anova['policies'])}\n\n")
+            is_significant = policy_anova['p_value'] < significance_threshold
+            significance = "SIGNIFICANT" if is_significant else "NOT significant"
+            f.write(f"Rollout Policy ANOVA: F={policy_anova['statistic']:.4f}, p={policy_anova['p_value']:.4f} ({significance})\n")
+            f.write(f"  This means the differences in win rates between different policies are {significance.lower()}.\n")
+            f.write(f"  Policies tested: {', '.join(policy_anova['policies'])}\n")
+            
+            if 'policy_win_rates' in policy_anova:
+                f.write("  Policy win rates:\n")
+                for i, policy in enumerate(policy_anova['policies']):
+                    win_rate = policy_anova['policy_win_rates'][i]
+                    f.write(f"    {policy}: {win_rate:.4f}\n")
+            f.write("\n")
             
         if 'exploration_weight_ttests' in statistical_results:
             f.write("Exploration Weight T-Tests:\n")
             for key, result in statistical_results['exploration_weight_ttests'].items():
-                f.write(f"  {key}: t={result['statistic']:.4f}, p={result['p_value']:.4f}\n")
+                is_significant = result['p_value'] < significance_threshold
+                significance = "SIGNIFICANT" if is_significant else "NOT significant"
+                w1, w2 = key.split('_vs_')
+                f.write(f"  {key}: t={result['statistic']:.4f}, p={result['p_value']:.4f} ({significance})\n")
+                if 'w1_win_rate' in result and 'w2_win_rate' in result:
+                    f.write(f"    Weight {w1} win rate: {result['w1_win_rate']:.4f}\n")
+                    f.write(f"    Weight {w2} win rate: {result['w2_win_rate']:.4f}\n")
             f.write("\n")
         
         f.write("Top Configurations:\n")

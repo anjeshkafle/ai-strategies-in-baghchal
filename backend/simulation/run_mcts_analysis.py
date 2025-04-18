@@ -10,6 +10,9 @@ Example usage:
     
     # Specify input file and output directory
     python run_mcts_analysis.py --input path/to/results.csv --output path/to/output
+    
+    # Use custom configuration file
+    python run_mcts_analysis.py --config path/to/config.json
 """
 
 import os
@@ -31,6 +34,9 @@ def parse_args():
     
     parser.add_argument("--output", type=str, default=None,
                         help="Directory for analysis outputs (default: simulation_results/mcts_analysis)")
+    
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to analysis configuration JSON file (default: mcts_analysis_config.json)")
     
     return parser.parse_args()
 
@@ -60,12 +66,24 @@ def main():
         output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
                                "simulation_results", "mcts_analysis", f"analysis_{timestamp}")
         os.makedirs(output_dir, exist_ok=True)
+        
+    # Use configuration file if specified
+    config_file = args.config
+    if config_file is None:
+        default_config = os.path.join(os.path.dirname(__file__), "mcts_analysis_config.json")
+        if os.path.exists(default_config):
+            config_file = default_config
+            print(f"Using configuration file: {config_file}")
+        else:
+            print("Using default configuration settings")
+    else:
+        print(f"Using configuration file: {config_file}")
     
     print(f"Starting MCTS configuration analysis at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Analysis results will be saved to: {output_dir}")
     
     # Run analysis
-    results = main_analysis.run_analysis(input_file, output_dir)
+    results = main_analysis.run_analysis(input_file, output_dir, config_file)
     
     # Print top configurations
     print("\nTop MCTS Configurations:")
@@ -76,8 +94,18 @@ def main():
         print(f"   Exploration Weight: {config['exploration_weight']}")
         print(f"   Composite Score: {config['composite_score']:.4f}")
         print(f"   Adjusted Win Rate (draws=0.5): {config['adjusted_win_rate']:.4f}")
+        
+        # Print confidence intervals if available
+        if 'win_rate_ci_lower' in config and 'win_rate_ci_upper' in config:
+            print(f"   Win Rate 95% CI: [{config['win_rate_ci_lower']:.4f}, {config['win_rate_ci_upper']:.4f}]")
+            
         print(f"   Average Win Rate (wins only): {config['average_win_rate']:.4f}")
         print(f"   Elo Rating: {config['elo_rating']:.1f}")
+        
+        # Print ELO confidence intervals if available
+        if 'elo_ci_lower' in config and 'elo_ci_upper' in config:
+            print(f"   Elo 95% CI: [{config['elo_ci_lower']:.1f}, {config['elo_ci_upper']:.1f}]")
+            
         print("")
     
     print(f"Analysis complete. Results available in: {output_dir}")

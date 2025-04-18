@@ -26,6 +26,9 @@ backend/simulation/simulation_config.json
 backend/tuned_params/
 backend/genetic/ga_config.json
 
+# MCTS Analysis Configuration
+backend/simulation/mcts_analysis_config.json
+
 # Editor directories and files
 .vscode/
 !.vscode/extensions.json

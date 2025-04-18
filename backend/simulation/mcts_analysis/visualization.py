@@ -6,18 +6,20 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 import os
+from matplotlib.colors import to_rgba
 
 def ensure_directory(path):
     """Ensure output directory exists."""
     os.makedirs(path, exist_ok=True)
 
-def create_win_rate_bar_chart(win_rates_df, output_dir):
+def create_win_rate_bar_chart(win_rates_df, output_dir, config=None):
     """
     Create bar chart of win rates for top 10 configurations.
     
     Args:
         win_rates_df: DataFrame with win rates
         output_dir: Directory to save output figure
+        config: Configuration dictionary
     """
     ensure_directory(output_dir)
     
@@ -43,13 +45,32 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
     # Create the plot
     plt.figure(figsize=(12, 6))
     
+    # Create numeric positions for the bars
+    x_positions = np.arange(len(top_10))
+    
     # Plot overall adjusted win rate (includes draws as 0.5 points)
     bars = plt.bar(
-        top_10['config_label'],
+        x_positions,
         top_10['adjusted_win_rate'],
+        width=0.7,  # Reduced width for better spacing
         color=bar_colors,
         alpha=0.7
     )
+    
+    # Add confidence intervals if available
+    if 'adjusted_win_rate_ci_lower' in top_10.columns and 'adjusted_win_rate_ci_upper' in top_10.columns:
+        plt.errorbar(
+            x_positions,
+            top_10['adjusted_win_rate'],
+            yerr=[
+                top_10['adjusted_win_rate'] - top_10['adjusted_win_rate_ci_lower'],
+                top_10['adjusted_win_rate_ci_upper'] - top_10['adjusted_win_rate']
+            ],
+            fmt='none',
+            ecolor='black',
+            capsize=5,
+            alpha=0.7
+        )
     
     # Add win rate as tiger and goat as error bars
     for i, (_, row) in enumerate(top_10.iterrows()):
@@ -92,8 +113,19 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
         loc='upper right'
     )
     
-    # Rotate x-axis labels for better readability
-    plt.xticks(rotation=45, ha='right')
+    # Important: This makes the x-tick label align with the center of the bar
+    plt.xticks(
+        x_positions,  # Use the exact same positions as the bars
+        top_10['config_label'], 
+        rotation=45, 
+        ha='right',  # Changed to 'right' for proper anchor point with anchor rotation
+        va='top',    # Added to align top of text with tick
+        fontsize=7  # Smaller font
+    )
+    
+    # Set rotation mode to anchor at the end of the text for better alignment
+    plt.setp(plt.gca().get_xticklabels(), rotation_mode="anchor")
+    plt.gca().set_xticks(x_positions, minor=False)
     
     # Add data labels - positioned to the left of each bar to avoid intersecting with vertical variance lines
     for bar in bars:
@@ -110,6 +142,7 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
         )
     
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)  # More space at the bottom for x labels
     
     # Save the figure
     output_path = os.path.join(output_dir, 'win_rates.png')
@@ -118,7 +151,7 @@ def create_win_rate_bar_chart(win_rates_df, output_dir):
     
     print(f"Win rate chart saved to {output_path}")
 
-def create_parameter_performance_charts(df, stats_results, output_dir):
+def create_parameter_performance_charts(df, stats_results, output_dir, config=None):
     """
     Create bar charts for each parameter's performance.
     
@@ -126,13 +159,19 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
         df: Preprocessed tournament data
         stats_results: Dictionary with statistical test results
         output_dir: Directory to save output figures
+        config: Configuration dictionary
     """
     ensure_directory(output_dir)
+    
+    # Set significance threshold
+    significance_threshold = 0.05
+    if config and 'statistical' in config and 'significance_threshold' in config['statistical']:
+        significance_threshold = config['statistical']['significance_threshold']
     
     # 1. Rollout Depth Chart
     plt.figure(figsize=(8, 6))
     
-    # Extract unique depth values
+    # Always extract unique depth values from data
     depths = sorted(set(df['tiger_rollout_depth'].unique()) | set(df['goat_rollout_depth'].unique()))
     
     # Calculate win rates by depth
@@ -141,6 +180,10 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     for depth in depths:
         # Games where either tiger or goat used this depth
         depth_games = df[(df['tiger_rollout_depth'] == depth) | (df['goat_rollout_depth'] == depth)]
+        
+        # Skip if no games with this depth
+        if len(depth_games) == 0:
+            continue
         
         # Win rate when playing as tiger with this depth
         tiger_games = df[df['tiger_rollout_depth'] == depth]
@@ -163,39 +206,110 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
         else:
             overall_adjusted_win_rate = 0
         
+        # Calculate confidence intervals
+        tiger_ci = (0, 0)
+        goat_ci = (0, 0)
+        overall_ci = (0, 0)
+        
+        if len(tiger_games) > 0:
+            from .mcts_analysis import calculate_confidence_intervals
+            tiger_ci = calculate_confidence_intervals(tiger_adjusted_win_rate, len(tiger_games))
+        
+        if len(goat_games) > 0:
+            from .mcts_analysis import calculate_confidence_intervals
+            goat_ci = calculate_confidence_intervals(goat_adjusted_win_rate, len(goat_games))
+            
+        if total_games > 0:
+            from .mcts_analysis import calculate_confidence_intervals
+            overall_ci = calculate_confidence_intervals(overall_adjusted_win_rate, total_games)
+        
         depth_win_rates.append({
             'depth': depth,
             'tiger_adjusted_win_rate': tiger_adjusted_win_rate,
             'goat_adjusted_win_rate': goat_adjusted_win_rate,
             'overall_adjusted_win_rate': overall_adjusted_win_rate,
-            'game_count': total_games
+            'game_count': total_games,
+            'tiger_ci_lower': tiger_ci[0],
+            'tiger_ci_upper': tiger_ci[1],
+            'goat_ci_lower': goat_ci[0],
+            'goat_ci_upper': goat_ci[1],
+            'overall_ci_lower': overall_ci[0],
+            'overall_ci_upper': overall_ci[1]
         })
     
     depth_df = pd.DataFrame(depth_win_rates)
+    
+    # If no data, skip this chart
+    if len(depth_df) == 0:
+        print("No depth data available for chart")
+        return
     
     # Width of the bars
     width = 0.3
     
     # Set position of bar on X axis
-    r1 = np.arange(len(depths))
+    r1 = np.arange(len(depth_df))
     r2 = [x + width for x in r1]
     
     # Make the plot for depth chart
-    plt.bar(r1, depth_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
-    plt.bar(r2, depth_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
+    tiger_bars = plt.bar(r1, depth_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
+    goat_bars = plt.bar(r2, depth_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
     
-    # Add value labels to the top of each bar
-    for i, value in enumerate(depth_df['tiger_adjusted_win_rate']):
-        plt.text(r1[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    # Add confidence intervals
+    plt.errorbar(
+        r1, 
+        depth_df['tiger_adjusted_win_rate'],
+        yerr=[
+            depth_df['tiger_adjusted_win_rate'] - depth_df['tiger_ci_lower'],
+            depth_df['tiger_ci_upper'] - depth_df['tiger_adjusted_win_rate']
+        ],
+        fmt='none',
+        ecolor='black',
+        capsize=4,
+        alpha=0.7
+    )
     
-    for i, value in enumerate(depth_df['goat_adjusted_win_rate']):
-        plt.text(r2[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    plt.errorbar(
+        r2, 
+        depth_df['goat_adjusted_win_rate'],
+        yerr=[
+            depth_df['goat_adjusted_win_rate'] - depth_df['goat_ci_lower'],
+            depth_df['goat_ci_upper'] - depth_df['goat_adjusted_win_rate']
+        ],
+        fmt='none',
+        ecolor='black',
+        capsize=4,
+        alpha=0.7
+    )
+    
+    # Add value labels to the top of each bar - positioned more to the left to avoid overlap with error bars
+    for i, bar in enumerate(tiger_bars):
+        value = depth_df['tiger_adjusted_win_rate'].iloc[i]
+        plt.text(
+            bar.get_x() + bar.get_width()*0.25,  # Position at 25% of the bar width (slightly less to the left)
+            value + 0.02, 
+            f'{value:.2f}', 
+            ha='center', 
+            va='bottom', 
+            fontsize=8
+        )
+    
+    for i, bar in enumerate(goat_bars):
+        value = depth_df['goat_adjusted_win_rate'].iloc[i]
+        plt.text(
+            bar.get_x() + bar.get_width()*0.25,  # Position at 25% of the bar width (slightly less to the left)
+            value + 0.02, 
+            f'{value:.2f}', 
+            ha='center', 
+            va='bottom', 
+            fontsize=8
+        )
     
     # Add labels and title
     plt.xlabel('Rollout Depth')
     plt.ylabel('Win Rate (draws = 0.5 points)')
     plt.title('Win Rate by Rollout Depth (Time-Constrained: 20s per move, draws = 0.5 points)')
-    plt.xticks([r + width/2 for r in range(len(depths))], depths)
+    plt.xticks([r + width/2 for r in range(len(depth_df))], depth_df['depth'])
     plt.ylim(0, 1)
     
     # Add a horizontal line for 50% win rate
@@ -204,10 +318,12 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     # Add text with t-test results if available
     if 'depth_ttest' in stats_results:
         p_value = stats_results['depth_ttest']['p_value']
+        is_significant = p_value < significance_threshold
+        significance_text = "★ Statistically significant difference" if is_significant else "No statistically significant difference"
+        
         plt.text(
             0.5, 0.9,
-            f"T-test p-value: {p_value:.4f}" +
-            (" (significant)" if p_value < 0.05 else ""),
+            f"T-test p-value: {p_value:.4f}\n{significance_text}",
             transform=plt.gca().transAxes,
             ha='center',
             bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8)
@@ -275,15 +391,31 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     r2 = [x + width for x in r1]
     
     # Make the plot for exploration weight chart
-    plt.bar(r1, weight_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
-    plt.bar(r2, weight_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
+    tiger_bars = plt.bar(r1, weight_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
+    goat_bars = plt.bar(r2, weight_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
     
-    # Add value labels to the top of each bar
-    for i, value in enumerate(weight_df['tiger_adjusted_win_rate']):
-        plt.text(r1[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    # Add value labels to the top of each bar - positioned at center
+    for i, bar in enumerate(tiger_bars):
+        value = weight_df['tiger_adjusted_win_rate'].iloc[i]
+        plt.text(
+            bar.get_x() + bar.get_width()*0.5,  # Position at center of the bar
+            value + 0.02, 
+            f'{value:.2f}', 
+            ha='center', 
+            va='bottom', 
+            fontsize=8
+        )
     
-    for i, value in enumerate(weight_df['goat_adjusted_win_rate']):
-        plt.text(r2[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    for i, bar in enumerate(goat_bars):
+        value = weight_df['goat_adjusted_win_rate'].iloc[i]
+        plt.text(
+            bar.get_x() + bar.get_width()*0.5,  # Position at center of the bar
+            value + 0.02, 
+            f'{value:.2f}', 
+            ha='center', 
+            va='bottom', 
+            fontsize=8
+        )
     
     # Add labels and title
     plt.xlabel('Exploration Weight')
@@ -306,7 +438,7 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
             )
         
         plt.text(
-            0.02, 0.95,  # Adjusted to match the padding of the legend
+            0.02, 0.85,  # Position lower at 85% instead of 95% vertical position
             "\n".join(text_lines),
             transform=plt.gca().transAxes,
             ha='left',
@@ -375,15 +507,31 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     r2 = [x + width for x in r1]
     
     # Make the plot for policy chart
-    plt.bar(r1, policy_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
-    plt.bar(r2, policy_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
+    tiger_bars = plt.bar(r1, policy_df['tiger_adjusted_win_rate'], width=width, color='indianred', label='As Tiger')
+    goat_bars = plt.bar(r2, policy_df['goat_adjusted_win_rate'], width=width, color='royalblue', label='As Goat')
     
-    # Add value labels to the top of each bar
-    for i, value in enumerate(policy_df['tiger_adjusted_win_rate']):
-        plt.text(r1[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    # Add value labels to the top of each bar - positioned at center
+    for i, bar in enumerate(tiger_bars):
+        value = policy_df['tiger_adjusted_win_rate'].iloc[i]
+        plt.text(
+            bar.get_x() + bar.get_width()*0.5,  # Position at center of the bar
+            value + 0.02, 
+            f'{value:.2f}', 
+            ha='center', 
+            va='bottom', 
+            fontsize=8
+        )
     
-    for i, value in enumerate(policy_df['goat_adjusted_win_rate']):
-        plt.text(r2[i], value + 0.02, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+    for i, bar in enumerate(goat_bars):
+        value = policy_df['goat_adjusted_win_rate'].iloc[i]
+        plt.text(
+            bar.get_x() + bar.get_width()*0.5,  # Position at center of the bar
+            value + 0.02, 
+            f'{value:.2f}', 
+            ha='center', 
+            va='bottom', 
+            fontsize=8
+        )
     
     # Add labels and title
     plt.xlabel('Rollout Policy')
@@ -417,60 +565,64 @@ def create_parameter_performance_charts(df, stats_results, output_dir):
     
     print(f"Policy performance chart saved to {output_path}")
 
-def create_elo_rating_chart(elo_df, output_dir):
+def create_elo_rating_chart(elo_df, output_dir, config=None):
     """
-    Create bar chart of Elo ratings.
+    Create bar chart of Elo ratings for all configurations.
     
     Args:
         elo_df: DataFrame with Elo ratings
         output_dir: Directory to save output figure
+        config: Configuration dictionary
     """
     ensure_directory(output_dir)
-    
-    # Get top 10 configurations by Elo rating
-    top_10 = elo_df.head(10).copy()
     
     # Create a color mapping for policies
     policy_colors = {
         'random': 'skyblue',
         'lightweight': 'lightgreen',
-        'guided': 'coral'
+        'guided': 'coral',
     }
     
     # Create a simplified configuration label
-    top_10['config_label'] = top_10.apply(
-        lambda row: f"{row['rollout_policy']}\nd={row['rollout_depth']}\ne={row['exploration_weight']}",
+    elo_df['config_label'] = elo_df.apply(
+        lambda row: f"{row['rollout_policy']}\nd={row['rollout_depth']}\ne={row['exploration_weight']}" + 
+                   (f"\ns={row['guided_strictness']}" if row['rollout_policy'] == 'guided' and 'guided_strictness' in row and pd.notna(row['guided_strictness']) else ""),
         axis=1
     )
     
     # Create the bar colors based on policy
-    bar_colors = [policy_colors.get(policy, 'gray') for policy in top_10['rollout_policy']]
+    bar_colors = [policy_colors.get(policy, 'gray') for policy in elo_df['rollout_policy']]
     
-    # Create the plot
-    plt.figure(figsize=(12, 6))
+    # Create the plot with wider spacing to avoid overlapping labels
+    plt.figure(figsize=(14, 6))  # Increased width for better spacing
     
-    # Plot Elo ratings
+    # Create numeric positions for the bars
+    x_positions = np.arange(len(elo_df))
+    
+    # Plot Elo ratings with numeric x positions for better control
+    width = 0.7  # Reduced bar width to create more space between them
     bars = plt.bar(
-        top_10['config_label'],
-        top_10['elo_rating'],
+        x_positions,  # Use numeric indices for x-axis positioning
+        elo_df['elo_rating'],
+        width=width,
         color=bar_colors,
         alpha=0.7
     )
     
-    # Add a horizontal line for initial Elo rating (1500)
-    plt.axhline(y=1500, color='gray', linestyle='--', alpha=0.5)
+    # Note: Confidence intervals removed as requested
+    
+    # Add a horizontal line for initial rating
+    initial_rating = 1500
+    if config and 'elo' in config and 'initial_rating' in config['elo']:
+        initial_rating = config['elo']['initial_rating']
+    plt.axhline(y=initial_rating, color='gray', linestyle='--', alpha=0.5)
     
     # Add labels and title
     plt.xlabel('Configuration')
     plt.ylabel('Elo Rating')
-    plt.title('Top 10 MCTS Configurations by Elo Rating (Time-Constrained: 20s per move)')
+    plt.title('MCTS Configurations by Elo Rating (Time-Constrained: 20s per move)')
     
-    # Get the current y-axis limits
-    y_min, y_max = plt.ylim()
-    # Add 20% more space at the top to make room for the legend
-    plt.ylim(y_min, y_max + (y_max - y_min) * 0.2)
-    
-    # Add policy legend with better positioning to avoid overlap
+    # Add policy legend
     policy_patches = [
         plt.Rectangle((0, 0), 1, 1, color=color, alpha=0.7)
         for policy, color in policy_colors.items()
@@ -478,18 +630,29 @@ def create_elo_rating_chart(elo_df, output_dir):
     plt.legend(
         policy_patches,
         list(policy_colors.keys()),
-        loc='upper right'  # Changed back to upper right with more vertical space
+        loc='upper right'
     )
     
-    # Rotate x-axis labels for better readability
-    plt.xticks(rotation=45, ha='right')
+    # Important: This makes the x-tick label align with the center of the bar
+    plt.xticks(
+        x_positions,  # Use the exact same positions as the bars
+        elo_df['config_label'], 
+        rotation=45, 
+        ha='right',  # Changed to 'right' for proper anchor point with anchor rotation
+        va='top',    # Added to align top of text with tick
+        fontsize=7  # Smaller font
+    )
     
-    # Add data labels - centered at the top of each bar for the Elo ratings chart
-    for bar in bars:
+    # Set rotation mode to anchor at the end of the text for better alignment
+    plt.setp(plt.gca().get_xticklabels(), rotation_mode="anchor")
+    plt.gca().set_xticks(x_positions, minor=False)
+    
+    # Add data labels - positioned at the center of the bar since there are no confidence intervals
+    for i, bar in enumerate(bars):
         height = bar.get_height()
         plt.text(
-            bar.get_x() + bar.get_width()/2.,  # Centered position
-            height + 10,
+            bar.get_x() + bar.get_width()*0.5,  # Position at center of bar width
+            height + 5,  # Position above the bar
             f'{height:.0f}',
             ha='center',
             va='bottom',
@@ -498,7 +661,9 @@ def create_elo_rating_chart(elo_df, output_dir):
             color='black'
         )
     
+    # Adjust tight_layout to leave more space for labels
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)  # More space at the bottom for x labels
     
     # Save the figure
     output_path = os.path.join(output_dir, 'elo_ratings.png')
@@ -507,19 +672,17 @@ def create_elo_rating_chart(elo_df, output_dir):
     
     print(f"Elo rating chart saved to {output_path}")
 
-def create_composite_score_chart(composite_df, top_configs, output_dir):
+def create_composite_score_chart(composite_df, top_configs, output_dir, config=None):
     """
-    Create bar chart of composite scores highlighting top 3.
+    Create bar chart of composite scores for all configurations.
     
     Args:
         composite_df: DataFrame with composite scores
         top_configs: List of top configurations
         output_dir: Directory to save output figure
+        config: Configuration dictionary
     """
     ensure_directory(output_dir)
-    
-    # Get top 10 configurations by composite score
-    top_10 = composite_df.head(10).copy()
     
     # Create a color mapping for policies
     policy_colors = {
@@ -529,58 +692,128 @@ def create_composite_score_chart(composite_df, top_configs, output_dir):
     }
     
     # Create a simplified configuration label
-    top_10['config_label'] = top_10.apply(
-        lambda row: f"{row['rollout_policy']}\nd={row['rollout_depth']}\ne={row['exploration_weight']}",
+    composite_df['config_label'] = composite_df.apply(
+        lambda row: f"{row['rollout_policy']}\nd={row['rollout_depth']}\ne={row['exploration_weight']}" + 
+                   (f"\ns={row['guided_strictness']}" if row['rollout_policy'] == 'guided' and 'guided_strictness' in row and pd.notna(row['guided_strictness']) else ""),
         axis=1
     )
     
-    # Create the bar colors based on policy
-    bar_colors = [policy_colors.get(policy, 'gray') for policy in top_10['rollout_policy']]
+    # Mark top configurations
+    top_config_ids = [config['config_id'] for config in top_configs]
+    composite_df['is_top'] = composite_df['config_id'].isin(top_config_ids)
     
-    # Create the plot
-    plt.figure(figsize=(12, 6))
+    # Sort by composite score
+    composite_df = composite_df.sort_values('composite_score', ascending=False)
     
-    # Create the bars
+    # Create the bar colors based on policy and highlight top configs
+    bar_colors = []
+    for i, row in composite_df.iterrows():
+        base_color = policy_colors.get(row['rollout_policy'], 'gray')
+        # Make top configurations more saturated
+        if row['is_top']:
+            bar_colors.append(base_color)
+        else:
+            # Create a lighter version for non-top configs
+            bar_colors.append(to_rgba(base_color, alpha=0.5))
+    
+    # Create the plot with wider spacing to avoid overlapping labels
+    plt.figure(figsize=(14, 6))  # Increased width for better spacing
+    
+    # Plot composite scores with wider bars and spacing
+    width = 0.7  # Reduced bar width to create more space between them
+    
+    # Create numeric positions for the bars
+    x_positions = np.arange(len(composite_df))
+    
     bars = plt.bar(
-        top_10['config_label'],
-        top_10['composite_score'],
-        color=bar_colors,
-        alpha=0.7
+        x_positions,  # Use numeric indices for x-axis positioning
+        composite_df['composite_score'],
+        width=width,
+        color=bar_colors
     )
     
-    # Highlight the top configurations with a border
-    top_config_ids = [config['config_id'] for config in top_configs]
-    for i, (_, row) in enumerate(top_10.iterrows()):
-        if row['config_id'] in top_config_ids:
-            bars[i].set_edgecolor('red')
-            bars[i].set_linewidth(2)
+    # Add confidence intervals if available
+    has_confidence = ('adjusted_win_rate_ci_lower' in composite_df.columns and 
+                     'adjusted_win_rate_ci_upper' in composite_df.columns and
+                     'elo_ci_lower' in composite_df.columns and
+                     'elo_ci_upper' in composite_df.columns)
+                     
+    if has_confidence:
+        # Get weights for composite score components
+        win_rate_weight = 0.5
+        elo_weight = 0.5
+        if config and 'composite_score' in config:
+            win_rate_weight = config['composite_score'].get('win_rate_weight', 0.5)
+            elo_weight = config['composite_score'].get('elo_weight', 0.5)
+            
+        # Normalize ELO CI bounds
+        min_elo = composite_df['elo_rating'].min()
+        max_elo = composite_df['elo_rating'].max()
+        elo_range = max_elo - min_elo if max_elo > min_elo else 1
+        
+        # Calculate lower and upper bounds for composite score
+        composite_df['composite_ci_lower'] = (
+            win_rate_weight * composite_df['adjusted_win_rate_ci_lower'] + 
+            elo_weight * ((composite_df['elo_ci_lower'] - min_elo) / elo_range)
+        )
+        
+        composite_df['composite_ci_upper'] = (
+            win_rate_weight * composite_df['adjusted_win_rate_ci_upper'] + 
+            elo_weight * ((composite_df['elo_ci_upper'] - min_elo) / elo_range)
+        )
+        
+        # Add error bars
+        plt.errorbar(
+            x_positions,
+            composite_df['composite_score'],
+            yerr=[
+                composite_df['composite_score'] - composite_df['composite_ci_lower'],
+                composite_df['composite_ci_upper'] - composite_df['composite_score']
+            ],
+            fmt='none',
+            ecolor='black',
+            capsize=4,
+            alpha=0.7
+        )
     
     # Add labels and title
     plt.xlabel('Configuration')
     plt.ylabel('Composite Score')
-    plt.title('Top 10 MCTS Configurations by Composite Score (Time-Constrained: 20s per move, draws = 0.5 points)')
-    plt.ylim(0, 1)
+    title = 'MCTS Configurations by Composite Score (Time-Constrained: 20s per move)'
     
-    # Add policy legend
-    policy_patches = [
-        plt.Rectangle((0, 0), 1, 1, color=color, alpha=0.7)
-        for policy, color in policy_colors.items()
-    ]
-    plt.legend(
-        policy_patches + [plt.Rectangle((0, 0), 1, 1, fill=False, edgecolor='red', linewidth=2)],
-        list(policy_colors.keys()) + ['Top Selection'],
-        loc='upper right'
+    # Add weights to title if available from config
+    if config and 'composite_score' in config:
+        w1 = config['composite_score'].get('win_rate_weight', 0.5)
+        w2 = config['composite_score'].get('elo_weight', 0.5)
+        title += f'\n(Win Rate Weight: {w1}, Elo Weight: {w2})'
+        
+    plt.title(title)
+    
+    # Important: This makes the x-tick label align with the center of the bar
+    plt.xticks(
+        x_positions,  # Use the exact same positions as the bars
+        composite_df['config_label'], 
+        rotation=45, 
+        ha='right',  # Changed to 'right' for proper anchor point with anchor rotation
+        va='top',    # Added to align top of text with tick
+        fontsize=7  # Smaller font
     )
     
-    # Rotate x-axis labels for better readability
-    plt.xticks(rotation=45, ha='right')
+    # Set rotation mode to anchor at the end of the text for better alignment
+    plt.setp(plt.gca().get_xticklabels(), rotation_mode="anchor")
+    plt.gca().set_xticks(x_positions, minor=False)
     
-    # Add data labels - centered at the top of each bar for the composite scores chart
-    for bar in bars:
+    # Mark top configurations with a star or highlight
+    for i, is_top in enumerate(composite_df['is_top']):
+        if is_top:
+            plt.plot(i, composite_df.iloc[i]['composite_score'] + 0.02, 'k*', markersize=10)
+    
+    # Add data labels - positioned even more to the left for better visibility with confidence intervals
+    for i, bar in enumerate(bars):
         height = bar.get_height()
         plt.text(
-            bar.get_x() + bar.get_width()/2.,  # Centered position
-            height + 0.02,
+            bar.get_x() + bar.get_width()*0.1,  # Position at 10% of the bar width (even more to the left)
+            height + 0.02,  # Position above the bar
             f'{height:.2f}',
             ha='center',
             va='bottom',
@@ -589,7 +822,24 @@ def create_composite_score_chart(composite_df, top_configs, output_dir):
             color='black'
         )
     
+    # Add a legend for top configurations
+    top_patch = plt.Line2D([0], [0], marker='*', color='w', markerfacecolor='black', 
+                          markersize=10, label='Top Configurations')
+    
+    # Add policy legend
+    policy_patches = [
+        plt.Rectangle((0, 0), 1, 1, color=color)
+        for policy, color in policy_colors.items()
+    ]
+    
+    handles = policy_patches + [top_patch]
+    labels = list(policy_colors.keys()) + ['Top Configurations']
+    
+    plt.legend(handles, labels, loc='upper right')
+    
+    # Adjust tight_layout to leave more space for labels
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)  # More space at the bottom for x labels
     
     # Save the figure
     output_path = os.path.join(output_dir, 'composite_scores.png')
