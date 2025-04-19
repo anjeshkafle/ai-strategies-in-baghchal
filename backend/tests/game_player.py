@@ -2,12 +2,14 @@
 """
 Interactive game player for recorded games.
 Loads games from MCTS tournament or main competition results and allows step-by-step playback.
+Can also fetch games remotely from Google Sheets when not found locally.
 """
 
 import os
 import sys
 import json
 import pandas as pd
+import requests
 from typing import Dict, List, Optional
 import readchar  # For keyboard input without requiring Enter
 
@@ -120,6 +122,80 @@ def display_board_and_info(game_state: GameState, move_number: int, total_moves:
     print(f"{RED}Tiger{RESET}: [{tiger_algo}] {tiger_config_str}")
     print(f"{GREEN}Goat{RESET}: [{goat_algo}] {goat_config_str}")
 
+def get_sheets_webapp_url():
+    """Get the Google Sheets webapp URL from the main_competition_config.json file."""
+    config_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "simulation", "main_competition_config.json"
+    )
+    
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            return config.get("sheets_webapp_url")
+    
+    return None
+
+def fetch_remote_game(game_id: str) -> Optional[Dict]:
+    """Fetch a game by ID from the remote Google Sheets webapp."""
+    sheets_url = get_sheets_webapp_url()
+    if not sheets_url:
+        print("Error: Could not find Google Sheets webapp URL in config.")
+        return None
+    
+    print(f"Fetching game {game_id} from remote server...")
+    try:
+        response = requests.get(f"{sheets_url}?id={game_id}")
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "success" and data.get("game"):
+                print("Game found on remote server.")
+                # Convert the remote game data format to our local format
+                remote_game = data["game"]
+                
+                # Parse string fields that contain JSON
+                tiger_config = json.loads(remote_game["tiger_config"]) if isinstance(remote_game["tiger_config"], str) else remote_game["tiger_config"]
+                goat_config = json.loads(remote_game["goat_config"]) if isinstance(remote_game["goat_config"], str) else remote_game["goat_config"]
+                
+                # Extract algorithm names from config IDs if not directly provided
+                tiger_algorithm = remote_game.get("tiger_algorithm", "")
+                if not tiger_algorithm:
+                    tiger_algorithm = "mcts" if "mcts" in tiger_config.get("config_id", "").lower() else "minimax"
+                
+                goat_algorithm = remote_game.get("goat_algorithm", "")
+                if not goat_algorithm:
+                    goat_algorithm = "mcts" if "mcts" in goat_config.get("config_id", "").lower() else "minimax"
+                
+                # Parse move history
+                move_history = parse_move_history(remote_game["move_history"])
+                
+                return {
+                    'game_id': remote_game["game_id"],
+                    'winner': remote_game["winner"],
+                    'reason': remote_game["reason"],
+                    'moves': remote_game["moves"],
+                    'game_duration': remote_game["game_duration"],
+                    'avg_tiger_move_time': remote_game["avg_tiger_move_time"],
+                    'avg_goat_move_time': remote_game["avg_goat_move_time"],
+                    'first_capture_move': remote_game["first_capture_move"],
+                    'goats_captured': remote_game["goats_captured"],
+                    'phase_transition_move': remote_game["phase_transition_move"], 
+                    'move_history': move_history,
+                    'tiger_algorithm': tiger_algorithm,
+                    'tiger_config': tiger_config,
+                    'goat_algorithm': goat_algorithm,
+                    'goat_config': goat_config
+                }
+            else:
+                print(f"Error: {data.get('message', 'Unknown error')}")
+                return None
+        else:
+            print(f"Error: Server returned status code {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"Error fetching game from remote server: {e}")
+        return None
+
 def find_game(game_id: str) -> Optional[str]:
     """Find a game by ID in either tournament or competition results."""
     # Check MCTS tournament results
@@ -188,37 +264,46 @@ def parse_move_history(move_str: str) -> List[Dict]:
     return moves
 
 def load_game(game_id: str) -> Dict:
-    """Load a game by ID from the results files."""
+    """Load a game by ID from local files or fetch from remote if not found."""
+    # First try to find the game locally
     file_path = find_game(game_id)
-    if not file_path:
-        raise ValueError(f"Game {game_id} not found in any results files")
+    if file_path:
+        print(f"Game {game_id} found locally at {file_path}")
+        df = pd.read_csv(file_path)
+        game_row = df[df['game_id'] == game_id].iloc[0]
+        
+        # Parse move history from compact format
+        move_history = parse_move_history(game_row['move_history'])
+        
+        # Convert string representations to Python objects
+        game_data = {
+            'game_id': game_row['game_id'],
+            'winner': game_row['winner'],
+            'reason': game_row['reason'],
+            'moves': game_row['moves'],
+            'game_duration': game_row['game_duration'],
+            'avg_tiger_move_time': game_row['avg_tiger_move_time'],
+            'avg_goat_move_time': game_row['avg_goat_move_time'],
+            'first_capture_move': game_row['first_capture_move'],
+            'goats_captured': game_row['goats_captured'],
+            'phase_transition_move': game_row['phase_transition_move'],
+            'move_history': move_history,
+            'tiger_algorithm': game_row['tiger_algorithm'],
+            'tiger_config': json.loads(game_row['tiger_config']),
+            'goat_algorithm': game_row['goat_algorithm'],
+            'goat_config': json.loads(game_row['goat_config'])
+        }
+        
+        return game_data
     
-    df = pd.read_csv(file_path)
-    game_row = df[df['game_id'] == game_id].iloc[0]
+    # If not found locally, try to fetch remotely
+    print(f"Game {game_id} not found locally. Trying to fetch remotely...")
+    remote_game = fetch_remote_game(game_id)
+    if remote_game:
+        return remote_game
     
-    # Parse move history from compact format
-    move_history = parse_move_history(game_row['move_history'])
-    
-    # Convert string representations to Python objects
-    game_data = {
-        'game_id': game_row['game_id'],
-        'winner': game_row['winner'],
-        'reason': game_row['reason'],
-        'moves': game_row['moves'],
-        'game_duration': game_row['game_duration'],
-        'avg_tiger_move_time': game_row['avg_tiger_move_time'],
-        'avg_goat_move_time': game_row['avg_goat_move_time'],
-        'first_capture_move': game_row['first_capture_move'],
-        'goats_captured': game_row['goats_captured'],
-        'phase_transition_move': game_row['phase_transition_move'],
-        'move_history': move_history,
-        'tiger_algorithm': game_row['tiger_algorithm'],
-        'tiger_config': json.loads(game_row['tiger_config']),
-        'goat_algorithm': game_row['goat_algorithm'],
-        'goat_config': json.loads(game_row['goat_config'])
-    }
-    
-    return game_data
+    # If we get here, the game wasn't found locally or remotely
+    raise ValueError(f"Game {game_id} not found locally or remotely")
 
 def play_game(game_id: str):
     """Interactive game playback."""
