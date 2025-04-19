@@ -43,8 +43,9 @@ class GameRunner:
         """
         if config['algorithm'] == 'minimax':
             return MinimaxAgent(
-                max_depth=config.get('depth', 3),
-                randomize_equal_moves=config.get('randomize', True)
+                max_depth=config.get('max_depth', 3),
+                randomize_equal_moves=config.get('randomize', True),
+                useTunedParams=config.get('use_tuned_params', True)
             )
         elif config['algorithm'] == 'mcts':
             return MCTSAgent(
