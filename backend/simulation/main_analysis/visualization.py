@@ -220,21 +220,19 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None,
         
         # Add the p-value summary box if we have any p-values
         if p_value_text:
-            # Create a text box in the upper right
-            plt.annotate(
+            # Create a custom legend for the p-values in the upper right corner
+            p_value_box = plt.matplotlib.offsetbox.AnchoredText(
                 p_value_text,
-                xy=(0.97, 0.97),
-                xycoords='axes fraction',
-                ha='right',
-                va='top',
-                fontsize=10,
-                bbox=dict(
-                    boxstyle='round,pad=0.5',
-                    facecolor='white',
-                    alpha=0.8,
-                    edgecolor='gray'
-                )
+                loc='upper right',
+                prop=dict(size=10),
+                frameon=True,
+                bbox_to_anchor=(0.99, 0.99),
+                bbox_transform=plt.gca().transAxes
             )
+            p_value_box.patch.set_boxstyle("round,pad=0.5")
+            p_value_box.patch.set_alpha(0.9)
+            p_value_box.patch.set_edgecolor('black')
+            plt.gca().add_artist(p_value_box)
     
     # Set labels and title
     plt.xlabel('Role', fontsize=14)
@@ -322,20 +320,25 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None,
                 if p_value is not None:
                     p_value_text += f"{algo} Tiger vs Goat: p = {p_value:.4g}\n"
         
-        # Add the summary box in the upper right corner
-        fig.text(
-            0.97, 0.97, 
-            p_value_text.rstrip(),  # Remove trailing newline
-            ha='right',
-            va='top',
-            fontsize=9,
-            bbox=dict(
-                boxstyle='round,pad=0.5',
-                facecolor='white',
-                alpha=0.8,
-                edgecolor='gray'
+        # Only add the summary box if we found comparisons
+        if p_value_text:
+            # Get the current figure
+            fig = plt.gcf()
+            
+            # Create a custom legend for the p-values in the upper right corner
+            # Make a new figure artist for this
+            p_value_box = plt.matplotlib.offsetbox.AnchoredText(
+                p_value_text.rstrip(),
+                loc='upper right',
+                prop=dict(size=10),
+                frameon=True,
+                bbox_to_anchor=(0.99, 0.99),
+                bbox_transform=plt.gca().transAxes
             )
-        )
+            p_value_box.patch.set_boxstyle("round,pad=0.5")
+            p_value_box.patch.set_alpha(0.9)
+            p_value_box.patch.set_edgecolor('black')
+            plt.gca().add_artist(p_value_box)
     
     # Set labels and title
     ax.set_xlabel('Algorithm', fontsize=14)
@@ -348,7 +351,7 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None,
     ax.set_xticklabels(algorithms, fontsize=12)
     
     # Add legend for both bars and significance
-    ax.legend(fontsize=12)
+    ax.legend(fontsize=12, loc='upper left')
     
     # Add a legend for p-values at the bottom
     if statistical_results and 'role_comparison_tests' in statistical_results:
@@ -432,7 +435,8 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
         test_keys = list(tests.keys())
         all_p_values = [test['p_value'] for test in tests.values()]
         
-        # Debug print to check if we have p-values
+        # Debug print to check if we have p-values and tests
+        print(f"Depth comparison tests: {test_keys}")
         print(f"Depth comparison p-values: {all_p_values}")
         
         # Apply Benjamini-Hochberg correction if we have p-values
@@ -442,58 +446,78 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
             # Debug print for corrected p-values
             print(f"Corrected depth p-values: {corrected_p_values}")
             
+            # Create a list to store all comparison texts for review
+            comparison_texts = []
+            
             # Make the p-values more visible by adding a summary box
             p_value_summary = "Adjacent Depth Comparisons:\n"
+            has_comparisons = False
             
             # Add significance indicators for adjacent depths
             for i in range(len(depth_performance) - 1):
                 # Find the test comparing current depth with next depth
-                current_depth = str(depth_performance['Depth'].iloc[i])
-                next_depth = str(depth_performance['Depth'].iloc[i + 1])
+                current_depth = str(int(depth_performance['Depth'].iloc[i]))  # Convert to int then string to remove decimal
+                next_depth = str(int(depth_performance['Depth'].iloc[i + 1]))
                 
+                # Debug info about which depths we're looking for
+                print(f"Looking for comparison between depth {current_depth} and {next_depth}")
+                
+                # Try both orders of the comparison
                 test_key = f"{current_depth}_vs_{next_depth}"
-                if test_key not in tests:
-                    test_key = f"{next_depth}_vs_{current_depth}"  # Try reverse order
+                reverse_test_key = f"{next_depth}_vs_{current_depth}"
                 
                 if test_key in tests:
+                    print(f"Found test: {test_key}")
                     test_idx = test_keys.index(test_key)
                     corrected_p = corrected_p_values[test_idx]
+                    has_comparisons = True
                     
-                    # Add this comparison to the summary
-                    p_value_summary += f"Depth {current_depth} vs {next_depth}: p = {corrected_p:.4g}\n"
+                    # Add this comparison to texts list
+                    comparison_text = f"Depth {current_depth} vs {next_depth}: p = {corrected_p:.4g}"
+                    comparison_texts.append(comparison_text)
+                    p_value_summary += comparison_text + "\n"
                     
-                    # Add p-value text at appropriate height with VERY prominent display
-                    text_height = max_ci_upper + 0.1
+                    # Print for debugging
+                    print(comparison_text)
                     
-                    # Calculate position halfway between bars
-                    x_pos = (positions[i] + positions[i + 1]) / 2
+                    # Remove the individual p-value text between bars
+                elif reverse_test_key in tests:
+                    print(f"Found reverse test: {reverse_test_key}")
+                    test_idx = test_keys.index(reverse_test_key)
+                    corrected_p = corrected_p_values[test_idx]
+                    has_comparisons = True
                     
-                    # Add p-value text with very clear formatting and larger size
-                    plt.text(
-                        x_pos,
-                        text_height,
-                        f'p = {corrected_p:.4g}',
-                        ha='center',
-                        va='bottom',
-                        fontsize=10,
-                        fontweight='bold',
-                        bbox=dict(facecolor='white', alpha=0.9, edgecolor='black', boxstyle='round,pad=0.3')
-                    )
+                    # Add this comparison to texts list
+                    comparison_text = f"Depth {current_depth} vs {next_depth}: p = {corrected_p:.4g}"
+                    comparison_texts.append(comparison_text)
+                    p_value_summary += comparison_text + "\n"
+                    
+                    # Print for debugging
+                    print(comparison_text)
+                    
+                    # Remove the individual p-value text between bars
+                else:
+                    print(f"No test found for comparison between depth {current_depth} and {next_depth}")
             
-            # Add a summary box in the upper right corner
-            plt.figtext(
-                0.97, 0.97,
-                p_value_summary.rstrip(),  # Remove trailing newline
-                ha='right',
-                va='top',
-                fontsize=9,
-                bbox=dict(
-                    boxstyle='round,pad=0.5',
-                    facecolor='white',
-                    alpha=0.8,
-                    edgecolor='gray'
+            # Print all comparisons for debugging
+            print(f"All comparison texts: {comparison_texts}")
+            
+            # Only add the summary box if we found comparisons
+            if has_comparisons:
+                # Create a custom legend for the p-values in the upper right corner
+                # Make a new figure artist for this
+                p_value_box = plt.matplotlib.offsetbox.AnchoredText(
+                    p_value_summary.rstrip(),
+                    loc='upper right',
+                    prop=dict(size=10),
+                    frameon=True,
+                    bbox_to_anchor=(0.99, 0.99),
+                    bbox_transform=plt.gca().transAxes
                 )
-            )
+                p_value_box.patch.set_boxstyle("round,pad=0.5")
+                p_value_box.patch.set_alpha(0.9)
+                p_value_box.patch.set_edgecolor('black')
+                plt.gca().add_artist(p_value_box)
     
     # Set labels and title
     plt.xlabel('Minimax Depth', fontsize=14)
