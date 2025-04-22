@@ -78,15 +78,16 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
     # Set x-ticks
     plt.xticks(positions, algorithm_comparison['Algorithm'], fontsize=12)
     
-    # Add number of games as text
+    # Add number of games as text above bars (win rate vis)
     for i, games in enumerate(algorithm_comparison['Games']):
         plt.text(
             positions[i],
-            0.05,
-            f'n={games}',
+            5,
+            str(games),
             ha='center',
             va='bottom',
-            fontsize=10
+            fontsize=10,
+            fontweight='bold'
         )
     
     plt.tight_layout()
@@ -154,15 +155,16 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
     # Set x-ticks
     plt.xticks(positions, role_performance['Role'], fontsize=12)
     
-    # Add number of games as text
+    # Add number of games as text above bars (win rate vis)
     for i, games in enumerate(role_performance['Games']):
         plt.text(
             positions[i],
             5,
-            f'n={games}',
+            str(games),
             ha='center',
             va='bottom',
-            fontsize=10
+            fontsize=10,
+            fontweight='bold'
         )
     
     plt.legend(fontsize=12)
@@ -286,15 +288,16 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
     # Set x-ticks
     plt.xticks(positions, depth_performance['Depth'], fontsize=12)
     
-    # Add number of games as text
+    # Add number of games as text above bars (win rate vis)
     for i, games in enumerate(depth_performance['Games']):
         plt.text(
             positions[i],
-            0.05,
-            f'n={games}',
+            5,
+            str(games),
             ha='center',
             va='bottom',
-            fontsize=10
+            fontsize=10,
+            fontweight='bold'
         )
     
     plt.legend(fontsize=12)
@@ -503,16 +506,16 @@ def create_matchup_visualizations(performance_metrics, output_dir, config=None):
             # Set x-ticks
             plt.xticks(positions, config_data['Minimax Depth'])
             
-            # Add number of games as text, in 2 rows and bold
+            # Add number of games as text above bars (win rate vis)
             for i, (tiger_games, goat_games) in enumerate(zip(config_data['As Tiger Games'], config_data['As Goat Games'])):
                 # Show total games in bold
                 total_games = tiger_games + goat_games
                 plt.text(
                     positions[i],
-                    -0.05,
+                    5,
                     str(total_games),
                     ha='center',
-                    va='top',
+                    va='bottom',
                     fontsize=10,
                     fontweight='bold'
                 )
@@ -582,69 +585,78 @@ def create_capture_visualizations(game_dynamics, output_dir, config=None):
     plt.xlabel('Number of Captures', fontsize=14)
     plt.ylabel('Percentage', fontsize=14)
     plt.title('Win Rates by Number of Captures', fontsize=16)
-    plt.xticks(positions, capture_analysis['Captures'])
     
-    # Add number of games as text in 2 rows, centered and bold
+    # Add extra data point for spacing (make room for the legend)
+    plt.xticks(positions.tolist() + [max(positions) + 1], capture_analysis['Captures'].tolist() + [""])
+    
+    # Add number of games as text above bars (win rate vis)
     for i, games in enumerate(capture_analysis['Games']):
         plt.text(
             positions[i],
-            -5,
+            5,
             str(games),
             ha='center',
-            va='top',
-            fontsize=9,
+            va='bottom',
+            fontsize=10,
             fontweight='bold'
         )
     
     plt.legend(fontsize=12)
     plt.ylim(0, 100)
-    
-    # Add extra padding to the right for the legend
-    plt.subplots_adjust(right=0.85)
+    plt.xlim(-0.5, max(positions) + 1.5)  # Extend x-axis for legend room
     
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'capture_outcomes.png'), dpi=300)
     plt.close()
     
     # Plot 2: First capture timing vs. outcome
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 7))
     
-    # Filter rows with valid first capture data
+    # Filter out rows with no first capture data
     first_capture_data = capture_analysis[capture_analysis['Avg First Capture Move'].notna()]
     
     if len(first_capture_data) > 0:
-        # Create positions for the scatter plot
-        x = first_capture_data['Avg First Capture Move']
-        y_tiger = first_capture_data['Tiger Win %']
-        y_goat = first_capture_data['Goat Win %']
-        sizes = first_capture_data['Games'] / max(first_capture_data['Games']) * 300
+        # Set positions for the bars
+        positions = np.arange(len(first_capture_data))
         
-        # Create scatter plot
-        plt.scatter(x, y_tiger, s=sizes, color=color_tiger, alpha=0.7, label='Tiger Win %')
-        plt.scatter(x, y_goat, s=sizes, color=color_goat, alpha=0.7, label='Goat Win %')
+        # Plot bars for first capture timing
+        plt.bar(
+            positions,
+            first_capture_data['Avg First Capture Move'],
+            color='purple',
+            alpha=0.7
+        )
+        
+        # Set labels and title
+        plt.xlabel('Number of Captures', fontsize=14)
+        plt.ylabel('Average Move Number of First Capture', fontsize=14)
+        plt.title('First Capture Timing by Final Capture Count', fontsize=16, pad=15)
+        
+        # Set x-ticks
+        plt.xticks(positions, first_capture_data['Captures'], fontsize=12)
+        
+        # Calculate y-axis max as next multiple of 5 above the maximum value
+        max_value = first_capture_data['Avg First Capture Move'].max()
+        y_max = 5 * (int(max_value / 5) + 2)  # Next highest multiple of 5, plus one extra tick
+        plt.ylim(0, y_max)
         
         # Add data labels
-        for i, row in first_capture_data.iterrows():
-            plt.text(
-                row['Avg First Capture Move'],
-                row['Tiger Win %'] + 3,
-                f"{int(row['Captures'])} captures",
-                ha='center',
-                va='center',
-                fontsize=9
-            )
+        for i, avg_move in enumerate(first_capture_data['Avg First Capture Move']):
+            if not pd.isna(avg_move):
+                plt.text(
+                    positions[i],
+                    avg_move + 1,
+                    f'{avg_move:.1f}',
+                    ha='center',
+                    va='bottom',
+                    fontsize=10
+                )
         
-        # Set labels and title with increased top padding
-        plt.xlabel('Average First Capture Move', fontsize=14)
-        plt.ylabel('Win Percentage', fontsize=14)
-        plt.title('First Capture Timing vs. Outcome', fontsize=16, pad=15)
-        plt.ylim(0, 100)
-        
-        plt.legend(fontsize=12)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'first_capture_timing.png'), dpi=300)
-    plt.close()
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'first_capture_timing.png'), dpi=300)
+        plt.close()
+    else:
+        print("No first capture timing data available for visualization")
     
     # Plot 3: Scatter plot of capture count vs. game length
     plt.figure(figsize=(12, 8))
@@ -754,18 +766,6 @@ def create_capture_visualizations(game_dynamics, output_dir, config=None):
         plt.title('Goat Comeback Wins Despite Captures', fontsize=16)
         plt.xticks(positions, comeback_analysis['Captures'])
         
-        # Add number of games as text (without "total")
-        for i, games in enumerate(comeback_analysis['Games']):
-            plt.text(
-                positions[i],
-                -0.5,
-                f"{games}",
-                ha='center',
-                va='top',
-                fontsize=10,
-                fontweight='bold'
-            )
-        
         plt.legend(fontsize=12)
         
         # Set y-limit to allow space for labels
@@ -835,15 +835,15 @@ def create_game_length_visualizations(game_dynamics, output_dir, config=None):
     plt.title('Game Outcomes by Length', fontsize=16)
     plt.xticks(positions, length_analysis['Length Range'], fontsize=10, rotation=45, ha='right')
     
-    # Add number of games as text in 2 rows, center-aligned and bold
+    # Add number of games as text above bars (win rate vis)
     for i, games in enumerate(length_analysis['Games']):
         plt.text(
             positions[i],
-            -5,
+            5,
             str(games),
             ha='center',
-            va='top',
-            fontsize=9,
+            va='bottom',
+            fontsize=10,
             fontweight='bold'
         )
     
@@ -1017,23 +1017,22 @@ def create_movement_visualizations(movement_patterns, output_dir, config=None):
                 plt.ylim(0, 100)
                 
                 # Set x-ticks
-                plt.xticks(positions, opening_data['Response'], fontsize=10, rotation=45, ha='right')
+                plt.xticks(positions, opening_data['Response'], fontsize=10, fontweight='bold')
                 
-                # Add number of games as text in 2 rows and bold
+                # Add number of games as text above bars (win rate vis)
                 for i, games in enumerate(opening_data['Games']):
                     plt.text(
                         positions[i],
-                        -5,
+                        5,
                         str(games),
                         ha='center',
-                        va='top',
-                        fontsize=9,
+                        va='bottom',
+                        fontsize=10,
                         fontweight='bold'
                     )
                 
                 plt.legend(fontsize=12)
                 plt.tight_layout()
-                plt.subplots_adjust(bottom=0.25)  # Add more space at the bottom
                 
                 # Create a safe filename
                 safe_opening_name = opening.replace('/', '_').replace('\\', '_').replace(' ', '_').replace('@', 'at')
