@@ -257,7 +257,8 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None,
             fontweight='bold'
         )
     
-    plt.legend(fontsize=12)
+    # Move the legend to the upper left
+    plt.legend(fontsize=12, loc='upper left', framealpha=0.7)
     
     # Add a legend for p-values at the bottom
     if statistical_results and 'algorithm_role_comparison_tests' in statistical_results:
