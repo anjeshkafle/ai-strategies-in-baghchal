@@ -316,25 +316,46 @@ def analyze_performance(df, config=None):
         'As Goat CI Upper': [mcts_as_goat_ci[1], minimax_as_goat_ci[1]]
     })
     
-    # Create role performance dataframe
-    role_performance = pd.DataFrame({
-        'Role': ['MCTS as Tiger', 'MCTS as Goat', 'Minimax as Tiger', 'Minimax as Goat'],
+    # Calculate wins and draws for each algorithm and role combination
+    mcts_tiger_wins = mcts_tiger['tiger_won'].sum()
+    mcts_tiger_draws = mcts_tiger['draw'].sum()
+    mcts_goat_wins = mcts_goat['goat_won'].sum()
+    mcts_goat_draws = mcts_goat['draw'].sum()
+    minimax_tiger_wins = minimax_tiger['tiger_won'].sum()
+    minimax_tiger_draws = minimax_tiger['draw'].sum()
+    minimax_goat_wins = minimax_goat['goat_won'].sum()
+    minimax_goat_draws = minimax_goat['draw'].sum()
+
+    # Analyze algorithm and role performance
+    roles = ['MCTS as Tiger', 'MCTS as Goat', 'Minimax as Tiger', 'Minimax as Goat']
+    
+    role_data = {
+        'Role': roles,
         'Games': [len(mcts_tiger), len(mcts_goat), len(minimax_tiger), len(minimax_goat)],
-        'Win Rate': [mcts_as_tiger_adjusted, mcts_as_goat_adjusted, 
-                    minimax_as_tiger_adjusted, minimax_as_goat_adjusted],
-        'Win %': [mcts_as_tiger_win_rate, mcts_as_goat_win_rate, 
-                 minimax_as_tiger_win_rate, minimax_as_goat_win_rate],
-        'Draw %': [mcts_as_tiger_draw_rate, mcts_as_goat_draw_rate, 
-                  minimax_as_tiger_draw_rate, minimax_as_goat_draw_rate],
-        'Loss %': [1 - mcts_as_tiger_win_rate - mcts_as_tiger_draw_rate, 
-                  1 - mcts_as_goat_win_rate - mcts_as_goat_draw_rate,
-                  1 - minimax_as_tiger_win_rate - minimax_as_tiger_draw_rate,
-                  1 - minimax_as_goat_win_rate - minimax_as_goat_draw_rate],
-        'CI Lower': [mcts_as_tiger_ci[0], mcts_as_goat_ci[0], 
-                    minimax_as_tiger_ci[0], minimax_as_goat_ci[0]],
-        'CI Upper': [mcts_as_tiger_ci[1], mcts_as_goat_ci[1], 
-                    minimax_as_tiger_ci[1], minimax_as_goat_ci[1]]
-    })
+        'Wins': [mcts_tiger_wins, mcts_goat_wins, minimax_tiger_wins, minimax_goat_wins],
+        'Draws': [mcts_tiger_draws, mcts_goat_draws, minimax_tiger_draws, minimax_goat_draws],
+        'Losses': [len(mcts_tiger) - mcts_tiger_wins - mcts_tiger_draws,
+                  len(mcts_goat) - mcts_goat_wins - mcts_goat_draws,
+                  len(minimax_tiger) - minimax_tiger_wins - minimax_tiger_draws,
+                  len(minimax_goat) - minimax_goat_wins - minimax_goat_draws]
+    }
+    
+    # Calculate percentages
+    role_data['Win %'] = [wins / games if games > 0 else 0 for wins, games in zip(role_data['Wins'], role_data['Games'])]
+    role_data['Draw %'] = [draws / games if games > 0 else 0 for draws, games in zip(role_data['Draws'], role_data['Games'])]
+    role_data['Loss %'] = [losses / games if games > 0 else 0 for losses, games in zip(role_data['Losses'], role_data['Games'])]
+    
+    # Calculate adjusted win rate (counting draws as 0.5 wins)
+    role_data['Win Rate'] = [(wins + 0.5 * draws) / games if games > 0 else 0 
+                            for wins, draws, games in zip(role_data['Wins'], role_data['Draws'], role_data['Games'])]
+    
+    # Calculate confidence intervals
+    role_data['CI Lower'] = [calculate_confidence_intervals(wr, g)[0] if g > 0 else 0 
+                            for wr, g in zip(role_data['Win Rate'], role_data['Games'])]
+    role_data['CI Upper'] = [calculate_confidence_intervals(wr, g)[1] if g > 0 else 0 
+                            for wr, g in zip(role_data['Win Rate'], role_data['Games'])]
+    
+    role_performance = pd.DataFrame(role_data)
     
     # Analyze Minimax depth performance
     depth_performance_list = []
@@ -684,7 +705,6 @@ def analyze_game_dynamics(df):
     
     # Analyze threefold repetition draws
     repetition_draws = df[(df['draw']) & (df['reason'] == 'THREEFOLD_REPETITION')]
-    normal_draws = df[(df['draw']) & (df['reason'] != 'THREEFOLD_REPETITION')]
     
     repetition_by_algorithm = {
         'MCTS as Tiger': len(repetition_draws[repetition_draws['tiger_algorithm'] == 'mcts']),
@@ -694,7 +714,7 @@ def analyze_game_dynamics(df):
     }
     
     repetition_analysis_data = [{
-        'Draw Type': 'Repetition',
+        'Draw Type': 'Threefold Repetition',
         'Games': len(repetition_draws),
         'Avg Length': repetition_draws['moves'].mean() if len(repetition_draws) > 0 else 0,
         'Avg Captures': repetition_draws['goats_captured'].mean() if len(repetition_draws) > 0 else 0,
@@ -702,15 +722,6 @@ def analyze_game_dynamics(df):
         'MCTS as Goat': repetition_by_algorithm['MCTS as Goat'],
         'Minimax as Tiger': repetition_by_algorithm['Minimax as Tiger'],
         'Minimax as Goat': repetition_by_algorithm['Minimax as Goat']
-    }, {
-        'Draw Type': 'Normal',
-        'Games': len(normal_draws),
-        'Avg Length': normal_draws['moves'].mean() if len(normal_draws) > 0 else 0,
-        'Avg Captures': normal_draws['goats_captured'].mean() if len(normal_draws) > 0 else 0,
-        'MCTS as Tiger': len(normal_draws[normal_draws['tiger_algorithm'] == 'mcts']),
-        'MCTS as Goat': len(normal_draws[normal_draws['goat_algorithm'] == 'mcts']),
-        'Minimax as Tiger': len(normal_draws[normal_draws['tiger_algorithm'] == 'minimax']),
-        'Minimax as Goat': len(normal_draws[normal_draws['goat_algorithm'] == 'minimax'])
     }]
     
     repetition_analysis = pd.DataFrame(repetition_analysis_data)
@@ -903,42 +914,9 @@ def analyze_movement_patterns(df):
     
     capture_pattern_analysis = pd.DataFrame(capture_pattern_data)
     
-    # Analyze draw patterns - positions at end of draw games
-    draw_positions = {}
-    
-    for _, game in df[df['draw']].iterrows():
-        parsed_moves = game['parsed_moves']
-        
-        if len(parsed_moves) > 0:
-            # Get last move
-            last_move = parsed_moves[-1]
-            
-            if last_move['type'] == 'movement':
-                to_pos = (last_move['to']['x'], last_move['to']['y'])
-                
-                if to_pos not in draw_positions:
-                    draw_positions[to_pos] = 0
-                
-                draw_positions[to_pos] += 1
-    
-    # Create a structured dataframe for draw pattern analysis
-    draw_pattern_data = []
-    
-    for pos, count in sorted(draw_positions.items(), key=lambda x: x[1], reverse=True)[:10]:  # Top 10 positions
-        draw_pattern_data.append({
-            'Position': board_positions[pos],
-            'X': pos[0],
-            'Y': pos[1],
-            'Count': count,
-            'Percentage': count / sum(draw_positions.values()) * 100
-        })
-    
-    draw_pattern_analysis = pd.DataFrame(draw_pattern_data)
-    
     return {
         'opening_analysis': opening_analysis,
-        'capture_pattern_analysis': capture_pattern_analysis,
-        'draw_pattern_analysis': draw_pattern_analysis
+        'capture_pattern_analysis': capture_pattern_analysis
     }
 
 def perform_statistical_tests(df):

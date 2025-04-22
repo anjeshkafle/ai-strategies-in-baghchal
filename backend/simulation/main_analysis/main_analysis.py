@@ -73,7 +73,6 @@ def run_analysis(competition_file, output_dir, config_file=None):
     game_dynamics["time_analysis"].to_csv(os.path.join(data_dir, "time_analysis.csv"), index=False)
     movement_patterns["opening_analysis"].to_csv(os.path.join(data_dir, "opening_analysis.csv"), index=False)
     movement_patterns["capture_pattern_analysis"].to_csv(os.path.join(data_dir, "capture_pattern_analysis.csv"), index=False)
-    movement_patterns["draw_pattern_analysis"].to_csv(os.path.join(data_dir, "draw_pattern_analysis.csv"), index=False)
     
     # Generate summary report
     with open(os.path.join(output_dir, "competition_analysis_summary.txt"), "w") as f:
