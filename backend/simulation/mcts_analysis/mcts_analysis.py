@@ -355,6 +355,241 @@ def calculate_win_rates(df):
     
     return merged_df
 
+def check_test_assumptions(data_groups):
+    """
+    Perform basic checks on statistical test assumptions.
+    
+    Args:
+        data_groups: List of data arrays to check
+        
+    Returns:
+        Dictionary with assumption check results
+    """
+    import numpy as np
+    from scipy import stats
+    
+    results = {}
+    
+    # Check sample sizes
+    sample_sizes = [len(group) for group in data_groups if hasattr(group, '__len__')]
+    results['sample_sizes'] = sample_sizes
+    
+    # Check if samples are large enough for CLT to apply
+    results['adequate_sample_size'] = all(size >= 30 for size in sample_sizes)
+    
+    # Basic normality check (simplified)
+    try:
+        normality_results = []
+        for i, group in enumerate(data_groups):
+            if hasattr(group, '__len__') and len(group) >= 8:  # Minimum for Shapiro-Wilk
+                stat, p = stats.shapiro(group)
+                normality_results.append({
+                    'group': i,
+                    'p_value': p,
+                    'normal': p > 0.05
+                })
+        results['normality'] = normality_results
+    except Exception as e:
+        results['normality'] = f"Error checking normality: {str(e)}"
+    
+    # Check homogeneity of variance
+    try:
+        if len(data_groups) == 2 and all(hasattr(group, '__len__') for group in data_groups):
+            # Use Levene's test for equal variances
+            stat, p = stats.levene(data_groups[0], data_groups[1])
+            results['homogeneity_of_variance'] = {
+                'test': 'Levene',
+                'statistic': stat,
+                'p_value': p,
+                'equal_variance': p > 0.05
+            }
+    except Exception as e:
+        results['homogeneity_of_variance'] = f"Error checking homogeneity of variance: {str(e)}"
+    
+    return results
+
+def generate_statistical_report(statistical_results, output_dir, config=None):
+    """
+    Generate a dedicated statistical report with test results.
+    
+    Args:
+        statistical_results: Dictionary with statistical test results
+        output_dir: Directory to save the report
+        config: Configuration dictionary
+    """
+    import os
+    from statsmodels.stats.multitest import multipletests
+    import numpy as np
+    
+    report_path = os.path.join(output_dir, 'statistical_validation.txt')
+    significance_threshold = config.get('statistical', {}).get('significance_threshold', 0.05)
+    
+    with open(report_path, 'w') as f:
+        f.write("MCTS TOURNAMENT STATISTICAL VALIDATION REPORT\n")
+        f.write("==========================================\n\n")
+        
+        f.write(f"Significance level (α): {significance_threshold}\n")
+        f.write("Multiple comparison correction: Benjamini-Hochberg procedure\n\n")
+        
+        # Rollout depth comparison
+        if 'depth_ttest' in statistical_results:
+            test = statistical_results['depth_ttest']
+            f.write("ROLLOUT DEPTH COMPARISON\n")
+            f.write("-----------------------\n")
+            f.write(f"Test: Two-sample t-test (Welch's t-test with unequal variance)\n")
+            f.write(f"t-statistic: {test['statistic']:.4f}\n")
+            f.write(f"p-value: {test['p_value']:.4f}\n")
+            f.write(f"Significant: {'Yes' if test['p_value'] < significance_threshold else 'No'}\n\n")
+            
+            # Add interpretation
+            if test['p_value'] < significance_threshold:
+                better_depth = "4" if test['depth4_win_rate'] > test['depth6_win_rate'] else "6"
+                effect_size = abs(test['depth4_win_rate'] - test['depth6_win_rate'])
+                effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                f.write(f"Interpretation: Rollout depth {better_depth} performs significantly better overall.\n")
+                f.write(f"  Depth 4 win rate: {test['depth4_win_rate']:.4f}\n")
+                f.write(f"  Depth 6 win rate: {test['depth6_win_rate']:.4f}\n")
+                f.write(f"  Effect size (mean difference): {effect_size:.4f} ({effect_magnitude})\n")
+            else:
+                f.write("Interpretation: No significant difference between rollout depths 4 and 6.\n")
+            f.write("\n")
+        
+        # Rollout policy comparison (ANOVA)
+        if 'policy_anova' in statistical_results:
+            test = statistical_results['policy_anova']
+            f.write("ROLLOUT POLICY COMPARISON\n")
+            f.write("------------------------\n")
+            f.write(f"Test: One-way ANOVA\n")
+            f.write(f"F-statistic: {test['statistic']:.4f}\n")
+            f.write(f"p-value: {test['p_value']:.4f}\n")
+            f.write(f"Significant: {'Yes' if test['p_value'] < significance_threshold else 'No'}\n\n")
+            
+            if 'policies' in test and 'policy_win_rates' in test:
+                f.write("Policy win rates:\n")
+                for i, policy in enumerate(test['policies']):
+                    f.write(f"  {policy}: {test['policy_win_rates'][i]:.4f}\n")
+            
+            # Add interpretation
+            if test['p_value'] < significance_threshold:
+                f.write("\nInterpretation: There are significant differences between rollout policies.\n")
+                if 'policies' in test and 'policy_win_rates' in test:
+                    best_idx = np.argmax(test['policy_win_rates'])
+                    best_policy = test['policies'][best_idx]
+                    f.write(f"  Best performing policy: {best_policy} (win rate: {test['policy_win_rates'][best_idx]:.4f})\n")
+            else:
+                f.write("\nInterpretation: No significant differences between rollout policies.\n")
+            f.write("\n")
+        
+        # Exploration weight comparisons with multiple comparison correction
+        if 'exploration_weight_ttests' in statistical_results:
+            f.write("EXPLORATION WEIGHT COMPARISONS\n")
+            f.write("-----------------------------\n")
+            f.write("Test: Pairwise t-tests with Benjamini-Hochberg correction\n\n")
+            
+            # Get p-values for correction
+            tests = statistical_results['exploration_weight_ttests']
+            test_keys = list(tests.keys())
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            # Apply correction if we have p-values
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                # Report results
+                for i, key in enumerate(test_keys):
+                    test = tests[key]
+                    w1, w2 = key.split('_vs_')
+                    corrected_p = corrected_p_values[i]
+                    is_significant = corrected_p < significance_threshold
+                    
+                    f.write(f"Weight {w1} vs Weight {w2}:\n")
+                    f.write(f"  t-statistic: {test['statistic']:.4f}\n")
+                    f.write(f"  Original p-value: {test['p_value']:.4f}\n")
+                    f.write(f"  Corrected p-value: {corrected_p:.4f}\n")
+                    f.write(f"  Significant after correction: {'Yes' if is_significant else 'No'}\n")
+                    
+                    if 'w1_win_rate' in test and 'w2_win_rate' in test:
+                        better_weight = w1 if test['w1_win_rate'] > test['w2_win_rate'] else w2
+                        effect_size = abs(test['w1_win_rate'] - test['w2_win_rate'])
+                        effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                        f.write(f"  Better performer: Weight {better_weight}\n")
+                        f.write(f"  Effect size (mean difference): {effect_size:.4f} ({effect_magnitude})\n")
+                    f.write("\n")
+        
+        f.write("\nASSUMPTION CHECKS\n")
+        f.write("----------------\n")
+        f.write("Note: For large sample sizes (n > 30), parametric tests are generally robust\n")
+        f.write("to violations of normality due to the Central Limit Theorem.\n\n")
+        
+        if 'assumption_checks' in statistical_results:
+            assumptions = statistical_results['assumption_checks']
+            if 'sample_sizes' in assumptions:
+                f.write("Sample sizes:\n")
+                for i, size in enumerate(assumptions['sample_sizes']):
+                    f.write(f"  Group {i+1}: {size} games\n")
+                f.write("\n")
+            
+            if 'normality' in assumptions and isinstance(assumptions['normality'], list):
+                f.write("Normality tests (Shapiro-Wilk):\n")
+                for result in assumptions['normality']:
+                    group = result['group']
+                    p_value = result['p_value']
+                    normal = result['normal']
+                    f.write(f"  Group {group+1}: p={p_value:.4f} - {'Normal' if normal else 'Non-normal'} distribution\n")
+                f.write("\n")
+            
+            if 'homogeneity_of_variance' in assumptions and isinstance(assumptions['homogeneity_of_variance'], dict):
+                hov = assumptions['homogeneity_of_variance']
+                f.write(f"Homogeneity of variance (Levene's test):\n")
+                f.write(f"  Statistic: {hov['statistic']:.4f}\n")
+                f.write(f"  p-value: {hov['p_value']:.4f}\n")
+                f.write(f"  Verdict: {'Equal' if hov['equal_variance'] else 'Unequal'} variances\n\n")
+        
+        f.write("\nSTATISTICALLY SIGNIFICANT FINDINGS SUMMARY\n")
+        f.write("---------------------------------------\n")
+        
+        # Collect all significant findings after correction
+        significant_findings = []
+        
+        # Depth comparison
+        if 'depth_ttest' in statistical_results:
+            test = statistical_results['depth_ttest']
+            if test['p_value'] < significance_threshold:
+                better_depth = "4" if test['depth4_win_rate'] > test['depth6_win_rate'] else "6"
+                significant_findings.append(f"- Rollout depth {better_depth} performs significantly better (p={test['p_value']:.4f})")
+        
+        # Policy comparison
+        if 'policy_anova' in statistical_results:
+            test = statistical_results['policy_anova']
+            if test['p_value'] < significance_threshold and 'policies' in test and 'policy_win_rates' in test:
+                best_idx = np.argmax(test['policy_win_rates'])
+                best_policy = test['policies'][best_idx]
+                significant_findings.append(f"- Rollout policy {best_policy} performs significantly better (ANOVA p={test['p_value']:.4f})")
+        
+        # Exploration weight comparisons
+        if 'exploration_weight_ttests' in statistical_results:
+            tests = statistical_results['exploration_weight_ttests']
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                # Find significant comparisons after correction
+                for i, (key, test) in enumerate(tests.items()):
+                    if corrected_p_values[i] < significance_threshold:
+                        w1, w2 = key.split('_vs_')
+                        better_weight = w1 if test.get('w1_win_rate', 0) > test.get('w2_win_rate', 0) else w2
+                        significant_findings.append(f"- Exploration weight {better_weight} performs significantly better than weight {w2 if better_weight == w1 else w1} (corrected p={corrected_p_values[i]:.4f})")
+        
+        if significant_findings:
+            for finding in significant_findings:
+                f.write(f"{finding}\n")
+        else:
+            f.write("No findings remained statistically significant after correction for multiple comparisons.\n")
+        
+    print(f"Statistical validation report saved to {report_path}")
+    return report_path
+
 def perform_statistical_tests(df):
     """
     Perform t-tests and ANOVA on configuration parameters.
@@ -391,6 +626,10 @@ def perform_statistical_tests(df):
             score = 1 if game['goat_won'] else 0.5 if game['draw'] else 0
         depth6_win_scores.append(score)
     
+    # Check assumptions
+    assumption_checks = check_test_assumptions([depth4_win_scores, depth6_win_scores])
+    results['assumption_checks'] = assumption_checks
+    
     if depth4_win_scores and depth6_win_scores:
         depth_ttest = stats.ttest_ind(
             depth4_win_scores,
@@ -398,11 +637,19 @@ def perform_statistical_tests(df):
             equal_var=False
         )
         
+        # Calculate effect size
+        effect_size = abs(np.mean(depth4_win_scores) - np.mean(depth6_win_scores))
+        
         results['depth_ttest'] = {
             'statistic': depth_ttest.statistic,
             'p_value': depth_ttest.pvalue,
             'depth4_win_rate': np.mean(depth4_win_scores),
-            'depth6_win_rate': np.mean(depth6_win_scores)
+            'depth6_win_rate': np.mean(depth6_win_scores),
+            'depth4_std': np.std(depth4_win_scores, ddof=1) if len(depth4_win_scores) > 1 else 0,
+            'depth6_std': np.std(depth6_win_scores, ddof=1) if len(depth6_win_scores) > 1 else 0,
+            'depth4_n': len(depth4_win_scores),
+            'depth6_n': len(depth6_win_scores),
+            'effect_size': effect_size
         }
     
     # T-tests for exploration weights

@@ -8,6 +8,7 @@ import json
 import os
 import re
 from typing import Dict, List, Tuple, Any, Optional
+from statsmodels.stats.multitest import multipletests
 
 def load_config(config_path=None):
     """
@@ -919,6 +920,56 @@ def analyze_movement_patterns(df):
         'capture_pattern_analysis': capture_pattern_analysis
     }
 
+def check_test_assumptions(data_groups):
+    """
+    Perform basic checks on statistical test assumptions.
+    
+    Args:
+        data_groups: List of data arrays to check
+        
+    Returns:
+        Dictionary with assumption check results
+    """
+    results = {}
+    
+    # Check sample sizes
+    sample_sizes = [len(group) for group in data_groups if hasattr(group, '__len__')]
+    results['sample_sizes'] = sample_sizes
+    
+    # Check if samples are large enough for CLT to apply
+    results['adequate_sample_size'] = all(size >= 30 for size in sample_sizes)
+    
+    # Basic normality check (simplified)
+    try:
+        normality_results = []
+        for i, group in enumerate(data_groups):
+            if hasattr(group, '__len__') and len(group) >= 8:  # Minimum for Shapiro-Wilk
+                stat, p = stats.shapiro(group)
+                normality_results.append({
+                    'group': i,
+                    'p_value': p,
+                    'normal': p > 0.05
+                })
+        results['normality'] = normality_results
+    except Exception as e:
+        results['normality'] = f"Error checking normality: {str(e)}"
+    
+    # Check homogeneity of variance
+    try:
+        if len(data_groups) == 2 and all(hasattr(group, '__len__') for group in data_groups):
+            # Use Levene's test for equal variances
+            stat, p = stats.levene(data_groups[0], data_groups[1])
+            results['homogeneity_of_variance'] = {
+                'test': 'Levene',
+                'statistic': stat,
+                'p_value': p,
+                'equal_variance': p > 0.05
+            }
+    except Exception as e:
+        results['homogeneity_of_variance'] = f"Error checking homogeneity of variance: {str(e)}"
+    
+    return results
+
 def perform_statistical_tests(df):
     """
     Perform statistical tests on the competition data.
@@ -948,6 +999,10 @@ def perform_statistical_tests(df):
         minimax_goat['goat_won'].astype(float) + 0.5 * minimax_goat['draw'].astype(float)
     ])
     
+    # Check assumptions for algorithm comparison
+    assumption_checks = check_test_assumptions([mcts_results, minimax_results])
+    results['assumption_checks'] = assumption_checks
+    
     # Perform t-test comparing MCTS and Minimax performance
     t_stat, p_value = stats.ttest_ind(mcts_results, minimax_results, equal_var=False)
     
@@ -955,8 +1010,16 @@ def perform_statistical_tests(df):
         'statistic': t_stat,
         'p_value': p_value,
         'mcts_mean': np.mean(mcts_results),
-        'minimax_mean': np.mean(minimax_results)
+        'minimax_mean': np.mean(minimax_results),
+        'mcts_std': np.std(mcts_results, ddof=1),
+        'minimax_std': np.std(minimax_results, ddof=1),
+        'mcts_n': len(mcts_results),
+        'minimax_n': len(minimax_results)
     }
+    
+    # Calculate effect size
+    effect_size = abs(np.mean(mcts_results) - np.mean(minimax_results))
+    results['algorithm_comparison_test']['effect_size'] = effect_size
     
     # Compare Minimax depths pairwise
     depth_comparison_tests = {}
@@ -985,15 +1048,27 @@ def perform_statistical_tests(df):
                 depth2_goat['goat_won'].astype(float) + 0.5 * depth2_goat['draw'].astype(float)
             ])
             
+            # Check assumptions
+            depth_assumptions = check_test_assumptions([depth1_results, depth2_results])
+            
             # Perform t-test
             if len(depth1_results) > 0 and len(depth2_results) > 0:
                 t_stat, p_value = stats.ttest_ind(depth1_results, depth2_results, equal_var=False)
+                
+                # Calculate effect size
+                effect_size = abs(np.mean(depth1_results) - np.mean(depth2_results))
                 
                 depth_comparison_tests[f"{int(depth1)}_vs_{int(depth2)}"] = {
                     'statistic': t_stat,
                     'p_value': p_value,
                     'depth1_mean': np.mean(depth1_results),
-                    'depth2_mean': np.mean(depth2_results)
+                    'depth2_mean': np.mean(depth2_results),
+                    'depth1_std': np.std(depth1_results, ddof=1) if len(depth1_results) > 1 else 0,
+                    'depth2_std': np.std(depth2_results, ddof=1) if len(depth2_results) > 1 else 0,
+                    'depth1_n': len(depth1_results),
+                    'depth2_n': len(depth2_results),
+                    'effect_size': effect_size,
+                    'assumptions': depth_assumptions
                 }
     
     results['depth_comparison_tests'] = depth_comparison_tests
@@ -1064,3 +1139,240 @@ def perform_statistical_tests(df):
     results['capture_impact_tests'] = capture_impact_tests
     
     return results 
+
+def generate_statistical_report(statistical_results, output_dir, config=None):
+    """
+    Generate a dedicated statistical report with test results.
+    
+    Args:
+        statistical_results: Dictionary with statistical test results
+        output_dir: Directory to save the report
+        config: Configuration dictionary
+    """
+    report_path = os.path.join(output_dir, 'statistical_validation.txt')
+    significance_threshold = config.get('statistical', {}).get('significance_threshold', 0.05)
+    
+    with open(report_path, 'w') as f:
+        f.write("STATISTICAL VALIDATION REPORT\n")
+        f.write("============================\n\n")
+        
+        f.write(f"Significance level (α): {significance_threshold}\n")
+        f.write("Multiple comparison correction: Benjamini-Hochberg procedure\n\n")
+        
+        # Algorithm comparison
+        if 'algorithm_comparison_test' in statistical_results:
+            test = statistical_results['algorithm_comparison_test']
+            f.write("ALGORITHM COMPARISON (MCTS vs Minimax)\n")
+            f.write("---------------------------------\n")
+            f.write(f"Test: Two-sample t-test (Welch's t-test with unequal variance)\n")
+            f.write(f"t-statistic: {test['statistic']:.4f}\n")
+            f.write(f"p-value: {test['p_value']:.4f}\n")
+            f.write(f"Significant: {'Yes' if test['p_value'] < significance_threshold else 'No'}\n\n")
+            
+            # Add interpretation
+            if test['p_value'] < significance_threshold:
+                better_algo = "MCTS" if test['mcts_mean'] > test['minimax_mean'] else "Minimax"
+                f.write(f"Interpretation: {better_algo} performs significantly better overall.\n")
+                effect_size = abs(test['mcts_mean'] - test['minimax_mean'])
+                effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                f.write(f"  MCTS win rate: {test['mcts_mean']:.4f}\n")
+                f.write(f"  Minimax win rate: {test['minimax_mean']:.4f}\n")
+                f.write(f"  Effect size (mean difference): {effect_size:.4f} ({effect_magnitude})\n")
+            else:
+                f.write("Interpretation: No significant difference in overall performance.\n")
+            f.write("\n")
+        
+        # Depth comparisons with multiple comparison correction
+        if 'depth_comparison_tests' in statistical_results and statistical_results['depth_comparison_tests']:
+            f.write("MINIMAX DEPTH COMPARISONS\n")
+            f.write("-------------------------\n")
+            f.write("Test: Pairwise t-tests with Benjamini-Hochberg correction\n\n")
+            
+            # Get p-values for correction
+            tests = statistical_results['depth_comparison_tests']
+            test_keys = list(tests.keys())
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            # Apply correction if we have p-values
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                # Report results
+                for i, key in enumerate(test_keys):
+                    test = tests[key]
+                    d1, d2 = key.split('_vs_')
+                    corrected_p = corrected_p_values[i]
+                    is_significant = corrected_p < significance_threshold
+                    
+                    f.write(f"Depth {d1} vs Depth {d2}:\n")
+                    f.write(f"  t-statistic: {test['statistic']:.4f}\n")
+                    f.write(f"  Original p-value: {test['p_value']:.4f}\n")
+                    f.write(f"  Corrected p-value: {corrected_p:.4f}\n")
+                    f.write(f"  Significant after correction: {'Yes' if is_significant else 'No'}\n")
+                    
+                    if 'depth1_mean' in test and 'depth2_mean' in test:
+                        better_depth = d1 if test['depth1_mean'] > test['depth2_mean'] else d2
+                        effect_size = abs(test['depth1_mean'] - test['depth2_mean'])
+                        effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                        f.write(f"  Better performer: Depth {better_depth}\n")
+                        f.write(f"  Effect size (mean difference): {effect_size:.4f} ({effect_magnitude})\n")
+                    f.write("\n")
+        
+        # MCTS configuration comparisons with multiple comparison correction
+        if 'config_comparison_tests' in statistical_results and statistical_results['config_comparison_tests']:
+            f.write("MCTS CONFIGURATION COMPARISONS\n")
+            f.write("-----------------------------\n")
+            f.write("Test: Pairwise t-tests with Benjamini-Hochberg correction\n\n")
+            
+            # Get p-values for correction
+            tests = statistical_results['config_comparison_tests']
+            test_keys = list(tests.keys())
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            # Apply correction if we have p-values
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                # Find significant comparisons
+                significant_tests = []
+                for i, key in enumerate(test_keys):
+                    if corrected_p_values[i] < significance_threshold:
+                        significant_tests.append((key, tests[key], corrected_p_values[i]))
+                
+                if significant_tests:
+                    f.write(f"Found {len(significant_tests)} significant configuration differences after correction:\n\n")
+                    
+                    for key, test, corrected_p in significant_tests:
+                        config1, config2 = key.split('_vs_')
+                        f.write(f"{config1} vs {config2}:\n")
+                        f.write(f"  t-statistic: {test['statistic']:.4f}\n")
+                        f.write(f"  Original p-value: {test['p_value']:.4f}\n")
+                        f.write(f"  Corrected p-value: {corrected_p:.4f}\n")
+                        
+                        if 'config1_mean' in test and 'config2_mean' in test:
+                            better_config = config1 if test['config1_mean'] > test['config2_mean'] else config2
+                            effect_size = abs(test['config1_mean'] - test['config2_mean'])
+                            effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                            f.write(f"  Better configuration: {better_config}\n")
+                            f.write(f"  Effect size (mean difference): {effect_size:.4f} ({effect_magnitude})\n")
+                        f.write("\n")
+                else:
+                    f.write("No significant differences between MCTS configurations after correction for multiple comparisons.\n\n")
+        
+        # Capture impact tests
+        if 'capture_impact_tests' in statistical_results and statistical_results['capture_impact_tests']:
+            f.write("CAPTURE IMPACT ANALYSIS\n")
+            f.write("---------------------\n")
+            f.write("Test: t-tests comparing games with captures vs no captures\n\n")
+            
+            # Get p-values for correction
+            tests = statistical_results['capture_impact_tests']
+            test_keys = list(tests.keys())
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            # Apply correction if we have p-values
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                # Report results
+                for i, key in enumerate(test_keys):
+                    test = tests[key]
+                    captures = key.split('_vs_')[0].replace('captures_', '')
+                    corrected_p = corrected_p_values[i]
+                    is_significant = corrected_p < significance_threshold
+                    
+                    f.write(f"{captures} captures vs 0 captures:\n")
+                    f.write(f"  t-statistic: {test['statistic']:.4f}\n")
+                    f.write(f"  Original p-value: {test['p_value']:.4f}\n")
+                    f.write(f"  Corrected p-value: {corrected_p:.4f}\n")
+                    f.write(f"  Significant after correction: {'Yes' if is_significant else 'No'}\n")
+                    
+                    if 'captures_mean' in test and 'no_captures_mean' in test:
+                        effect_size = abs(test['captures_mean'] - test['no_captures_mean'])
+                        effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                        f.write(f"  Effect size (mean difference): {effect_size:.4f} ({effect_magnitude})\n")
+                        
+                        # Determine which side is advantaged
+                        if is_significant:
+                            advantaged = "Tigers" if test['captures_mean'] > test['no_captures_mean'] else "Goats"
+                            f.write(f"  Interpretation: {advantaged} are significantly advantaged in games with {captures} captures\n")
+                    f.write("\n")
+        
+        f.write("\nASSUMPTION CHECKS\n")
+        f.write("----------------\n")
+        f.write("Note: For large sample sizes (n > 30), parametric tests are generally robust\n")
+        f.write("to violations of normality due to the Central Limit Theorem.\n\n")
+        
+        if 'algorithm_comparison_test' in statistical_results:
+            f.write("Sample sizes for algorithm comparison:\n")
+            if 'sample_sizes' in statistical_results.get('assumption_checks', {}):
+                sample_sizes = statistical_results['assumption_checks']['sample_sizes']
+                f.write(f"  MCTS: {sample_sizes[0]} games\n")
+                f.write(f"  Minimax: {sample_sizes[1]} games\n")
+            else:
+                f.write("  Sample size information not available\n")
+            f.write("\n")
+            
+        f.write("\nSTATISTICALLY SIGNIFICANT FINDINGS SUMMARY\n")
+        f.write("---------------------------------------\n")
+        
+        # Collect all significant findings after correction
+        significant_findings = []
+        
+        # Algorithm comparison
+        if 'algorithm_comparison_test' in statistical_results:
+            test = statistical_results['algorithm_comparison_test']
+            if test['p_value'] < significance_threshold:
+                better_algo = "MCTS" if test['mcts_mean'] > test['minimax_mean'] else "Minimax"
+                significant_findings.append(f"- {better_algo} performs significantly better overall (p={test['p_value']:.4f})")
+        
+        # Depth comparisons
+        if 'depth_comparison_tests' in statistical_results and statistical_results['depth_comparison_tests']:
+            tests = statistical_results['depth_comparison_tests']
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                for i, (key, test) in enumerate(tests.items()):
+                    if corrected_p_values[i] < significance_threshold:
+                        d1, d2 = key.split('_vs_')
+                        better_depth = d1 if test.get('depth1_mean', 0) > test.get('depth2_mean', 0) else d2
+                        significant_findings.append(f"- Minimax depth {better_depth} performs significantly better than depth {d2 if better_depth == d1 else d1} (corrected p={corrected_p_values[i]:.4f})")
+        
+        # MCTS configuration comparisons
+        if 'config_comparison_tests' in statistical_results and statistical_results['config_comparison_tests']:
+            tests = statistical_results['config_comparison_tests']
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                for i, (key, test) in enumerate(tests.items()):
+                    if corrected_p_values[i] < significance_threshold:
+                        config1, config2 = key.split('_vs_')
+                        better_config = config1 if test.get('config1_mean', 0) > test.get('config2_mean', 0) else config2
+                        significant_findings.append(f"- MCTS configuration {better_config} performs significantly better than {config2 if better_config == config1 else config1} (corrected p={corrected_p_values[i]:.4f})")
+        
+        # Capture impact tests
+        if 'capture_impact_tests' in statistical_results and statistical_results['capture_impact_tests']:
+            tests = statistical_results['capture_impact_tests']
+            all_p_values = [test['p_value'] for test in tests.values()]
+            
+            if all_p_values:
+                rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+                
+                for i, (key, test) in enumerate(tests.items()):
+                    if corrected_p_values[i] < significance_threshold:
+                        captures = key.split('_vs_')[0].replace('captures_', '')
+                        advantaged = "Tigers" if test.get('captures_mean', 0) > test.get('no_captures_mean', 0) else "Goats"
+                        significant_findings.append(f"- {advantaged} are significantly advantaged in games with {captures} captures (corrected p={corrected_p_values[i]:.4f})")
+        
+        if significant_findings:
+            for finding in significant_findings:
+                f.write(f"{finding}\n")
+        else:
+            f.write("No findings remained statistically significant after correction for multiple comparisons.\n")
+        
+    print(f"Statistical validation report saved to {report_path}")
+    return report_path 

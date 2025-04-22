@@ -454,76 +454,76 @@ def create_matchup_visualizations(performance_metrics, output_dir, config=None):
             
             # Sort by depth
             config_data = config_data.sort_values('Minimax Depth')
-            
-            # Set positions for the bars
-            positions = np.arange(len(config_data))
+        
+        # Set positions for the bars
+        positions = np.arange(len(config_data))
             width = 0.35  # Slightly increased bar width
-            
+        
             # Create bars for MCTS as Tiger and MCTS as Goat
             plt.bar(
-                positions - width/2,
-                config_data['As Tiger Win Rate'],
-                width=width,
+            positions - width/2,
+            config_data['As Tiger Win Rate'],
+            width=width,
                 color=color_tiger,
-                alpha=0.7,
-                label='MCTS as Tiger'
-            )
-            
+            alpha=0.7,
+            label='MCTS as Tiger'
+        )
+        
             plt.bar(
-                positions + width/2,
-                config_data['As Goat Win Rate'],
-                width=width,
+            positions + width/2,
+            config_data['As Goat Win Rate'],
+            width=width,
                 color=color_goat,
-                alpha=0.7,
-                label='MCTS as Goat'
-            )
-            
-            # Add a horizontal line for 50% win rate
+            alpha=0.7,
+            label='MCTS as Goat'
+        )
+        
+        # Add a horizontal line for 50% win rate
             plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='50% threshold')
-            
-            # Add data labels
+        
+        # Add data labels
             def add_labels(positions, values, offset, color):
                 for i, value in enumerate(values):
-                    plt.text(
+                plt.text(
                         positions[i] + offset,
                         value + 0.02,
                         f'{value:.3f}',
-                        ha='center',
-                        va='bottom',
+                    ha='center',
+                    va='bottom',
                         fontsize=9,
                         color=color
-                    )
-            
+                )
+        
             add_labels(positions, config_data['As Tiger Win Rate'], -width/2, color_tiger)
             add_labels(positions, config_data['As Goat Win Rate'], width/2, color_goat)
-            
-            # Set labels and title
-            plt.xlabel('Minimax Depth', fontsize=14)
-            plt.ylabel('Win Rate (draws = 0.5)', fontsize=14)
+        
+        # Set labels and title
+        plt.xlabel('Minimax Depth', fontsize=14)
+        plt.ylabel('Win Rate (draws = 0.5)', fontsize=14)
             plt.title(f'MCTS {mcts_config} vs. Minimax', fontsize=16)
-            plt.ylim(0, 1)
-            
-            # Set x-ticks
+        plt.ylim(0, 1)
+        
+        # Set x-ticks
             plt.xticks(positions, config_data['Minimax Depth'])
-            
+        
             # Add number of games as text above bars (win rate vis)
             for i, (tiger_games, goat_games) in enumerate(zip(config_data['As Tiger Games'], config_data['As Goat Games'])):
                 # Show total games in bold
                 total_games = tiger_games + goat_games
-                plt.text(
+            plt.text(
                     positions[i],
                     5,
                     str(total_games),
-                    ha='center',
-                    va='bottom',
+                ha='center',
+                va='bottom',
                     fontsize=10,
                     fontweight='bold'
-                )
-            
-            plt.legend(fontsize=12)
-            plt.tight_layout()
+            )
+        
+        plt.legend(fontsize=12)
+        plt.tight_layout()
             plt.savefig(os.path.join(output_dir, f'matchup_{mcts_config.replace("/", "_")}.png'), dpi=300)
-            plt.close()
+    plt.close()
 
 def create_capture_visualizations(game_dynamics, output_dir, config=None):
     """
@@ -741,8 +741,8 @@ def create_capture_visualizations(game_dynamics, output_dir, config=None):
             color='orange',
             alpha=0.7,
             label='Minimax as Goat'
-        )
-        
+    )
+    
         # Add data labels
         def add_labels(bars):
             for bar in bars:
@@ -752,22 +752,22 @@ def create_capture_visualizations(game_dynamics, output_dir, config=None):
                         bar.get_x() + bar.get_width()/2,
                         height + 0.5,
                         str(int(height)),
-                        ha='center',
+            ha='center',
                         va='bottom',
-                        fontsize=9
-                    )
-        
+            fontsize=9
+        )
+    
         add_labels(mcts_bars)
         add_labels(minimax_bars)
         
-        # Set labels and title
-        plt.xlabel('Number of Captures', fontsize=14)
+    # Set labels and title
+    plt.xlabel('Number of Captures', fontsize=14)
         plt.ylabel('Number of Comeback Wins', fontsize=14)
         plt.title('Goat Comeback Wins Despite Captures', fontsize=16)
         plt.xticks(positions, comeback_analysis['Captures'])
         
         plt.legend(fontsize=12)
-        
+    
         # Set y-limit to allow space for labels
         max_value = max(max(comeback_analysis['MCTS Games']), max(comeback_analysis['Minimax Games']))
         plt.ylim(0, max_value * 1.15)
@@ -1074,4 +1074,4 @@ def create_movement_visualizations(movement_patterns, output_dir, config=None):
         plt.savefig(os.path.join(output_dir, 'capture_positions.png'), dpi=300)
         plt.close()
     else:
-        print("No capture pattern analysis data available for visualization") 
+        print("No capture pattern analysis data available for visualization")

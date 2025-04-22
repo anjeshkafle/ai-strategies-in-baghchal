@@ -89,18 +89,31 @@ def main():
     print("\nTop MCTS Configurations:")
     for i, config in enumerate(results['top_configs']):
         print(f"{i+1}. {config['config_id']}")
-        print(f"   Rollout Policy: {config['rollout_policy']}")
-        print(f"   Rollout Depth: {config['rollout_depth']}")
-        print(f"   Exploration Weight: {config['exploration_weight']}")
-        print(f"   Composite Score: {config['composite_score']:.4f}")
-        print(f"   Adjusted Win Rate (draws=0.5): {config['adjusted_win_rate']:.4f}")
+        
+        if 'rollout_policy' in config:
+            print(f"   Rollout Policy: {config['rollout_policy']}")
+        
+        if 'rollout_depth' in config:
+            print(f"   Rollout Depth: {config['rollout_depth']}")
+        
+        if 'exploration_weight' in config:
+            print(f"   Exploration Weight: {config['exploration_weight']}")
+        
+        if 'composite_score' in config:
+            print(f"   Composite Score: {config['composite_score']:.4f}")
+        
+        if 'adjusted_win_rate' in config:
+            print(f"   Adjusted Win Rate (draws=0.5): {config['adjusted_win_rate']:.4f}")
         
         # Print confidence intervals if available
         if 'win_rate_ci_lower' in config and 'win_rate_ci_upper' in config:
             print(f"   Win Rate 95% CI: [{config['win_rate_ci_lower']:.4f}, {config['win_rate_ci_upper']:.4f}]")
-            
-        print(f"   Average Win Rate (wins only): {config['average_win_rate']:.4f}")
-        print(f"   Elo Rating: {config['elo_rating']:.1f}")
+        
+        if 'average_win_rate' in config:
+            print(f"   Average Win Rate (wins only): {config['average_win_rate']:.4f}")
+        
+        if 'elo_rating' in config:
+            print(f"   Elo Rating: {config['elo_rating']:.1f}")
         
         # Print ELO confidence intervals if available
         if 'elo_ci_lower' in config and 'elo_ci_upper' in config:
