@@ -56,9 +56,9 @@ def run_analysis(competition_file, output_dir, config_file=None):
     
     # Generate visualizations
     print("\nGenerating visualizations...")
-    visualization.create_win_rate_visualizations(performance_metrics, figures_dir, config)
-    visualization.create_depth_performance_visualizations(performance_metrics, figures_dir, config)
-    visualization.create_matchup_visualizations(performance_metrics, figures_dir, config)
+    visualization.create_win_rate_visualizations(performance_metrics, figures_dir, config, statistical_results)
+    visualization.create_depth_performance_visualizations(performance_metrics, figures_dir, config, statistical_results)
+    visualization.create_matchup_visualizations(performance_metrics, figures_dir, config, statistical_results)
     visualization.create_capture_visualizations(game_dynamics, figures_dir, config)
     visualization.create_game_length_visualizations(game_dynamics, figures_dir, config)
     visualization.create_repetition_visualizations(game_dynamics, figures_dir, config)

@@ -8,12 +8,13 @@ import numpy as np
 import os
 from matplotlib.colors import to_rgba
 import matplotlib.gridspec as gridspec
+from statsmodels.stats.multitest import multipletests
 
 def ensure_directory(path):
     """Ensure output directory exists."""
     os.makedirs(path, exist_ok=True)
 
-def create_win_rate_visualizations(performance_metrics, output_dir, config=None):
+def create_win_rate_visualizations(performance_metrics, output_dir, config=None, statistical_results=None):
     """
     Create visualizations of algorithm win rates.
     
@@ -21,12 +22,16 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
         performance_metrics: Dictionary with performance metrics
         output_dir: Directory to save output figures
         config: Configuration dictionary
+        statistical_results: Dictionary with statistical test results
     """
     ensure_directory(output_dir)
     
     # Extract data
     algorithm_comparison = performance_metrics['algorithm_comparison']
     role_performance = performance_metrics['role_performance']
+    
+    # Get significance threshold from config
+    significance_threshold = config.get('statistical', {}).get('significance_threshold', 0.05) if config else 0.05
     
     # Set colors from config or use defaults
     color_mcts = config['visualization']['color_mcts'] if config else "#1f77b4"
@@ -54,12 +59,15 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
         alpha=0.7
     )
     
-    # Add data labels
+    # Add data labels well above the confidence intervals
     for bar in bars:
         height = bar.get_height()
+        ci_height = max(algorithm_comparison['CI Upper'])
+        label_height = max(height, ci_height) + 0.02  # Ensure labels are above CI bars
+        
         plt.text(
             bar.get_x() + bar.get_width()/2,
-            height + 0.01,
+            label_height,
             f'{height:.3f}',
             ha='center',
             va='bottom',
@@ -68,6 +76,41 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
     
     # Add a horizontal line for 50% win rate
     plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Add statistical significance indicator if data is available
+    if statistical_results and 'algorithm_comparison_test' in statistical_results:
+        test_result = statistical_results['algorithm_comparison_test']
+        p_value = test_result.get('p_value')
+        
+        if p_value is not None:
+            # Determine significance
+            is_significant = p_value < significance_threshold
+            
+            # Add p-value text at an appropriate height
+            max_height = max(algorithm_comparison['CI Upper']) + 0.07
+            
+            # Add p-value text with proper formatting
+            plt.text(
+                (positions[0] + positions[1]) / 2,
+                max_height,
+                f'p = {p_value:.4g}',  # Using g format to handle small values with scientific notation
+                ha='center',
+                va='bottom',
+                fontsize=10
+            )
+            
+            # Add effect size if available
+            if 'effect_size' in test_result:
+                effect_size = test_result['effect_size']
+                effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                plt.text(
+                    (positions[0] + positions[1]) / 2,
+                    max_height + 0.03,
+                    f'Effect size: {effect_size:.3f} ({effect_magnitude})',
+                    ha='center',
+                    va='bottom',
+                    fontsize=9
+                )
     
     # Set labels and title
     plt.xlabel('Algorithm', fontsize=14)
@@ -90,7 +133,15 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
             fontweight='bold'
         )
     
-    plt.tight_layout()
+    # Add a legend for significance markers
+    if statistical_results and 'algorithm_comparison_test' in statistical_results:
+        plt.figtext(
+            0.15, 0.01,
+            "p-values: p<0.05 is considered statistically significant",
+            fontsize=8
+        )
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 1])  # Add padding at the bottom for the legend
     plt.savefig(os.path.join(output_dir, 'overall_win_rates.png'), dpi=300)
     plt.close()
     
@@ -146,10 +197,51 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
     # Add a horizontal line for 50% win rate
     plt.axhline(y=50, color='black', linestyle='--', alpha=0.5, label='50% threshold')
     
+    # Add statistical significance indicators for algorithm performance in same role
+    if statistical_results and 'algorithm_role_comparison_tests' in statistical_results:
+        tests = statistical_results['algorithm_role_comparison_tests']
+        
+        # Create a text box for the p-values in the upper right corner
+        p_value_text = ""
+        
+        # Look for tests comparing MCTS vs Minimax in Tiger role
+        if 'mcts_tiger_vs_minimax_tiger' in tests:
+            test_result = tests['mcts_tiger_vs_minimax_tiger']
+            p_value = test_result.get('p_value')
+            if p_value is not None:
+                p_value_text += f"Tiger role: p = {p_value:.4g}\n"
+        
+        # Look for tests comparing MCTS vs Minimax in Goat role
+        if 'mcts_goat_vs_minimax_goat' in tests:
+            test_result = tests['mcts_goat_vs_minimax_goat']
+            p_value = test_result.get('p_value')
+            if p_value is not None:
+                p_value_text += f"Goat role: p = {p_value:.4g}"
+        
+        # Add the p-value summary box if we have any p-values
+        if p_value_text:
+            # Create a text box in the upper right
+            plt.annotate(
+                p_value_text,
+                xy=(0.97, 0.97),
+                xycoords='axes fraction',
+                ha='right',
+                va='top',
+                fontsize=10,
+                bbox=dict(
+                    boxstyle='round,pad=0.5',
+                    facecolor='white',
+                    alpha=0.8,
+                    edgecolor='gray'
+                )
+            )
+    
     # Set labels and title
     plt.xlabel('Role', fontsize=14)
     plt.ylabel('Percentage (%)', fontsize=14)
     plt.title('Performance by Algorithm and Role', fontsize=16)
+    
+    # Set y-limit back to a standard value
     plt.ylim(0, 100)
     
     # Set x-ticks
@@ -168,7 +260,16 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
         )
     
     plt.legend(fontsize=12)
-    plt.tight_layout()
+    
+    # Add a legend for p-values at the bottom
+    if statistical_results and 'algorithm_role_comparison_tests' in statistical_results:
+        plt.figtext(
+            0.15, 0.01,
+            "p-values: p<0.05 is considered statistically significant",
+            fontsize=8
+        )
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 1])  # Add padding at the bottom for the legend
     plt.savefig(os.path.join(output_dir, 'role_performance.png'), dpi=300)
     plt.close()
     
@@ -206,6 +307,36 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
     add_labels(tiger_bars)
     add_labels(goat_bars)
     
+    # Add statistical significance indicators for role differences in a neat box
+    if statistical_results and 'role_comparison_tests' in statistical_results:
+        tests = statistical_results['role_comparison_tests']
+        
+        # Create a formatted text for the p-values
+        p_value_text = "Statistical Comparisons:\n"
+        
+        for i, algo in enumerate(algorithms):
+            test_key = f"{algo.lower()}_tiger_vs_goat"
+            if test_key in tests:
+                test_result = tests[test_key]
+                p_value = test_result.get('p_value')
+                if p_value is not None:
+                    p_value_text += f"{algo} Tiger vs Goat: p = {p_value:.4g}\n"
+        
+        # Add the summary box in the upper right corner
+        fig.text(
+            0.97, 0.97, 
+            p_value_text.rstrip(),  # Remove trailing newline
+            ha='right',
+            va='top',
+            fontsize=9,
+            bbox=dict(
+                boxstyle='round,pad=0.5',
+                facecolor='white',
+                alpha=0.8,
+                edgecolor='gray'
+            )
+        )
+    
     # Set labels and title
     ax.set_xlabel('Algorithm', fontsize=14)
     ax.set_ylabel('Win Rate (draws = 0.5)', fontsize=14)
@@ -216,12 +347,22 @@ def create_win_rate_visualizations(performance_metrics, output_dir, config=None)
     ax.set_xticks(x)
     ax.set_xticklabels(algorithms, fontsize=12)
     
+    # Add legend for both bars and significance
     ax.legend(fontsize=12)
-    fig.tight_layout()
+    
+    # Add a legend for p-values at the bottom
+    if statistical_results and 'role_comparison_tests' in statistical_results:
+        fig.text(
+            0.15, 0.01,
+            "p-values: p<0.05 is considered statistically significant",
+            fontsize=8
+        )
+    
+    fig.tight_layout(rect=[0, 0.03, 1, 1])  # Add padding at the bottom for the legend
     plt.savefig(os.path.join(output_dir, 'algorithm_role_win_rates.png'), dpi=300)
     plt.close()
 
-def create_depth_performance_visualizations(performance_metrics, output_dir, config=None):
+def create_depth_performance_visualizations(performance_metrics, output_dir, config=None, statistical_results=None):
     """
     Create visualizations of Minimax depth performance.
     
@@ -229,6 +370,7 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
         performance_metrics: Dictionary with performance metrics
         output_dir: Directory to save output figures
         config: Configuration dictionary
+        statistical_results: Dictionary with statistical test results
     """
     ensure_directory(output_dir)
     
@@ -238,6 +380,9 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
     if len(depth_performance) == 0:
         print("No depth performance data available for visualization")
         return
+    
+    # Get significance threshold from config
+    significance_threshold = config.get('statistical', {}).get('significance_threshold', 0.05) if config else 0.05
     
     # Set colors from config or use defaults
     color_tiger = config['visualization']['color_tiger'] if config else "#d62728"
@@ -249,7 +394,7 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
     # Create positions for the bars
     positions = np.arange(len(depth_performance))
     
-    # Plot overall win rate bars
+    # Plot win rate bars with confidence intervals
     bars = plt.bar(
         positions,
         depth_performance['Win Rate'],
@@ -258,41 +403,112 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
             depth_performance['CI Upper'] - depth_performance['Win Rate']
         ],
         width=0.6,
-        capsize=5,
-        color='blue',
-        alpha=0.7,
-        label='Overall Win Rate'
+        capsize=10,
+        color='#ff7f0e',  # Minimax color
+        alpha=0.7
     )
     
-    # Add a horizontal line for 50% win rate
-    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    # Calculate max height of CI for proper data label placement
+    max_ci_upper = max(depth_performance['CI Upper'])
     
-    # Add data labels
+    # Add data labels (positioned higher than the CI bars)
     for bar in bars:
         height = bar.get_height()
         plt.text(
             bar.get_x() + bar.get_width()/2,
-            height + 0.01,
+            max_ci_upper + 0.03,  # Position labels above the highest CI
             f'{height:.3f}',
             ha='center',
             va='bottom',
-            fontsize=10
+            fontsize=12
         )
+    
+    # Add a horizontal line for 50% win rate
+    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+    
+    # Add statistical significance indicators for depth comparisons
+    if statistical_results and 'depth_comparison_tests' in statistical_results:
+        tests = statistical_results['depth_comparison_tests']
+        test_keys = list(tests.keys())
+        all_p_values = [test['p_value'] for test in tests.values()]
+        
+        # Debug print to check if we have p-values
+        print(f"Depth comparison p-values: {all_p_values}")
+        
+        # Apply Benjamini-Hochberg correction if we have p-values
+        if all_p_values:
+            rejected, corrected_p_values, _, _ = multipletests(all_p_values, method='fdr_bh')
+            
+            # Debug print for corrected p-values
+            print(f"Corrected depth p-values: {corrected_p_values}")
+            
+            # Make the p-values more visible by adding a summary box
+            p_value_summary = "Adjacent Depth Comparisons:\n"
+            
+            # Add significance indicators for adjacent depths
+            for i in range(len(depth_performance) - 1):
+                # Find the test comparing current depth with next depth
+                current_depth = str(depth_performance['Depth'].iloc[i])
+                next_depth = str(depth_performance['Depth'].iloc[i + 1])
+                
+                test_key = f"{current_depth}_vs_{next_depth}"
+                if test_key not in tests:
+                    test_key = f"{next_depth}_vs_{current_depth}"  # Try reverse order
+                
+                if test_key in tests:
+                    test_idx = test_keys.index(test_key)
+                    corrected_p = corrected_p_values[test_idx]
+                    
+                    # Add this comparison to the summary
+                    p_value_summary += f"Depth {current_depth} vs {next_depth}: p = {corrected_p:.4g}\n"
+                    
+                    # Add p-value text at appropriate height with VERY prominent display
+                    text_height = max_ci_upper + 0.1
+                    
+                    # Calculate position halfway between bars
+                    x_pos = (positions[i] + positions[i + 1]) / 2
+                    
+                    # Add p-value text with very clear formatting and larger size
+                    plt.text(
+                        x_pos,
+                        text_height,
+                        f'p = {corrected_p:.4g}',
+                        ha='center',
+                        va='bottom',
+                        fontsize=10,
+                        fontweight='bold',
+                        bbox=dict(facecolor='white', alpha=0.9, edgecolor='black', boxstyle='round,pad=0.3')
+                    )
+            
+            # Add a summary box in the upper right corner
+            plt.figtext(
+                0.97, 0.97,
+                p_value_summary.rstrip(),  # Remove trailing newline
+                ha='right',
+                va='top',
+                fontsize=9,
+                bbox=dict(
+                    boxstyle='round,pad=0.5',
+                    facecolor='white',
+                    alpha=0.8,
+                    edgecolor='gray'
+                )
+            )
     
     # Set labels and title
     plt.xlabel('Minimax Depth', fontsize=14)
     plt.ylabel('Win Rate (draws = 0.5)', fontsize=14)
-    plt.title('Minimax Performance by Depth', fontsize=16)
+    plt.title('Minimax Performance by Search Depth', fontsize=16)
     plt.ylim(0, 1)
     
     # Set x-ticks
     plt.xticks(positions, depth_performance['Depth'], fontsize=12)
     
-    # Add number of games as text above bars (win rate vis)
+    # Add number of games as text above bars
     for i, games in enumerate(depth_performance['Games']):
         plt.text(
             positions[i],
-            5,
+            0.05,
             str(games),
             ha='center',
             va='bottom',
@@ -300,9 +516,16 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
             fontweight='bold'
         )
     
-    plt.legend(fontsize=12)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'depth_win_rates.png'), dpi=300)
+    # Add a legend for p-values
+    if statistical_results and 'depth_comparison_tests' in statistical_results:
+        plt.figtext(
+            0.15, 0.01,
+            "p-values: p<0.05 is considered statistically significant (Benjamini-Hochberg corrected)",
+            fontsize=8
+        )
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 1])  # Add padding at the bottom for the legend
+    plt.savefig(os.path.join(output_dir, 'depth_performance.png'), dpi=300)
     plt.close()
     
     # Plot 2: Tiger vs Goat win rates by depth
@@ -422,14 +645,15 @@ def create_depth_performance_visualizations(performance_metrics, output_dir, con
     plt.savefig(os.path.join(output_dir, 'depth_winrate_time.png'), dpi=300)
     plt.close()
 
-def create_matchup_visualizations(performance_metrics, output_dir, config=None):
+def create_matchup_visualizations(performance_metrics, output_dir, config=None, statistical_results=None):
     """
-    Create visualizations of MCTS vs Minimax matchups by configuration.
+    Create visualizations of specific matchup performances.
     
     Args:
         performance_metrics: Dictionary with performance metrics
         output_dir: Directory to save output figures
         config: Configuration dictionary
+        statistical_results: Dictionary with statistical test results
     """
     ensure_directory(output_dir)
     

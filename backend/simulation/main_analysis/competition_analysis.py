@@ -1021,6 +1021,102 @@ def perform_statistical_tests(df):
     effect_size = abs(np.mean(mcts_results) - np.mean(minimax_results))
     results['algorithm_comparison_test']['effect_size'] = effect_size
     
+    # Compare roles (Tiger vs Goat) for each algorithm
+    role_comparison_tests = {}
+    
+    # MCTS: Tiger vs Goat
+    mcts_tiger_results = mcts_tiger['tiger_won'].astype(float) + 0.5 * mcts_tiger['draw'].astype(float)
+    mcts_goat_results = mcts_goat['goat_won'].astype(float) + 0.5 * mcts_goat['draw'].astype(float)
+    
+    if len(mcts_tiger_results) > 0 and len(mcts_goat_results) > 0:
+        role_assumptions = check_test_assumptions([mcts_tiger_results, mcts_goat_results])
+        t_stat, p_value = stats.ttest_ind(mcts_tiger_results, mcts_goat_results, equal_var=False)
+        
+        effect_size = abs(np.mean(mcts_tiger_results) - np.mean(mcts_goat_results))
+        
+        role_comparison_tests["mcts_tiger_vs_goat"] = {
+            'statistic': t_stat,
+            'p_value': p_value,
+            'tiger_mean': np.mean(mcts_tiger_results),
+            'goat_mean': np.mean(mcts_goat_results),
+            'tiger_std': np.std(mcts_tiger_results, ddof=1) if len(mcts_tiger_results) > 1 else 0,
+            'goat_std': np.std(mcts_goat_results, ddof=1) if len(mcts_goat_results) > 1 else 0,
+            'tiger_n': len(mcts_tiger_results),
+            'goat_n': len(mcts_goat_results),
+            'effect_size': effect_size,
+            'assumptions': role_assumptions
+        }
+    
+    # Minimax: Tiger vs Goat
+    minimax_tiger_results = minimax_tiger['tiger_won'].astype(float) + 0.5 * minimax_tiger['draw'].astype(float)
+    minimax_goat_results = minimax_goat['goat_won'].astype(float) + 0.5 * minimax_goat['draw'].astype(float)
+    
+    if len(minimax_tiger_results) > 0 and len(minimax_goat_results) > 0:
+        role_assumptions = check_test_assumptions([minimax_tiger_results, minimax_goat_results])
+        t_stat, p_value = stats.ttest_ind(minimax_tiger_results, minimax_goat_results, equal_var=False)
+        
+        effect_size = abs(np.mean(minimax_tiger_results) - np.mean(minimax_goat_results))
+        
+        role_comparison_tests["minimax_tiger_vs_goat"] = {
+            'statistic': t_stat,
+            'p_value': p_value,
+            'tiger_mean': np.mean(minimax_tiger_results),
+            'goat_mean': np.mean(minimax_goat_results),
+            'tiger_std': np.std(minimax_tiger_results, ddof=1) if len(minimax_tiger_results) > 1 else 0,
+            'goat_std': np.std(minimax_goat_results, ddof=1) if len(minimax_goat_results) > 1 else 0,
+            'tiger_n': len(minimax_tiger_results),
+            'goat_n': len(minimax_goat_results),
+            'effect_size': effect_size,
+            'assumptions': role_assumptions
+        }
+    
+    results['role_comparison_tests'] = role_comparison_tests
+    
+    # Compare algorithms for each role
+    algorithm_role_comparison_tests = {}
+    
+    # Tiger role: MCTS vs Minimax
+    if len(mcts_tiger_results) > 0 and len(minimax_tiger_results) > 0:
+        role_assumptions = check_test_assumptions([mcts_tiger_results, minimax_tiger_results])
+        t_stat, p_value = stats.ttest_ind(mcts_tiger_results, minimax_tiger_results, equal_var=False)
+        
+        effect_size = abs(np.mean(mcts_tiger_results) - np.mean(minimax_tiger_results))
+        
+        algorithm_role_comparison_tests["mcts_tiger_vs_minimax_tiger"] = {
+            'statistic': t_stat,
+            'p_value': p_value,
+            'mcts_mean': np.mean(mcts_tiger_results),
+            'minimax_mean': np.mean(minimax_tiger_results),
+            'mcts_std': np.std(mcts_tiger_results, ddof=1) if len(mcts_tiger_results) > 1 else 0,
+            'minimax_std': np.std(minimax_tiger_results, ddof=1) if len(minimax_tiger_results) > 1 else 0,
+            'mcts_n': len(mcts_tiger_results),
+            'minimax_n': len(minimax_tiger_results),
+            'effect_size': effect_size,
+            'assumptions': role_assumptions
+        }
+    
+    # Goat role: MCTS vs Minimax
+    if len(mcts_goat_results) > 0 and len(minimax_goat_results) > 0:
+        role_assumptions = check_test_assumptions([mcts_goat_results, minimax_goat_results])
+        t_stat, p_value = stats.ttest_ind(mcts_goat_results, minimax_goat_results, equal_var=False)
+        
+        effect_size = abs(np.mean(mcts_goat_results) - np.mean(minimax_goat_results))
+        
+        algorithm_role_comparison_tests["mcts_goat_vs_minimax_goat"] = {
+            'statistic': t_stat,
+            'p_value': p_value,
+            'mcts_mean': np.mean(mcts_goat_results),
+            'minimax_mean': np.mean(minimax_goat_results),
+            'mcts_std': np.std(mcts_goat_results, ddof=1) if len(mcts_goat_results) > 1 else 0,
+            'minimax_std': np.std(minimax_goat_results, ddof=1) if len(minimax_goat_results) > 1 else 0,
+            'mcts_n': len(mcts_goat_results),
+            'minimax_n': len(minimax_goat_results),
+            'effect_size': effect_size,
+            'assumptions': role_assumptions
+        }
+    
+    results['algorithm_role_comparison_tests'] = algorithm_role_comparison_tests
+    
     # Compare Minimax depths pairwise
     depth_comparison_tests = {}
     minimax_depths = sorted(df['tiger_depth'].dropna().unique())
@@ -1148,9 +1244,12 @@ def generate_statistical_report(statistical_results, output_dir, config=None):
         statistical_results: Dictionary with statistical test results
         output_dir: Directory to save the report
         config: Configuration dictionary
+        
+    Returns:
+        Path to the generated report
     """
     report_path = os.path.join(output_dir, 'statistical_validation.txt')
-    significance_threshold = config.get('statistical', {}).get('significance_threshold', 0.05)
+    significance_threshold = config.get('statistical', {}).get('significance_threshold', 0.05) if config else 0.05
     
     with open(report_path, 'w') as f:
         f.write("STATISTICAL VALIDATION REPORT\n")
@@ -1159,28 +1258,172 @@ def generate_statistical_report(statistical_results, output_dir, config=None):
         f.write(f"Significance level (α): {significance_threshold}\n")
         f.write("Multiple comparison correction: Benjamini-Hochberg procedure\n\n")
         
-        # Algorithm comparison
+        # Algorithm overall comparison
         if 'algorithm_comparison_test' in statistical_results:
-            test = statistical_results['algorithm_comparison_test']
-            f.write("ALGORITHM COMPARISON (MCTS vs Minimax)\n")
-            f.write("---------------------------------\n")
-            f.write(f"Test: Two-sample t-test (Welch's t-test with unequal variance)\n")
-            f.write(f"t-statistic: {test['statistic']:.4f}\n")
-            f.write(f"p-value: {test['p_value']:.4f}\n")
-            f.write(f"Significant: {'Yes' if test['p_value'] < significance_threshold else 'No'}\n\n")
+            f.write("ALGORITHM COMPARISON\n")
+            f.write("-------------------\n")
+            f.write("Test: Welch's t-test for MCTS vs Minimax overall performance\n\n")
             
-            # Add interpretation
-            if test['p_value'] < significance_threshold:
-                better_algo = "MCTS" if test['mcts_mean'] > test['minimax_mean'] else "Minimax"
-                f.write(f"Interpretation: {better_algo} performs significantly better overall.\n")
-                effect_size = abs(test['mcts_mean'] - test['minimax_mean'])
+            test = statistical_results['algorithm_comparison_test']
+            p_value = test.get('p_value')
+            is_significant = p_value < significance_threshold if p_value is not None else False
+            
+            f.write(f"t-statistic: {test.get('statistic', 'N/A'):.4f}\n")
+            f.write(f"p-value: {p_value:.4f}\n")
+            f.write(f"Significant: {'Yes' if is_significant else 'No'}\n\n")
+            
+            f.write(f"MCTS mean win rate: {test.get('mcts_mean', 'N/A'):.4f} (n={test.get('mcts_n', 'N/A')})\n")
+            f.write(f"Minimax mean win rate: {test.get('minimax_mean', 'N/A'):.4f} (n={test.get('minimax_n', 'N/A')})\n")
+            
+            if 'effect_size' in test:
+                effect_size = test['effect_size']
                 effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
-                f.write(f"  MCTS win rate: {test['mcts_mean']:.4f}\n")
-                f.write(f"  Minimax win rate: {test['minimax_mean']:.4f}\n")
-                f.write(f"  Effect size (mean difference): {effect_size:.4f} ({effect_magnitude})\n")
+                f.write(f"Effect size: {effect_size:.4f} ({effect_magnitude})\n\n")
+            
+            if 'assumption_checks' in statistical_results:
+                f.write("Assumption Checks:\n")
+                assumptions = statistical_results['assumption_checks']
+                
+                if 'adequate_sample_size' in assumptions:
+                    f.write(f"  Adequate sample size: {'Yes' if assumptions['adequate_sample_size'] else 'No'}\n")
+                
+                if 'normality' in assumptions and not isinstance(assumptions['normality'], str):
+                    f.write("  Normality (Shapiro-Wilk):\n")
+                    for result in assumptions['normality']:
+                        f.write(f"    Group {result['group']}: p={result['p_value']:.4f} (normal: {'Yes' if result['normal'] else 'No'})\n")
+                
+                if 'homogeneity_of_variance' in assumptions and not isinstance(assumptions['homogeneity_of_variance'], str):
+                    f.write(f"  Homogeneity of variance (Levene): p={assumptions['homogeneity_of_variance']['p_value']:.4f} ")
+                    f.write(f"(equal variance: {'Yes' if assumptions['homogeneity_of_variance']['equal_variance'] else 'No'})\n")
+                
+                f.write("\n")
+            
+            better_algorithm = "MCTS" if test.get('mcts_mean', 0) > test.get('minimax_mean', 0) else "Minimax"
+            f.write(f"Based on the data, {better_algorithm} performs better overall")
+            if is_significant:
+                f.write(f", and this difference is statistically significant (p < {significance_threshold}).\n\n")
             else:
-                f.write("Interpretation: No significant difference in overall performance.\n")
-            f.write("\n")
+                f.write(f", but this difference is not statistically significant (p > {significance_threshold}).\n\n")
+        
+        # Role comparisons
+        if 'role_comparison_tests' in statistical_results and statistical_results['role_comparison_tests']:
+            f.write("ROLE COMPARISON TESTS\n")
+            f.write("-------------------\n")
+            f.write("Test: Welch's t-test comparing Tiger vs Goat performance for each algorithm\n\n")
+            
+            tests = statistical_results['role_comparison_tests']
+            
+            # MCTS: Tiger vs Goat
+            if "mcts_tiger_vs_goat" in tests:
+                test = tests["mcts_tiger_vs_goat"]
+                p_value = test.get('p_value')
+                is_significant = p_value < significance_threshold if p_value is not None else False
+                
+                f.write("MCTS as Tiger vs MCTS as Goat:\n")
+                f.write(f"  t-statistic: {test.get('statistic', 'N/A'):.4f}\n")
+                f.write(f"  p-value: {p_value:.4f}\n")
+                f.write(f"  Significant: {'Yes' if is_significant else 'No'}\n\n")
+                
+                f.write(f"  MCTS as Tiger mean win rate: {test.get('tiger_mean', 'N/A'):.4f} (n={test.get('tiger_n', 'N/A')})\n")
+                f.write(f"  MCTS as Goat mean win rate: {test.get('goat_mean', 'N/A'):.4f} (n={test.get('goat_n', 'N/A')})\n")
+                
+                if 'effect_size' in test:
+                    effect_size = test['effect_size']
+                    effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                    f.write(f"  Effect size: {effect_size:.4f} ({effect_magnitude})\n\n")
+                
+                better_role = "Tiger" if test.get('tiger_mean', 0) > test.get('goat_mean', 0) else "Goat"
+                f.write(f"  Based on the data, MCTS performs better as {better_role}")
+                if is_significant:
+                    f.write(f", and this difference is statistically significant (p < {significance_threshold}).\n\n")
+                else:
+                    f.write(f", but this difference is not statistically significant (p > {significance_threshold}).\n\n")
+            
+            # Minimax: Tiger vs Goat
+            if "minimax_tiger_vs_goat" in tests:
+                test = tests["minimax_tiger_vs_goat"]
+                p_value = test.get('p_value')
+                is_significant = p_value < significance_threshold if p_value is not None else False
+                
+                f.write("Minimax as Tiger vs Minimax as Goat:\n")
+                f.write(f"  t-statistic: {test.get('statistic', 'N/A'):.4f}\n")
+                f.write(f"  p-value: {p_value:.4f}\n")
+                f.write(f"  Significant: {'Yes' if is_significant else 'No'}\n\n")
+                
+                f.write(f"  Minimax as Tiger mean win rate: {test.get('tiger_mean', 'N/A'):.4f} (n={test.get('tiger_n', 'N/A')})\n")
+                f.write(f"  Minimax as Goat mean win rate: {test.get('goat_mean', 'N/A'):.4f} (n={test.get('goat_n', 'N/A')})\n")
+                
+                if 'effect_size' in test:
+                    effect_size = test['effect_size']
+                    effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                    f.write(f"  Effect size: {effect_size:.4f} ({effect_magnitude})\n\n")
+                
+                better_role = "Tiger" if test.get('tiger_mean', 0) > test.get('goat_mean', 0) else "Goat"
+                f.write(f"  Based on the data, Minimax performs better as {better_role}")
+                if is_significant:
+                    f.write(f", and this difference is statistically significant (p < {significance_threshold}).\n\n")
+                else:
+                    f.write(f", but this difference is not statistically significant (p > {significance_threshold}).\n\n")
+        
+        # Algorithm-Role comparisons
+        if 'algorithm_role_comparison_tests' in statistical_results and statistical_results['algorithm_role_comparison_tests']:
+            f.write("ALGORITHM PERFORMANCE BY ROLE\n")
+            f.write("---------------------------\n")
+            f.write("Test: Welch's t-test comparing MCTS vs Minimax performance for each role\n\n")
+            
+            tests = statistical_results['algorithm_role_comparison_tests']
+            
+            # Tiger role: MCTS vs Minimax
+            if "mcts_tiger_vs_minimax_tiger" in tests:
+                test = tests["mcts_tiger_vs_minimax_tiger"]
+                p_value = test.get('p_value')
+                is_significant = p_value < significance_threshold if p_value is not None else False
+                
+                f.write("Tiger Role - MCTS vs Minimax:\n")
+                f.write(f"  t-statistic: {test.get('statistic', 'N/A'):.4f}\n")
+                f.write(f"  p-value: {p_value:.4f}\n")
+                f.write(f"  Significant: {'Yes' if is_significant else 'No'}\n\n")
+                
+                f.write(f"  MCTS as Tiger mean win rate: {test.get('mcts_mean', 'N/A'):.4f} (n={test.get('mcts_n', 'N/A')})\n")
+                f.write(f"  Minimax as Tiger mean win rate: {test.get('minimax_mean', 'N/A'):.4f} (n={test.get('minimax_n', 'N/A')})\n")
+                
+                if 'effect_size' in test:
+                    effect_size = test['effect_size']
+                    effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                    f.write(f"  Effect size: {effect_size:.4f} ({effect_magnitude})\n\n")
+                
+                better_algo = "MCTS" if test.get('mcts_mean', 0) > test.get('minimax_mean', 0) else "Minimax"
+                f.write(f"  Based on the data, {better_algo} performs better as Tiger")
+                if is_significant:
+                    f.write(f", and this difference is statistically significant (p < {significance_threshold}).\n\n")
+                else:
+                    f.write(f", but this difference is not statistically significant (p > {significance_threshold}).\n\n")
+            
+            # Goat role: MCTS vs Minimax
+            if "mcts_goat_vs_minimax_goat" in tests:
+                test = tests["mcts_goat_vs_minimax_goat"]
+                p_value = test.get('p_value')
+                is_significant = p_value < significance_threshold if p_value is not None else False
+                
+                f.write("Goat Role - MCTS vs Minimax:\n")
+                f.write(f"  t-statistic: {test.get('statistic', 'N/A'):.4f}\n")
+                f.write(f"  p-value: {p_value:.4f}\n")
+                f.write(f"  Significant: {'Yes' if is_significant else 'No'}\n\n")
+                
+                f.write(f"  MCTS as Goat mean win rate: {test.get('mcts_mean', 'N/A'):.4f} (n={test.get('mcts_n', 'N/A')})\n")
+                f.write(f"  Minimax as Goat mean win rate: {test.get('minimax_mean', 'N/A'):.4f} (n={test.get('minimax_n', 'N/A')})\n")
+                
+                if 'effect_size' in test:
+                    effect_size = test['effect_size']
+                    effect_magnitude = "large" if effect_size > 0.2 else "medium" if effect_size > 0.1 else "small"
+                    f.write(f"  Effect size: {effect_size:.4f} ({effect_magnitude})\n\n")
+                
+                better_algo = "MCTS" if test.get('mcts_mean', 0) > test.get('minimax_mean', 0) else "Minimax"
+                f.write(f"  Based on the data, {better_algo} performs better as Goat")
+                if is_significant:
+                    f.write(f", and this difference is statistically significant (p < {significance_threshold}).\n\n")
+                else:
+                    f.write(f", but this difference is not statistically significant (p > {significance_threshold}).\n\n")
         
         # Depth comparisons with multiple comparison correction
         if 'depth_comparison_tests' in statistical_results and statistical_results['depth_comparison_tests']:
@@ -1326,6 +1569,38 @@ def generate_statistical_report(statistical_results, output_dir, config=None):
                 better_algo = "MCTS" if test['mcts_mean'] > test['minimax_mean'] else "Minimax"
                 significant_findings.append(f"- {better_algo} performs significantly better overall (p={test['p_value']:.4f})")
         
+        # Role comparisons
+        if 'role_comparison_tests' in statistical_results and statistical_results['role_comparison_tests']:
+            tests = statistical_results['role_comparison_tests']
+            
+            if "mcts_tiger_vs_goat" in tests:
+                test = tests["mcts_tiger_vs_goat"]
+                if test['p_value'] < significance_threshold:
+                    better_role = "Tiger" if test['tiger_mean'] > test['goat_mean'] else "Goat"
+                    significant_findings.append(f"- MCTS performs significantly better as {better_role} (p={test['p_value']:.4f})")
+            
+            if "minimax_tiger_vs_goat" in tests:
+                test = tests["minimax_tiger_vs_goat"]
+                if test['p_value'] < significance_threshold:
+                    better_role = "Tiger" if test['tiger_mean'] > test['goat_mean'] else "Goat"
+                    significant_findings.append(f"- Minimax performs significantly better as {better_role} (p={test['p_value']:.4f})")
+        
+        # Algorithm role comparisons
+        if 'algorithm_role_comparison_tests' in statistical_results and statistical_results['algorithm_role_comparison_tests']:
+            tests = statistical_results['algorithm_role_comparison_tests']
+            
+            if "mcts_tiger_vs_minimax_tiger" in tests:
+                test = tests["mcts_tiger_vs_minimax_tiger"]
+                if test['p_value'] < significance_threshold:
+                    better_algo = "MCTS" if test['mcts_mean'] > test['minimax_mean'] else "Minimax"
+                    significant_findings.append(f"- {better_algo} performs significantly better as Tiger (p={test['p_value']:.4f})")
+            
+            if "mcts_goat_vs_minimax_goat" in tests:
+                test = tests["mcts_goat_vs_minimax_goat"]
+                if test['p_value'] < significance_threshold:
+                    better_algo = "MCTS" if test['mcts_mean'] > test['minimax_mean'] else "Minimax"
+                    significant_findings.append(f"- {better_algo} performs significantly better as Goat (p={test['p_value']:.4f})")
+        
         # Depth comparisons
         if 'depth_comparison_tests' in statistical_results and statistical_results['depth_comparison_tests']:
             tests = statistical_results['depth_comparison_tests']
@@ -1337,7 +1612,7 @@ def generate_statistical_report(statistical_results, output_dir, config=None):
                 for i, (key, test) in enumerate(tests.items()):
                     if corrected_p_values[i] < significance_threshold:
                         d1, d2 = key.split('_vs_')
-                        better_depth = d1 if test.get('depth1_mean', 0) > test.get('depth2_mean', 0) else d2
+                        better_depth = d1 if test['depth1_mean'] > test['depth2_mean'] else d2
                         significant_findings.append(f"- Minimax depth {better_depth} performs significantly better than depth {d2 if better_depth == d1 else d1} (corrected p={corrected_p_values[i]:.4f})")
         
         # MCTS configuration comparisons
@@ -1351,7 +1626,7 @@ def generate_statistical_report(statistical_results, output_dir, config=None):
                 for i, (key, test) in enumerate(tests.items()):
                     if corrected_p_values[i] < significance_threshold:
                         config1, config2 = key.split('_vs_')
-                        better_config = config1 if test.get('config1_mean', 0) > test.get('config2_mean', 0) else config2
+                        better_config = config1 if test['config1_mean'] > test['config2_mean'] else config2
                         significant_findings.append(f"- MCTS configuration {better_config} performs significantly better than {config2 if better_config == config1 else config1} (corrected p={corrected_p_values[i]:.4f})")
         
         # Capture impact tests
@@ -1365,7 +1640,7 @@ def generate_statistical_report(statistical_results, output_dir, config=None):
                 for i, (key, test) in enumerate(tests.items()):
                     if corrected_p_values[i] < significance_threshold:
                         captures = key.split('_vs_')[0].replace('captures_', '')
-                        advantaged = "Tigers" if test.get('captures_mean', 0) > test.get('no_captures_mean', 0) else "Goats"
+                        advantaged = "Tigers" if test['captures_mean'] > test['no_captures_mean'] else "Goats"
                         significant_findings.append(f"- {advantaged} are significantly advantaged in games with {captures} captures (corrected p={corrected_p_values[i]:.4f})")
         
         if significant_findings:
@@ -1374,5 +1649,6 @@ def generate_statistical_report(statistical_results, output_dir, config=None):
         else:
             f.write("No findings remained statistically significant after correction for multiple comparisons.\n")
         
-    print(f"Statistical validation report saved to {report_path}")
-    return report_path 
+        f.write("\nFor complete statistical details of individual tests, refer to the sections above.\n")
+    
+    return report_path
