@@ -586,8 +586,8 @@ def create_capture_visualizations(game_dynamics, output_dir, config=None):
     plt.ylabel('Percentage', fontsize=14)
     plt.title('Win Rates by Number of Captures', fontsize=16)
     
-    # Add extra data point for spacing (make room for the legend)
-    plt.xticks(positions.tolist() + [max(positions) + 1], capture_analysis['Captures'].tolist() + [""])
+    # Set x-ticks normally (no extra point)
+    plt.xticks(positions, capture_analysis['Captures'])
     
     # Add number of games as text above bars (win rate vis)
     for i, games in enumerate(capture_analysis['Games']):
@@ -601,9 +601,9 @@ def create_capture_visualizations(game_dynamics, output_dir, config=None):
             fontweight='bold'
         )
     
-    plt.legend(fontsize=12)
-    plt.ylim(0, 100)
-    plt.xlim(-0.5, max(positions) + 1.5)  # Extend x-axis for legend room
+    # Create legend with horizontal layout (ncol=3)
+    plt.legend(fontsize=12, loc='upper center', ncol=3, framealpha=0.7)
+    plt.ylim(0, 110)  # Extend y-axis to 110% to provide margin above 100%
     
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'capture_outcomes.png'), dpi=300)
