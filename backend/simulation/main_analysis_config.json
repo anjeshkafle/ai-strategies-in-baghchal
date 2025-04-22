@@ -1,0 +1,15 @@
+{
+  "statistical": {
+    "significance_threshold": 0.05,
+    "confidence_level": 0.95
+  },
+  "visualization": {
+    "color_mcts": "#1f77b4",
+    "color_minimax": "#ff7f0e",
+    "color_tiger": "#d62728",
+    "color_goat": "#2ca02c"
+  },
+  "top_configs": {
+    "count": 0
+  }
+}
