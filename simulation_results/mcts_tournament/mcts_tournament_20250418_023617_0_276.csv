@@ -1,1 +1,0 @@
-game_id,winner,reason,moves,game_duration,avg_tiger_move_time,avg_goat_move_time,first_capture_move,goats_captured,phase_transition_move,move_history,tiger_algorithm,tiger_config,goat_algorithm,goat_config
