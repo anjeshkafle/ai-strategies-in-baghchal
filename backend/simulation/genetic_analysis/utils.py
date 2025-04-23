@@ -24,7 +24,6 @@ def load_config(config_path):
             'include_fitness_analysis': True,
             'include_win_rate_analysis': True,
             'include_diversity_analysis': True,
-            'include_parameter_sensitivity': True,
             'include_time_efficiency': True,
             'include_parameter_comparison': True,
             'convergence_threshold': 0.001,

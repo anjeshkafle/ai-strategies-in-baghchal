@@ -186,58 +186,6 @@ def create_parameter_evolution_visualizations(parameter_data, output_dir, config
         plt.savefig(os.path.join(output_dir, 'parameter_percent_changes.png'))
         plt.close()
 
-def create_parameter_sensitivity_visualizations(parameter_data, output_dir, config):
-    """
-    Create visualizations for parameter sensitivity analysis.
-    
-    Args:
-        parameter_data: Dictionary with parameter analysis results
-        output_dir: Directory to save visualizations
-        config: Visualization configuration
-    """
-    setup_visualization_style(config)
-    
-    if 'parameter_importance' not in parameter_data or not parameter_data['parameter_importance']:
-        print("No parameter importance data available for visualization")
-        return
-    
-    # Create parameter importance visualization
-    param_importance = parameter_data['parameter_importance']
-    
-    # Select top 10 parameters by absolute correlation
-    top_params = param_importance[:10] if len(param_importance) > 10 else param_importance
-    
-    param_names = [param['parameter'] for param in top_params]
-    correlations = [param['correlation'] for param in top_params]
-    
-    # Create horizontal bar chart for correlations
-    figsize = config.get('visualization', {}).get('figsize', (10, 6))
-    fig, ax = plt.subplots(figsize=figsize)
-    colors = ['green' if x >= 0 else 'red' for x in correlations]
-    bars = ax.barh(param_names, correlations, color=colors, alpha=0.7)
-    
-    ax.set_xlabel('Correlation with Fitness')
-    ax.set_ylabel('Parameter')
-    ax.set_title('Parameter Importance (Correlation with Fitness)')
-    ax.grid(True, axis='x', alpha=0.3)
-    
-    # Add vertical line at zero
-    ax.axvline(x=0, color='black', linestyle='-', alpha=0.3)
-    
-    # Add labels on bars
-    for bar in bars:
-        width = bar.get_width()
-        sign = '+' if width >= 0 else ''
-        ax.text(width + (0.01 if width >= 0 else -0.05), 
-              bar.get_y() + bar.get_height()/2.,
-              f'{sign}{width:.3f}', 
-              ha='left' if width >= 0 else 'right', 
-              va='center')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'parameter_importance.png'))
-    plt.close()
-
 def create_parameter_comparison_visualizations(parameter_data, output_dir, config):
     """
     Create visualizations comparing initial and final parameter values.

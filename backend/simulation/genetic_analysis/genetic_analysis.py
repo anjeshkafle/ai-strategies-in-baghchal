@@ -74,9 +74,6 @@ def run_analysis(source_dir, output_dir, config_file=None):
     if config.get('analysis', {}).get('include_time_efficiency', True):
         visualization.create_time_efficiency_visualizations(time_analysis, figures_dir, config)
     
-    if config.get('analysis', {}).get('include_parameter_sensitivity', True):
-        visualization.create_parameter_sensitivity_visualizations(parameter_analysis, figures_dir, config)
-    
     if config.get('analysis', {}).get('include_parameter_comparison', True):
         visualization.create_parameter_comparison_visualizations(parameter_analysis, figures_dir, config)
     
@@ -224,8 +221,7 @@ def analyze_parameters(ga_data, config):
     if not ga_data.get('parameter_evolution'):
         return {
             'parameter_evolution': [],
-            'top_parameter_changes': {},
-            'parameter_importance': []
+            'top_parameter_changes': {}
         }
     
     parameter_evolution = ga_data['parameter_evolution']
@@ -256,42 +252,10 @@ def analyze_parameters(ga_data, config):
     sorted_changes = sorted(param_changes.items(), key=lambda x: abs(x[1]['percent_change']), reverse=True)
     top_param_changes = dict(sorted_changes[:5]) if len(sorted_changes) > 5 else dict(sorted_changes)
     
-    # Estimate parameter importance by correlation with fitness
-    param_importance = []
-    if 'fitness_history' in ga_data and len(ga_data['fitness_history']) > 0:
-        fitness_values = [entry['best_fitness'] for entry in ga_data['fitness_history']]
-        
-        for param in initial_params:
-            if param == 'generation' or param == 'timestamp':
-                continue
-            
-            try:
-                # Extract parameter values across generations
-                param_values = [entry[param] for entry in parameter_evolution]
-                
-                # Calculate correlation with fitness (if we have matching data points)
-                min_length = min(len(param_values), len(fitness_values))
-                
-                if min_length > 1:
-                    import numpy as np
-                    correlation = np.corrcoef(param_values[:min_length], fitness_values[:min_length])[0, 1]
-                    
-                    param_importance.append({
-                        'parameter': param,
-                        'correlation': correlation,
-                        'abs_correlation': abs(correlation)
-                    })
-            except (KeyError, ValueError):
-                continue
-        
-        # Sort by absolute correlation
-        param_importance.sort(key=lambda x: x['abs_correlation'], reverse=True)
-    
     return {
         'parameter_evolution': parameter_evolution,
         'parameter_changes': param_changes,
-        'top_parameter_changes': top_param_changes,
-        'parameter_importance': param_importance
+        'top_parameter_changes': top_param_changes
     }
 
 def analyze_win_rates(ga_data, config):
@@ -487,19 +451,14 @@ def generate_summary_report(output_dir, ga_data, fitness_analysis, parameter_ana
         f.write(f"Average diversity: {diversity_analysis.get('avg_diversity', 0):.4f}\n")
         f.write(f"Diversity trend: {diversity_analysis.get('diversity_trend', 'unknown')}\n\n")
         
-        f.write("Parameter Importance\n")
-        f.write("-------------------\n")
-        for i, param in enumerate(parameter_analysis.get('parameter_importance', [])[:10]):
-            f.write(f"{i+1}. {param['parameter']}: correlation with fitness = {param['correlation']:.4f}\n")
-        f.write("\n")
-        
         f.write("Top Parameter Changes\n")
         f.write("-------------------\n")
         for param, details in parameter_analysis.get('top_parameter_changes', {}).items():
             f.write(f"{param}:\n")
             f.write(f"  Initial value: {details['initial_value']:.4f}\n")
             f.write(f"  Final value: {details['final_value']:.4f}\n")
-            f.write(f"  Change: {details['absolute_change']:.4f} ({details['percent_change']:.2f}%)\n\n")
+            f.write(f"  Change: {details['absolute_change']:.4f} ({details['percent_change']:.2f}%)\n")
+        f.write("\n")
         
         f.write("\nBest Configuration\n")
         f.write("-----------------\n")
