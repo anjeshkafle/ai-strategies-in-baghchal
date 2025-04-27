@@ -76,6 +76,7 @@ def run_training(config):
     # Extract config values with defaults
     episodes = config.get("episodes", 10000)
     save_interval = config.get("save_interval", 100)
+    backup_interval = config.get("backup_interval", 10)  # New parameter for more frequent backups
     save_path = config.get("save_path", "models/q_tables")
     discount_factor = config.get("discount_factor", 0.95)
     initial_exploration_rate = config.get("initial_exploration_rate", 1.0)
@@ -283,17 +284,17 @@ def run_training(config):
                     print(f"Episode {episode}/{episodes}, Epsilon: {epsilon:.3f}, Game Length: {game_length}, " + 
                           f"Winner: {winner}, T/G/D: {tiger_wins}/{goat_wins}/{draws}, Elapsed: {elapsed_time:.1f}s")
                 
-                # Save periodically
-                if episode % save_interval == 0 or interrupted:
-                    # Save Q-tables
+                # Backup to main files frequently
+                if episode % backup_interval == 0 or interrupted:
+                    # Save to the main 4 files (overwriting)
                     q_agent.save_tables(
-                        f"{save_path}/tiger_q_{episode}.json",
-                        f"{save_path}/tiger_v_{episode}.json",
-                        f"{save_path}/goat_q_{episode}.json",
-                        f"{save_path}/goat_v_{episode}.json"
+                        f"{save_path}/tiger_q_final.json",
+                        f"{save_path}/tiger_v_final.json",
+                        f"{save_path}/goat_q_final.json",
+                        f"{save_path}/goat_v_final.json"
                     )
                     
-                    # Save metadata
+                    # Update metadata
                     current_time = time.time() - start_time + total_training_time
                     metadata = {
                         "completed_episodes": episode,
@@ -305,7 +306,19 @@ def run_training(config):
                     }
                     save_metadata(save_path, metadata)
                     
-                    print(f"Saved progress at episode {episode}")
+                    if episode % backup_interval == 0:
+                        print(f"Backed up progress at episode {episode}")
+                
+                # Create snapshots only if save_interval is positive
+                if save_interval > 0 and episode % save_interval == 0:
+                    # Save the numbered snapshot files
+                    q_agent.save_tables(
+                        f"{save_path}/tiger_q_{episode}.json",
+                        f"{save_path}/tiger_v_{episode}.json",
+                        f"{save_path}/goat_q_{episode}.json",
+                        f"{save_path}/goat_v_{episode}.json"
+                    )
+                    print(f"Created snapshot at episode {episode}")
                 
                 # Decay epsilon
                 epsilon = max(q_agent.min_exploration_rate, epsilon * q_agent.exploration_decay)
@@ -395,9 +408,42 @@ def run_training(config):
                     print(f"Episode {episode}/{episodes}, Epsilon: {epsilon:.3f}, Game Length: {game_length}, " + 
                           f"Winner: {winner}, T/G/D: {tiger_wins}/{goat_wins}/{draws}, Elapsed: {elapsed_time:.1f}s")
                 
-                # Save periodically
-                if episode % save_interval == 0 or interrupted:
-                    # Save Q-tables
+                # Backup to main files frequently
+                if episode % backup_interval == 0 or interrupted:
+                    # Save to the main files based on training role
+                    if role_to_train == "TIGER":
+                        q_agent.save_tables(
+                            f"{save_path}/tiger_q_final.json",
+                            f"{save_path}/tiger_v_final.json",
+                            None,
+                            None
+                        )
+                    else:  # GOAT
+                        q_agent.save_tables(
+                            None,
+                            None,
+                            f"{save_path}/goat_q_final.json",
+                            f"{save_path}/goat_v_final.json"
+                        )
+                    
+                    # Update metadata
+                    current_time = time.time() - start_time + total_training_time
+                    metadata = {
+                        "completed_episodes": episode,
+                        "exploration_rate": epsilon,
+                        "tiger_wins": tiger_wins,
+                        "goat_wins": goat_wins,
+                        "draws": draws,
+                        "training_seconds": current_time
+                    }
+                    save_metadata(save_path, metadata)
+                    
+                    if episode % backup_interval == 0:
+                        print(f"Backed up progress at episode {episode}")
+                
+                # Create snapshots only if save_interval is positive
+                if save_interval > 0 and episode % save_interval == 0:
+                    # Save the numbered snapshot files based on training role
                     if role_to_train == "TIGER":
                         q_agent.save_tables(
                             f"{save_path}/tiger_q_{episode}.json",
@@ -412,20 +458,7 @@ def run_training(config):
                             f"{save_path}/goat_q_{episode}.json",
                             f"{save_path}/goat_v_{episode}.json"
                         )
-                    
-                    # Save metadata
-                    current_time = time.time() - start_time + total_training_time
-                    metadata = {
-                        "completed_episodes": episode,
-                        "exploration_rate": epsilon,
-                        "tiger_wins": tiger_wins,
-                        "goat_wins": goat_wins,
-                        "draws": draws,
-                        "training_seconds": current_time
-                    }
-                    save_metadata(save_path, metadata)
-                    
-                    print(f"Saved progress at episode {episode}")
+                    print(f"Created snapshot at episode {episode}")
                 
                 # Decay epsilon
                 epsilon = max(q_agent.min_exploration_rate, epsilon * q_agent.exploration_decay)
@@ -434,43 +467,7 @@ def run_training(config):
         # Final save
         episode = min(episodes, current_episode)
         
-        # Save Q-tables
-        if training_mode == "self_play":
-            q_agent.save_tables(
-                f"{save_path}/tiger_q_{episode}.json",
-                f"{save_path}/tiger_v_{episode}.json",
-                f"{save_path}/goat_q_{episode}.json",
-                f"{save_path}/goat_v_{episode}.json"
-            )
-        else:  # Coach training
-            if role_to_train == "TIGER":
-                q_agent.save_tables(
-                    f"{save_path}/tiger_q_{episode}.json",
-                    f"{save_path}/tiger_v_{episode}.json",
-                    None,
-                    None
-                )
-            else:  # GOAT
-                q_agent.save_tables(
-                    None,
-                    None,
-                    f"{save_path}/goat_q_{episode}.json",
-                    f"{save_path}/goat_v_{episode}.json"
-                )
-        
-        # Save metadata
-        current_time = time.time() - start_time + total_training_time
-        metadata = {
-            "completed_episodes": episode,
-            "exploration_rate": epsilon,
-            "tiger_wins": tiger_wins,
-            "goat_wins": goat_wins,
-            "draws": draws,
-            "training_seconds": current_time
-        }
-        save_metadata(save_path, metadata)
-        
-        # Make a copy of latest tables to "final" for easy reference
+        # No need to create another snapshot - we'll just ensure final files are up to date
         if training_mode == "self_play":
             q_agent.save_tables(
                 f"{save_path}/tiger_q_final.json",
@@ -493,6 +490,18 @@ def run_training(config):
                     f"{save_path}/goat_q_final.json",
                     f"{save_path}/goat_v_final.json"
                 )
+        
+        # Final metadata update
+        current_time = time.time() - start_time + total_training_time
+        metadata = {
+            "completed_episodes": episode,
+            "exploration_rate": epsilon,
+            "tiger_wins": tiger_wins,
+            "goat_wins": goat_wins,
+            "draws": draws,
+            "training_seconds": current_time
+        }
+        save_metadata(save_path, metadata)
         
         print("\nTraining complete!")
         print(f"Completed {episode} episodes.")

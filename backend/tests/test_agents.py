@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.mcts_agent import MCTSAgent, MCTSNode
 from models.minimax_agent import MinimaxAgent
+from models.q_agent import QLearningAgent
 from models.game_state import GameState
 
 #-----------------------------------------------
@@ -60,8 +61,9 @@ GOATS_PLACED = 1
 GOATS_CAPTURED = 0
 
 # Select which agent(s) to run (True/False)
-RUN_MINIMAX = True
+RUN_MINIMAX = False
 RUN_MCTS = False
+RUN_Q_AGENT = True
 
 # Agent parameters
 # Minimax parameters
@@ -75,6 +77,9 @@ MCTS_ROLLOUT_POLICY = "lightweight"
 MCTS_MAX_ROLLOUT_DEPTH = 6
 MCTS_GUIDED_STRICTNESS = 0.8 # lower values mean more exploration
 MCTS_MAX_TIME_SECONDS = 50
+
+# Q-learning parameters
+Q_TABLES_PATH = "backend/simulation_results/q_tables"
 
 #-----------------------------------------------
 # HELPER FUNCTIONS
@@ -354,6 +359,66 @@ def run_mcts_test(game_state):
         print("No move was returned by the agent.")
 
 
+def run_q_agent_test(game_state):
+    """Run Q-learning agent test with the given game state."""
+    print("\n" + "="*50)
+    print("RUNNING Q-LEARNING AGENT TEST")
+    print("="*50)
+    
+    # Get valid moves for the current state
+    valid_moves = game_state.get_valid_moves()
+    print(f"\nValid moves for {game_state.turn}: {len(valid_moves)}")
+    
+    # Check for capture moves
+    capture_moves = [move for move in valid_moves if move.get("capture")]
+    print(f"Capture moves available: {len(capture_moves)}")
+    
+    # Configure Q-learning parameters
+    tables_path = Q_TABLES_PATH
+    
+    print(f"\nInitializing Q-Learning agent")
+    print(f"Tables path: {tables_path}")
+    
+    # Create the Q-learning agent
+    agent = QLearningAgent(
+        auto_load=True,
+        tables_path=tables_path
+    )
+    
+    # Print available moves
+    print("\nAvailable moves:")
+    for i, move in enumerate(valid_moves):
+        capture_str = " (CAPTURE)" if move.get("capture") else ""
+        print(f"  {i+1}. {format_move(move)}{capture_str}")
+    
+    # Time the decision
+    start_time = time.time()
+    best_move = agent.get_move(game_state)
+    elapsed_time = time.time() - start_time
+    
+    # Print performance information
+    print(f"\nQ-agent decision completed in {elapsed_time:.4f} seconds")
+    print(f"Best move: {format_move(best_move)}")
+    
+    # Apply the move to see the result
+    if best_move:
+        new_state = game_state.clone()
+        new_state.apply_move(best_move)
+        print("\nBoard state after applying the best move:")
+        print_board(new_state)
+        
+        # Check if the move was a capture move
+        if best_move.get("capture"):
+            print("✓ The agent chose a capture move!")
+        else:
+            if capture_moves:
+                print("✗ The agent did NOT choose a capture move, even though captures are available.")
+            else:
+                print("(No capture moves were available)")
+    else:
+        print("No move was returned by the agent.")
+
+
 def main():
     """Run agent tests with configurable parameters."""
     # Create a game state from the board
@@ -384,6 +449,9 @@ def main():
     
     if RUN_MCTS:
         run_mcts_test(game_state)
+        
+    if RUN_Q_AGENT:
+        run_q_agent_test(game_state)
 
 
 if __name__ == "__main__":
