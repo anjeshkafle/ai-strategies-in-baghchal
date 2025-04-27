@@ -1,0 +1,30 @@
+{
+  "episodes": 11000,             /* Total number of training episodes */
+  "save_interval": 1000,         /* Save Q-table snapshots every N episodes */
+  "backup_interval": 10,         /* Backup to main files every N episodes */
+  "save_path": "backend/simulation_results/q_tables", /* Directory to save Q-tables */
+  "discount_factor": 0.95,       /* Gamma value for Q-learning (future reward discount) */
+  "initial_exploration_rate": 1.0, /* Starting epsilon value (exploration vs exploitation) */
+  "min_exploration_rate": 0.05,  /* Minimum epsilon value after decay */
+  "exploration_decay": 0.995,    /* Rate at which epsilon decreases */
+  "seed": 42,                    /* Random seed for reproducibility */
+  "max_time_seconds": 7200,      /* Maximum training time in seconds (2 hours) */
+
+  /* Optional coach settings when training with a coach agent instead of self-play 
+     Set to null for self-play, or provide an object with coach settings */
+  "coach_settings": null,
+  
+  "_documentation": {
+    "episodes": "Total number of training episodes",
+    "save_interval": "Save Q-table snapshots every N episodes",
+    "backup_interval": "Backup to main files every N episodes",
+    "save_path": "Directory to save Q-tables",
+    "discount_factor": "Gamma value for Q-learning (future reward discount)",
+    "initial_exploration_rate": "Starting epsilon value (exploration vs exploitation)",
+    "min_exploration_rate": "Minimum epsilon value after decay",
+    "exploration_decay": "Rate at which epsilon decreases",
+    "seed": "Random seed for reproducibility",
+    "max_time_seconds": "Maximum training time in seconds (2 hours)",
+    "coach_settings": "Optional coach settings when training with a coach agent instead of self-play. Set to null for self-play, or provide an object with coach settings"
+  }
+} 

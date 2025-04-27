@@ -1,0 +1,42 @@
+{
+  "sheets_webapp_url": "https://script.google.com/macros/s/YOUR_WEBAPP_ID/exec",
+  "sheets_batch_size": 20,
+  "mcts_tournament": {
+    "max_simulation_time": 600,
+    "max_time_per_move": 20,
+    "output_dir": "simulation_results",
+    "configurations": [
+      {
+        "rollout_policies": ["random"],
+        "rollout_depths": [4, 6],
+        "exploration_weights": [1.0, 1.414, 2.0]
+      },
+      {
+        "rollout_policies": ["lightweight"],
+        "rollout_depths": [4, 6],
+        "exploration_weights": [1.0, 1.414, 2.0]
+      },
+      {
+        "rollout_policies": ["guided"],
+        "rollout_depths": [4, 6],
+        "exploration_weights": [1.0, 1.414, 2.0],
+        "guided_strictness_values": [0.5, 0.85]
+      }
+    ]
+  },
+  
+  "_documentation": {
+    "sheets_webapp_url": "URL of Google Apps Script webapp for syncing results to Google Sheets",
+    "sheets_batch_size": "Number of results to send in each batch to Google Sheets",
+    "mcts_tournament": {
+      "max_simulation_time": "Maximum runtime in minutes (600 = 10 hours)",
+      "max_time_per_move": "Maximum seconds allowed per move",
+      "output_dir": "Directory for saving simulation results",
+      "configurations": "Array of different MCTS configurations to test",
+      "rollout_policies": "Types of policies to use during MCTS rollout phase",
+      "rollout_depths": "Depths to search during rollout phase",
+      "exploration_weights": "UCB1 exploration parameter values (higher = more exploration)",
+      "guided_strictness_values": "Values that control how strictly the guided policy follows heuristics"
+    }
+  }
+} 

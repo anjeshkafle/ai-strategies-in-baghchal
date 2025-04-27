@@ -1,0 +1,21 @@
+{
+  "sheets_webapp_url": "https://script.google.com/macros/s/YOUR_WEBAPP_ID/exec",
+  "sheets_batch_size": 50,
+  "max_simulation_time": 1440,
+  "parallel_games": 7,
+  "minimax_depths": [3, 4, 5, 6, 7],
+  "minimax_use_tuned_params": true,
+  "max_time_per_move": 10,
+  "output_dir": "simulation_results/main_competition",
+  
+  "_documentation": {
+    "sheets_webapp_url": "URL of Google Apps Script webapp for syncing results to Google Sheets",
+    "sheets_batch_size": "Number of results to send in each batch to Google Sheets",
+    "max_simulation_time": "Maximum runtime in minutes (1440 = 24 hours)",
+    "parallel_games": "Number of game simulations to run in parallel",
+    "minimax_depths": "Array of search depths to use for Minimax agents",
+    "minimax_use_tuned_params": "Whether to use genetically tuned parameters for evaluation function",
+    "max_time_per_move": "Maximum seconds allowed per move",
+    "output_dir": "Directory for saving simulation results"
+  }
+} 

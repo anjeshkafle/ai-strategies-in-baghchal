@@ -1,0 +1,56 @@
+{
+  "population_size": 20,
+  "generations": 100,
+  "max_execution_time": 36000,
+  "elitism_count": 4,
+  "tournament_size": 3,
+  "mutation_rate": 0.15,
+  "mutation_magnitude": 0.2,
+  "crossover_rate": 0.8,
+  "games_per_evaluation": 22,
+  "parallel_processes": 0,
+  "parallel_processes_info": "When set to 0, automatically uses CPU count - 1 for optimal performance",
+  "save_interval": 2,
+  "search_depth": 5,
+  "output_dir": "tuned_params",
+  "parameter_ranges": {
+    "mobility_weight_placement": [50, 500],
+    "mobility_weight_movement": [100, 800],
+    "base_capture_value": [2000, 5000],
+    "capture_speed_weight": [20, 100],
+    "dispersion_weight": [50, 300],
+    "edge_weight": [100, 600],
+    "closed_spaces_weight": [600, 1500],
+    "closed_space_weight_factor": [0.5, 2.5],
+    "position_weight_factor": [0.5, 2.0],
+    "edge_weight_factor": [0.6, 2.5],
+    "spacing_weight_factor": [0.6, 2.0]
+  },
+  "equilibrium_ranges": {
+    "position_equilibrium_early": [0.35, 0.7],
+    "position_equilibrium_late": [0.2, 0.5],
+    "spacing_equilibrium_early": [0.35, 0.7],
+    "spacing_equilibrium_late": [0.2, 0.5],
+    "edge_equilibrium_early": [0.7, 1.0],
+    "edge_equilibrium_mid": [0.6, 0.95],
+    "edge_equilibrium_late": [0.05, 0.3]
+  },
+  
+  "_documentation": {
+    "population_size": "Number of individuals in each generation",
+    "generations": "Maximum number of generations to run",
+    "max_execution_time": "Maximum runtime in seconds (10 hours)",
+    "elitism_count": "Number of top individuals to preserve intact between generations",
+    "tournament_size": "Number of individuals in tournament selection",
+    "mutation_rate": "Probability of gene mutation",
+    "mutation_magnitude": "Scale of mutation when it occurs",
+    "crossover_rate": "Probability of crossover between parents",
+    "games_per_evaluation": "Number of games to play for fitness evaluation",
+    "parallel_processes": "Number of parallel processes for evaluation (0 = auto)",
+    "save_interval": "Save results every N generations",
+    "search_depth": "Minimax search depth for evaluation",
+    "output_dir": "Directory for saving optimized parameters",
+    "parameter_ranges": "Min/max ranges for each parameter to optimize",
+    "equilibrium_ranges": "Min/max ranges for equilibrium settings"
+  }
+} 

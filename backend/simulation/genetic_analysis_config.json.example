@@ -1,0 +1,49 @@
+{
+  "analysis": {
+    "include_parameter_evolution": true,
+    "include_fitness_analysis": true,
+    "include_win_rate_analysis": true,
+    "include_diversity_analysis": true,
+    "include_parameter_sensitivity": true,
+    "include_time_efficiency": true,
+    "include_parameter_comparison": true,
+    "convergence_threshold": 0.001,
+    "stability_count": 3,
+    "min_generations_for_convergence": 5
+  },
+  "visualization": {
+    "dpi": 300,
+    "figsize": [10, 6],
+    "style": "seaborn-v0_8-whitegrid",
+    "custom_colors": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+  },
+  "statistics": {
+    "significance_threshold": 0.05,
+    "confidence_level": 0.95
+  },
+  
+  "_documentation": {
+    "analysis": {
+      "include_parameter_evolution": "Whether to analyze how parameters change over generations",
+      "include_fitness_analysis": "Whether to analyze fitness trends",
+      "include_win_rate_analysis": "Whether to analyze win rates",
+      "include_diversity_analysis": "Whether to analyze population diversity",
+      "include_parameter_sensitivity": "Whether to analyze parameter sensitivity",
+      "include_time_efficiency": "Whether to analyze computation time",
+      "include_parameter_comparison": "Whether to compare parameters across generations",
+      "convergence_threshold": "Threshold for considering parameters converged",
+      "stability_count": "Number of generations needed for stable convergence",
+      "min_generations_for_convergence": "Minimum generations before checking convergence"
+    },
+    "visualization": {
+      "dpi": "Resolution of output images",
+      "figsize": "Size of output figures (width, height)",
+      "style": "Matplotlib style to use",
+      "custom_colors": "Color palette for plots"
+    },
+    "statistics": {
+      "significance_threshold": "P-value threshold for statistical significance",
+      "confidence_level": "Confidence level for statistical tests"
+    }
+  }
+} 

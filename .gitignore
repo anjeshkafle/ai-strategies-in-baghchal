@@ -23,15 +23,22 @@ backend/data/
 backend/simulation/simulation_results/
 backend/simulation_results/
 backend/tuned_params/
-backend/genetic/ga_config.json
 
 # Configuration files
+backend/genetic/ga_config.json
 backend/simulation/mcts_analysis_config.json
 backend/simulation/main_competition_config.json
 backend/simulation/genetic_analysis_config.json
 backend/simulation/mcts_simulation_config.json
 backend/simulation/q_training_config.json
-
+# Example config files are explicitly included (not ignored)
+!backend/genetic/ga_config.json.example
+!backend/simulation/mcts_analysis_config.json.example
+!backend/simulation/main_competition_config.json.example
+!backend/simulation/genetic_analysis_config.json.example
+!backend/simulation/mcts_simulation_config.json.example
+!backend/simulation/q_training_config.json.example
+!backend/simulation/main_analysis_config.json.example
 
 # Editor directories and files
 .vscode/
