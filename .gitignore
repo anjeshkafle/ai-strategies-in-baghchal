@@ -30,6 +30,7 @@ backend/simulation/mcts_analysis_config.json
 backend/simulation/main_competition_config.json
 backend/simulation/genetic_analysis_config.json
 backend/simulation/mcts_simulation_config.json
+backend/simulation/q_training_config.json
 
 
 # Editor directories and files
