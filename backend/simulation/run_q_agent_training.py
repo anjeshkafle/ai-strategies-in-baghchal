@@ -571,18 +571,114 @@ def run_training(config):
         
         return q_agent
 
+def fix_metadata(save_path, episode_count=None):
+    """
+    Fix metadata inconsistency by setting completed_episodes to match statistics
+    or a user-provided value.
+    
+    Args:
+        save_path: Path to save directory
+        episode_count: Custom episode count (optional)
+    """
+    metadata_path = os.path.join(save_path, 'metadata.json')
+    if not os.path.exists(metadata_path):
+        print(f"No metadata file found at {metadata_path}")
+        return
+    
+    try:
+        # Load existing metadata
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+        
+        # Calculate game count from statistics
+        game_count = metadata.get("tiger_wins", 0) + metadata.get("goat_wins", 0) + metadata.get("draws", 0)
+        
+        # Previous episode count
+        prev_count = metadata.get("completed_episodes", 0)
+        
+        # Determine new episode count
+        if episode_count is not None:
+            # User-provided value
+            new_count = episode_count
+        else:
+            # Use game count instead
+            new_count = game_count
+        
+        # Update metadata
+        metadata["completed_episodes"] = new_count
+        
+        # Save updated metadata
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f)
+        
+        print(f"Updated metadata: completed_episodes changed from {prev_count} to {new_count}")
+        print(f"Game statistics - Tiger wins: {metadata.get('tiger_wins', 0)}, " + 
+              f"Goat wins: {metadata.get('goat_wins', 0)}, Draws: {metadata.get('draws', 0)}")
+    
+    except Exception as e:
+        print(f"Error fixing metadata: {e}")
+
+def clean_training_files(save_path, keep_final_only=True):
+    """
+    Clean up training files, keeping only essential files.
+    
+    Args:
+        save_path: Path to save directory
+        keep_final_only: If True, delete all snapshot files
+    """
+    essential_files = [
+        "tiger_q_final.json", 
+        "tiger_v_final.json", 
+        "goat_q_final.json", 
+        "goat_v_final.json",
+        "metadata.json"
+    ]
+    
+    try:
+        file_count = 0
+        for filename in os.listdir(save_path):
+            if filename not in essential_files and (keep_final_only or "_final.json" not in filename):
+                file_path = os.path.join(save_path, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+                    file_count += 1
+        
+        print(f"Removed {file_count} files. Kept essential training files.")
+    
+    except Exception as e:
+        print(f"Error cleaning files: {e}")
+
 def main():
     """Main function to parse arguments and run training"""
     parser = argparse.ArgumentParser(description='Train a Q-learning agent for Bagh Chal')
     parser.add_argument('--config', type=str, default='backend/simulation/q_training_config.json',
                         help='Path to training configuration JSON file')
+    parser.add_argument('--fix-metadata', action='store_true',
+                        help='Fix metadata inconsistency by matching completed_episodes to game statistics')
+    parser.add_argument('--set-episodes', type=int,
+                        help='Set completed_episodes in metadata to this value')
+    parser.add_argument('--clean', action='store_true',
+                        help='Clean up training files, keeping only essential files')
     args = parser.parse_args()
     
     # Load configuration
     config = load_config(args.config)
     
-    # Run training
-    run_training(config)
+    # Handle utility operations
+    if args.fix_metadata or args.set_episodes is not None:
+        save_path = config.get("save_path", "backend/simulation_results/q_tables")
+        fix_metadata(save_path, args.set_episodes)
+        if not args.clean:  # If not also cleaning, exit
+            return
+    
+    if args.clean:
+        save_path = config.get("save_path", "backend/simulation_results/q_tables")
+        clean_training_files(save_path)
+        return
+    
+    # Run training if no utility operations
+    if not (args.fix_metadata or args.set_episodes is not None or args.clean):
+        run_training(config)
 
 if __name__ == "__main__":
     main() 
