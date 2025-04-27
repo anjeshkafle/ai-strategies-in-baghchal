@@ -343,7 +343,7 @@ def run_training(config):
                         print(f"Backed up progress at episode {episode}")
                 
                 # Create snapshots only if save_interval is positive
-                if save_interval > 0 and episode % save_interval == 0:
+                if save_interval > 0 and ((episode - current_episode + 1) % save_interval == 0 or episode % save_interval == 0):
                     # Save the numbered snapshot files
                     q_agent.save_tables(
                         f"{save_path}/tiger_q_{episode}.json",
@@ -487,7 +487,7 @@ def run_training(config):
                         print(f"Backed up progress at episode {episode}")
                 
                 # Create snapshots only if save_interval is positive
-                if save_interval > 0 and episode % save_interval == 0:
+                if save_interval > 0 and ((episode - current_episode + 1) % save_interval == 0 or episode % save_interval == 0):
                     # Save the numbered snapshot files based on training role
                     if role_to_train == "TIGER":
                         q_agent.save_tables(
@@ -509,8 +509,13 @@ def run_training(config):
                 epsilon = max(q_agent.min_exploration_rate, epsilon * q_agent.exploration_decay)
     
     finally:
-        # Final save
-        episode = min(episodes, current_episode)
+        # Get the actual last completed episode
+        last_episode = current_episode - 1
+        if not interrupted:
+            last_episode = episodes  # All episodes completed
+        else:
+            # If interrupted, use the current episode - 1 (current_episode is the one being processed)
+            last_episode = max(completed_episodes, current_episode - 1)
         
         # No need to create another snapshot - we'll just ensure final files are up to date
         if training_mode == "self_play":
@@ -536,10 +541,10 @@ def run_training(config):
                     f"{save_path}/goat_v_final.json"
                 )
         
-        # Final metadata update
+        # Final metadata update with corrected completed episodes
         current_time = time.time() - start_time + total_training_time
         metadata = {
-            "completed_episodes": episode,
+            "completed_episodes": last_episode,
             "exploration_rate": epsilon,
             "tiger_wins": tiger_wins,
             "goat_wins": goat_wins,
@@ -548,8 +553,12 @@ def run_training(config):
         }
         save_metadata(save_path, metadata)
         
+        # Calculate episodes completed in this run
+        episodes_this_run = last_episode - completed_episodes
+        
         print("\nTraining complete!")
-        print(f"Completed {episode} episodes.")
+        print(f"Completed {episodes_this_run} episodes in this run.")
+        print(f"Total episodes trained: {last_episode}")
         print(f"Final statistics - Tiger wins: {tiger_wins}, Goat wins: {goat_wins}, Draws: {draws}")
         print(f"Total training time: {current_time:.1f} seconds")
         
