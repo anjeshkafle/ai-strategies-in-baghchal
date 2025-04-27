@@ -510,12 +510,19 @@ def run_training(config):
     
     finally:
         # Get the actual last completed episode
-        last_episode = current_episode - 1
-        if not interrupted:
-            last_episode = episodes  # All episodes completed
+        # Read the latest metadata to get the most recent completed episode
+        metadata_path = os.path.join(save_path, 'metadata.json')
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as f:
+                try:
+                    temp_metadata = json.load(f)
+                    last_episode = temp_metadata.get("completed_episodes", completed_episodes)
+                except:
+                    # Fallback in case of metadata read error
+                    last_episode = current_episode - 1 if interrupted else episodes
         else:
-            # If interrupted, use the current episode - 1 (current_episode is the one being processed)
-            last_episode = max(completed_episodes, current_episode - 1)
+            # Fallback if no metadata
+            last_episode = current_episode - 1 if interrupted else episodes
         
         # No need to create another snapshot - we'll just ensure final files are up to date
         if training_mode == "self_play":
