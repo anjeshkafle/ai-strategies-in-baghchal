@@ -6,6 +6,7 @@ from models.random_agent import RandomAgent
 from models.minimax_agent import MinimaxAgent
 from models.game_state import GameState
 from models.mcts_agent import MCTSAgent
+from models.q_agent import QLearningAgent
 import logging
 import time
 import json
@@ -43,6 +44,9 @@ class AgentSettings(BaseModel):
     max_time_seconds: Optional[int] = Field(None, ge=1, le=300, description="Maximum time in seconds for MCTS")
     exploration_weight: Optional[float] = Field(None, ge=0.1, le=3.0, description="Exploration weight for MCTS")
     guided_strictness: Optional[float] = Field(None, ge=0.0, le=1.0, description="Guided rollout strictness (0.0-1.0)")
+    
+    # Q-learning specific settings
+    tables_path: Optional[str] = Field(None, description="Path to Q-tables directory")
 
 class MoveRequest(BaseModel):
     board: List[List[Optional[Dict]]]
@@ -67,6 +71,10 @@ default_settings = {
         "guided_strictness": 0.7,
         "max_rollout_depth": 6,
         "max_time_seconds": 50
+    },
+    "q-learning": {
+        "tables_path": "backend/simulation_results/q_tables",
+        "discount_factor": 0.95
     }
 }
 
@@ -83,6 +91,11 @@ agents = {
         guided_strictness=default_settings["mcts"]["guided_strictness"],
         max_rollout_depth=default_settings["mcts"]["max_rollout_depth"],
         max_time_seconds=default_settings["mcts"]["max_time_seconds"]
+    ),
+    "q-learning": QLearningAgent(
+        discount_factor=default_settings["q-learning"]["discount_factor"],
+        tables_path=default_settings["q-learning"]["tables_path"],
+        auto_load=True
     )
 }
 
@@ -167,6 +180,17 @@ async def get_best_move(request: MoveRequest):
                         max_rollout_depth=custom_max_depth,
                         guided_strictness=custom_strictness,
                         max_time_seconds=custom_max_time
+                    )
+                    move = custom_agent.get_move(state)
+                
+                elif request.model == "q-learning":
+                    # Extract custom settings or use defaults
+                    custom_tables_path = request.settings.tables_path if request.settings.tables_path is not None else default_settings["q-learning"]["tables_path"]
+                    
+                    logger.info(f"Using custom Q-learning settings: tables_path={custom_tables_path}")
+                    custom_agent = QLearningAgent(
+                        tables_path=custom_tables_path,
+                        auto_load=True
                     )
                     move = custom_agent.get_move(state)
                 

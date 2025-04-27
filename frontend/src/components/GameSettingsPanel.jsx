@@ -20,6 +20,9 @@ const DEFAULT_AGENT_SETTINGS = {
     max_rollout_depth: 6,
     max_time_seconds: 50,
   },
+  "q-learning": {
+    tables_path: "backend/simulation_results/q_tables",
+  },
 };
 
 // Options for rollout policies
@@ -150,6 +153,8 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
           ? { ...DEFAULT_AGENT_SETTINGS.minimax }
           : model === "mcts"
           ? { ...DEFAULT_AGENT_SETTINGS.mcts }
+          : model === "q-learning"
+          ? { ...DEFAULT_AGENT_SETTINGS["q-learning"] }
           : null;
 
       setSettings((prevSettings) => ({
@@ -299,6 +304,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                     { value: "minimax", label: "Minimax" },
                     { value: "mcts", label: "MCTS" },
                     { value: "random", label: "Random" },
+                    { value: "q-learning", label: "Q-Learning" },
                   ]}
                   disabled={!isPaused}
                 />
@@ -539,6 +545,37 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                       />
                     </div>
                   </div>
+                ) : settings.players.goat.model === "q-learning" ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="text-gray-300 block text-sm mb-1">
+                        Q-Tables Path
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          settings.players.goat.settings?.tables_path ||
+                          DEFAULT_AGENT_SETTINGS["q-learning"].tables_path
+                        }
+                        onChange={(e) =>
+                          updateAgentSettings(
+                            "goat",
+                            "tables_path",
+                            e.target.value
+                          )
+                        }
+                        className={`w-full ${
+                          isPaused
+                            ? "bg-gray-700 text-white"
+                            : "bg-gray-800 text-gray-500 cursor-not-allowed"
+                        } rounded px-2 py-1 text-sm`}
+                        disabled={!isPaused}
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Path to directory containing trained Q-tables
+                      </p>
+                    </div>
+                  </div>
                 ) : null}
               </div>
             )}
@@ -580,6 +617,7 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                     { value: "minimax", label: "Minimax" },
                     { value: "mcts", label: "MCTS" },
                     { value: "random", label: "Random" },
+                    { value: "q-learning", label: "Q-Learning" },
                   ]}
                   disabled={!isPaused}
                 />
@@ -818,6 +856,37 @@ const GameSettingsPanel = ({ isPaused, onTogglePause, onApplySettings }) => {
                         } rounded px-2 py-1 text-sm`}
                         disabled={!isPaused}
                       />
+                    </div>
+                  </div>
+                ) : settings.players.tiger.model === "q-learning" ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="text-gray-300 block text-sm mb-1">
+                        Q-Tables Path
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          settings.players.tiger.settings?.tables_path ||
+                          DEFAULT_AGENT_SETTINGS["q-learning"].tables_path
+                        }
+                        onChange={(e) =>
+                          updateAgentSettings(
+                            "tiger",
+                            "tables_path",
+                            e.target.value
+                          )
+                        }
+                        className={`w-full ${
+                          isPaused
+                            ? "bg-gray-700 text-white"
+                            : "bg-gray-800 text-gray-500 cursor-not-allowed"
+                        } rounded px-2 py-1 text-sm`}
+                        disabled={!isPaused}
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Path to directory containing trained Q-tables
+                      </p>
                     </div>
                   </div>
                 ) : null}

@@ -1,0 +1,13 @@
+{
+  "episodes": 10000,
+  "save_interval": 100,
+  "save_path": "backend/simulation_results/q_tables",
+  "discount_factor": 0.95,
+  "initial_exploration_rate": 1.0,
+  "min_exploration_rate": 0.05,
+  "exploration_decay": 0.995,
+  "seed": 42,
+  "max_time_seconds": 7200,
+
+  "coach_settings": null
+}
