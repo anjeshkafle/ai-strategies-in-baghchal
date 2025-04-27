@@ -231,9 +231,42 @@ def run_training(config):
                 state = GameState()
                 game_length = 0
                 
+                # Track visited states for threefold repetition
+                visited_states = {}  # Format: {state_hash: count}
+                
+                # Helper function to get a hash representation of the game state
+                def get_state_hash(game_state):
+                    # Only track repetition during movement phase
+                    if game_state.phase == "MOVEMENT":
+                        # Convert board to a string representation
+                        board_str = ""
+                        for row in game_state.board:
+                            for cell in row:
+                                if cell is None:
+                                    board_str += "_"
+                                elif cell["type"] == "TIGER":
+                                    board_str += "T"
+                                else:
+                                    board_str += "G"
+                        
+                        # Include turn in the hash
+                        return f"{board_str}_{game_state.turn}"
+                    else:
+                        # During placement phase, include goats_placed to ensure uniqueness
+                        return f"PLACEMENT_{game_state.goats_placed}_{game_state.turn}"
+                
                 # Play until game end
                 while not state.is_terminal():
                     game_length += 1
+                    
+                    # Check for threefold repetition in movement phase
+                    if state.phase == "MOVEMENT":
+                        state_hash = get_state_hash(state)
+                        visited_states[state_hash] = visited_states.get(state_hash, 0) + 1
+                        if visited_states[state_hash] >= 3:
+                            # Game ends in a draw due to threefold repetition
+                            draws += 1
+                            break
                     
                     if state.turn == "TIGER":
                         # Tiger's turn
@@ -347,9 +380,21 @@ def run_training(config):
                 state = GameState()
                 game_length = 0
                 
+                # Track visited states for threefold repetition
+                visited_states = {}  # Format: {state_hash: count}
+                
                 # Play until game end
                 while not state.is_terminal():
                     game_length += 1
+                    
+                    # Check for threefold repetition in movement phase
+                    if state.phase == "MOVEMENT":
+                        state_hash = get_state_hash(state)
+                        visited_states[state_hash] = visited_states.get(state_hash, 0) + 1
+                        if visited_states[state_hash] >= 3:
+                            # Game ends in a draw due to threefold repetition
+                            draws += 1
+                            break
                     
                     # Determine if the current player is the learner or the coach
                     is_learner_turn = (state.turn == role_to_train)
