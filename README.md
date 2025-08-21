@@ -2,7 +2,7 @@ AI Strategies in Bagh-Chal
 
 For the full MSc Project report detailing the development and evaluation of AI strategies for BaghChal, please refer to this link:
 
-https://docs.google.com/document/d/16Q7J666m4caudsTJJBtiKq06XE86Q-x9J2fuj6aGWMM/edit?tab=t.0
+https://docs.google.com/document/d/16Q7J666m4caudsTJJBtiKq06XE86Q-x9J2fuj6aGWMM/
 
 
 BaghChal is a strategically complex asymmetric Nepali board game (~10⁴¹ states) featuring distinct Tiger/Goat objectives. Despite its depth, there are currently no rigorous AI benchmarks. This project addresses that gap by developing, systematically tuning, and comparatively evaluating non-neural strategies.
