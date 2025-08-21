@@ -4,6 +4,12 @@ For the full MSc Project report detailing the development and evaluation of AI s
 
 https://docs.google.com/document/d/16Q7J666m4caudsTJJBtiKq06XE86Q-x9J2fuj6aGWMM/
 
+All datasets, results, and supplementary materials are be accessible via Google Drive at:
+
+https://drive.google.com/drive/folders/13W5E36KSKwo-8chMsm91UE0c4G0Vy2FS
+
+
+
 
 BaghChal is a strategically complex asymmetric Nepali board game (~10⁴¹ states) featuring distinct Tiger/Goat objectives. Despite its depth, there are currently no rigorous AI benchmarks. This project addresses that gap by developing, systematically tuning, and comparatively evaluating non-neural strategies.
 
