@@ -1,4 +1,4 @@
-BaghChal AI Project
+AI Strategies in Bagh-Chal
 
 For the full MSc Project report detailing the development and evaluation of AI strategies for BaghChal, please refer to this link:
 
